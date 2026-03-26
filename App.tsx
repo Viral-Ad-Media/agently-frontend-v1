@@ -373,14 +373,25 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
+  const handleUpdateFaq = async (faqId: string, updates: { question?: string; answer?: string }) => {
+    await api.updateFaq(faqId, updates);
+    await refreshWorkspace();
+  };
+
   const handleRemoveFaq = async (faqId: string) => {
     await api.removeFaq(faqId);
     await refreshWorkspace();
   };
 
-  const handleSyncFaqs = async () => {
+  const handleSyncFaqs = async (website?: string) => {
     const { org: currentOrg } = requireWorkspace();
-    await api.syncFaqs(currentOrg.profile.website);
+    await api.syncFaqs(website || currentOrg.profile.website);
+    await refreshWorkspace();
+  };
+
+  const handleImportChatbotFaqs = async (chatbotId: string, website: string) => {
+    const faqs = await api.generateOnboardingFaqs(website);
+    await api.updateChatbot(chatbotId, { faqs });
     await refreshWorkspace();
   };
 
@@ -568,6 +579,7 @@ const App: React.FC = () => {
                   onDeleteVoiceAgent={handleDeleteVoiceAgent}
                   onUpdateRules={handleUpdateRules}
                   onAddFaq={handleAddFaq}
+                  onUpdateFaq={handleUpdateFaq}
                   onRemoveFaq={handleRemoveFaq}
                   onSyncFaqs={handleSyncFaqs}
                   onRestartAgent={handleRestartAgent}
@@ -586,6 +598,7 @@ const App: React.FC = () => {
                   onResetConversation={handleResetConversation}
                   onCreateChatbot={handleCreateChatbot}
                   onUpdateChatbot={handleUpdateChatbot}
+                  onImportChatbotFaqs={handleImportChatbotFaqs}
                   onActivateChatbot={handleActivateChatbot}
                   onDeleteChatbot={handleDeleteChatbot}
                 />

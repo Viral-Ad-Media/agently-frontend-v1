@@ -14,8 +14,9 @@ interface AgentSettingsProps {
   onDeleteVoiceAgent: (id: string) => Promise<void>;
   onUpdateRules: (ruleUpdates: Partial<AgentConfig['rules']>) => Promise<void>;
   onAddFaq: () => Promise<void>;
+  onUpdateFaq: (id: string, updates: { question?: string; answer?: string }) => Promise<void>;
   onRemoveFaq: (id: string) => Promise<void>;
-  onSyncFaqs: () => Promise<void>;
+  onSyncFaqs: (website?: string) => Promise<void>;
   onRestartAgent: () => Promise<void>;
 }
 
@@ -27,17 +28,23 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   onDeleteVoiceAgent,
   onUpdateRules,
   onAddFaq,
+  onUpdateFaq,
   onRemoveFaq,
   onSyncFaqs,
   onRestartAgent,
 }) => {
   const [draftAgent, setDraftAgent] = useState(org.agent);
+  const [knowledgeWebsite, setKnowledgeWebsite] = useState(org.profile.website);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     setDraftAgent(org.agent);
   }, [org.agent]);
+
+  useEffect(() => {
+    setKnowledgeWebsite(org.profile.website);
+  }, [org.profile.website, org.activeVoiceAgentId]);
 
   const saveAgent = async (updates: Partial<AgentConfig>, actionKey = 'agent') => {
     setError('');
@@ -77,6 +84,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     } finally {
       setBusyAction(null);
     }
+  };
+
+  const updateDraftFaq = (faqId: string, field: 'question' | 'answer', value: string) => {
+    setDraftAgent((current) => ({
+      ...current,
+      faqs: current.faqs.map((faq) => (faq.id === faqId ? { ...faq, [field]: value } : faq)),
+    }));
   };
 
   return (
@@ -290,39 +304,86 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         </div>
 
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
-              Training & Knowledge
-            </h3>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
+                Training & Knowledge
+              </h3>
+              <p className="mt-2 text-sm text-slate-500">Edit, remove, and import knowledge for this voice agent. Changes apply to the active agent only.</p>
+            </div>
             <button
               onClick={() => void runAction('add-faq', onAddFaq)}
-              className="text-indigo-600 text-sm font-black uppercase tracking-wider hover:underline"
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
             >
               + New Entry
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {org.agent.faqs.map(faq => (
-              <div key={faq.id} className="p-5 rounded-2xl border-2 border-slate-50 bg-slate-50 relative group hover:border-indigo-100 hover:bg-white transition-all">
-                <p className="font-bold text-sm text-slate-900 mb-2">{faq.question}</p>
-                <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{faq.answer}</p>
-                <button
-                  onClick={() => void runAction(`faq-${faq.id}`, () => onRemoveFaq(faq.id))}
-                  className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                </button>
-              </div>
-            ))}
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-6">
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Import from Website URL</label>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input
+                type="text"
+                value={knowledgeWebsite}
+                onChange={(event) => setKnowledgeWebsite(event.target.value)}
+                placeholder="www.example.com"
+                className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={() => void runAction('sync-faqs', () => onSyncFaqs(knowledgeWebsite))}
+                disabled={!knowledgeWebsite.trim()}
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Import Knowledge
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-400">This replaces the current knowledge base with entries pulled from the website when available, with fallback starter content if the site cannot be parsed.</p>
           </div>
-          <button
-            onClick={() => void runAction('sync-faqs', onSyncFaqs)}
-            className="w-full mt-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            Sync from Website URL
-          </button>
+
+          <div className="space-y-4">
+            {draftAgent.faqs.map((faq) => {
+              const originalFaq = org.agent.faqs.find((entry) => entry.id === faq.id);
+
+              return (
+                <div key={faq.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Knowledge Entry</p>
+                    <button
+                      onClick={() => void runAction(`faq-${faq.id}-delete`, () => onRemoveFaq(faq.id))}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-red-200 hover:text-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={faq.question}
+                    onChange={(event) => updateDraftFaq(faq.id, 'question', event.target.value)}
+                    onBlur={() => {
+                      if (faq.question !== (originalFaq?.question || '')) {
+                        void runAction(`faq-${faq.id}-question`, () => onUpdateFaq(faq.id, { question: faq.question }));
+                      }
+                    }}
+                    className="mb-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Question or topic"
+                  />
+                  <textarea
+                    rows={4}
+                    value={faq.answer}
+                    onChange={(event) => updateDraftFaq(faq.id, 'answer', event.target.value)}
+                    onBlur={() => {
+                      if (faq.answer !== (originalFaq?.answer || '')) {
+                        void runAction(`faq-${faq.id}-answer`, () => onUpdateFaq(faq.id, { answer: faq.answer }));
+                      }
+                    }}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Detailed answer"
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
 
       </div>

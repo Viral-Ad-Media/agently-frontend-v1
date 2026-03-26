@@ -8,6 +8,7 @@ interface MessengerProps {
   onResetConversation: (chatbotId?: string) => Promise<void>;
   onCreateChatbot: () => Promise<void>;
   onUpdateChatbot: (chatbotId: string, updates: Partial<ChatbotConfig>) => Promise<void>;
+  onImportChatbotFaqs: (chatbotId: string, website: string) => Promise<void>;
   onActivateChatbot: (chatbotId: string) => Promise<void>;
   onDeleteChatbot: (chatbotId: string) => Promise<void>;
 }
@@ -19,6 +20,7 @@ const Messenger: React.FC<MessengerProps> = ({
   onResetConversation,
   onCreateChatbot,
   onUpdateChatbot,
+  onImportChatbotFaqs,
   onActivateChatbot,
   onDeleteChatbot,
 }) => {
@@ -32,11 +34,16 @@ const Messenger: React.FC<MessengerProps> = ({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [knowledgeWebsite, setKnowledgeWebsite] = useState(org.profile.website);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDraftChatbot(activeChatbot);
   }, [activeChatbot]);
+
+  useEffect(() => {
+    setKnowledgeWebsite(org.profile.website);
+  }, [org.profile.website, activeChatbot.id]);
 
   useEffect(() => {
     setLocalMessages(messages);
@@ -75,6 +82,14 @@ const Messenger: React.FC<MessengerProps> = ({
         position: draftChatbot.position,
         avatarLabel: draftChatbot.avatarLabel,
         customPrompt: draftChatbot.customPrompt,
+      });
+    });
+  };
+
+  const saveKnowledgeBase = async () => {
+    await runAction('save-chatbot-knowledge', async () => {
+      await onUpdateChatbot(activeChatbot.id, {
+        faqs: draftChatbot.faqs,
       });
     });
   };
@@ -341,6 +356,28 @@ const Messenger: React.FC<MessengerProps> = ({
                   </button>
                 </div>
 
+                <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Import from Website URL</label>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={knowledgeWebsite}
+                      onChange={(event) => setKnowledgeWebsite(event.target.value)}
+                      placeholder="www.example.com"
+                      className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void runAction(`import-chatbot-faqs-${activeChatbot.id}`, () => onImportChatbotFaqs(activeChatbot.id, knowledgeWebsite))}
+                      disabled={!knowledgeWebsite.trim()}
+                      className="rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Import Website Data
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400">We pull visible website content into chatbot knowledge when possible, and fall back to starter content if the site blocks parsing.</p>
+                </div>
+
                 <div className="space-y-3">
                   {draftChatbot.faqs.map((faq) => (
                     <div key={faq.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -370,6 +407,16 @@ const Messenger: React.FC<MessengerProps> = ({
                       />
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void saveKnowledgeBase()}
+                    className="rounded-2xl bg-indigo-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700"
+                  >
+                    Save Knowledge Base
+                  </button>
                 </div>
               </div>
 

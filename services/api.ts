@@ -227,6 +227,13 @@ export const api = {
     });
   },
 
+  async updateFaq(id: string, updates: Partial<FAQ>) {
+    return request<FAQ>(`/api/agent/faqs/${id}`, {
+      method: 'PATCH',
+      body: updates,
+    });
+  },
+
   async removeFaq(id: string) {
     return request<{ success: boolean }>(`/api/agent/faqs/${id}`, {
       method: 'DELETE',
