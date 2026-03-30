@@ -7,6 +7,7 @@ type SidebarIcon = React.ComponentType<Record<string, never>>;
 
 const NAV_ITEMS: Array<{ to: string; icon: SidebarIcon; label: string; description: string }> = [
   { to: '/dashboard', icon: ICONS.Dashboard, label: 'Dashboard', description: 'Live performance and workload' },
+  { to: '/features', icon: ICONS.Sparkles, label: 'Platform Features', description: 'Browse the full product surface' },
   { to: '/agent', icon: ICONS.Robot, label: 'Voice Agent', description: 'Configure lines, scripts, and knowledge' },
   { to: '/messenger', icon: ICONS.MessageSquare, label: 'Chatbot Agent', description: 'Widget design and chatbot knowledge' },
   { to: '/calls', icon: ICONS.Phone, label: 'Call Logs', description: 'Transcripts, outcomes, and reports' },
@@ -43,6 +44,11 @@ const getPageMeta = (pathname: string, org: Organization) => {
       eyebrow: 'Voice Operations',
       title: 'Voice Agent Studio',
       description: 'Manage every inbound and outbound voice agent, their numbers, and their knowledge base.',
+    },
+    '/features': {
+      eyebrow: 'Product Surface',
+      title: 'Platform Features',
+      description: 'Review the full Agently feature set without leaving the workspace shell.',
     },
     '/messenger': {
       eyebrow: 'Digital Concierge',
@@ -191,7 +197,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, org, user, setShowSim
         >
           <div className="m-4 flex h-[calc(100vh-2rem)] flex-col rounded-[2rem] border border-white/70 bg-white/88 p-5 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
             <div className="flex items-center justify-between">
-              <Link to="/" className="flex items-center gap-3">
+              <Link to="/dashboard" className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
                   <ICONS.Robot />
                 </div>
