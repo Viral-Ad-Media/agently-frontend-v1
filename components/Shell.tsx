@@ -14,7 +14,6 @@ const NAV_ITEMS: Array<{ to: string; icon: SidebarIcon; label: string; descripti
   { to: '/team', icon: ICONS.Shield, label: 'Team', description: 'Members, permissions, and invites' },
   { to: '/billing', icon: ICONS.CreditCard, label: 'Billing', description: 'Plan usage, invoices, and upgrades' },
   { to: '/settings', icon: ICONS.Settings, label: 'Settings', description: 'Workspace, phone, and Twilio setup' },
-  { to: '/features', icon: ICONS.Sparkles, label: 'Platform Features', description: 'Browse the full product surface' },
 ];
 
 const PUBLIC_NAV_ITEMS = [
@@ -187,7 +186,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, org, user, setShowSim
         />
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[18.75rem] transform transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-[18.75rem] transform transition-transform duration-300 md:translate-x-0 ${
             mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -256,7 +255,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, org, user, setShowSim
           </div>
         </aside>
 
-        <div className="flex-1 md:min-w-0">
+        <div className="flex-1 md:ml-[18.75rem] md:min-w-0">
           <div className="px-4 pb-10 pt-4 sm:px-6 lg:px-8">
             <header className="sticky top-4 z-20">
               <div className="rounded-[1.6rem] border border-white/70 bg-white/84 px-4 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:px-5">
