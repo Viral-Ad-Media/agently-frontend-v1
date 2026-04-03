@@ -1,29 +1,48 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AgentConfig, BusinessProfile, ChatMessage, ChatbotConfig, Lead, Organization, User, WorkspaceBootstrap } from './types';
-import { api } from './services/api';
-import { clearSessionToken, getSessionToken, setSessionToken } from './services/session';
-import { AppLoading, MainLayout, PublicLayout } from './components/Shell';
+import React, { Suspense, lazy, useEffect, useState } from "react";
+import {
+  HashRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import {
+  AgentConfig,
+  BusinessProfile,
+  ChatMessage,
+  ChatbotConfig,
+  Lead,
+  Organization,
+  User,
+  WorkspaceBootstrap,
+} from "./types";
+import { api } from "./services/api";
+import {
+  clearSessionToken,
+  getSessionToken,
+  setSessionToken,
+} from "./services/session";
+import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
+import { subscribeToOrgRealtime } from "./services/realtime"; // <-- NEW IMPORT
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Onboarding = lazy(() => import('./pages/Onboarding'));
-const CallLogs = lazy(() => import('./pages/CallLogs'));
-const Leads = lazy(() => import('./pages/Leads'));
-const AgentSettings = lazy(() => import('./pages/AgentSettings'));
-const Billing = lazy(() => import('./pages/Billing'));
-const Team = lazy(() => import('./pages/Team'));
-const Login = lazy(() => import('./pages/Login'));
-const Messenger = lazy(() => import('./pages/Messenger'));
-const Features = lazy(() => import('./pages/Features'));
-const Home = lazy(() => import('./pages/Home'));
-const About = lazy(() => import('./pages/About'));
-const Contact = lazy(() => import('./pages/Contact'));
-const FAQs = lazy(() => import('./pages/FAQs'));
-const Pricing = lazy(() => import('./pages/Pricing'));
-const Terms = lazy(() => import('./pages/Terms'));
-const Privacy = lazy(() => import('./pages/Privacy'));
-const Settings = lazy(() => import('./pages/Settings'));
-const CallSimulator = lazy(() => import('./components/CallSimulator'));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const CallLogs = lazy(() => import("./pages/CallLogs"));
+const Leads = lazy(() => import("./pages/Leads"));
+const AgentSettings = lazy(() => import("./pages/AgentSettings"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Team = lazy(() => import("./pages/Team"));
+const Login = lazy(() => import("./pages/Login"));
+const Messenger = lazy(() => import("./pages/Messenger"));
+const Features = lazy(() => import("./pages/Features"));
+const Home = lazy(() => import("./pages/Home"));
+const About = lazy(() => import("./pages/About"));
+const Contact = lazy(() => import("./pages/Contact"));
+const FAQs = lazy(() => import("./pages/FAQs"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Settings = lazy(() => import("./pages/Settings"));
+const CallSimulator = lazy(() => import("./components/CallSimulator"));
 
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
@@ -47,6 +66,7 @@ const App: React.FC = () => {
     return nextWorkspace;
   };
 
+  // ── BOOTSTRAP (existing) ──────────────────────────────────────
   useEffect(() => {
     const token = getSessionToken();
     if (!token) {
@@ -81,13 +101,35 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // ── REALTIME: live dashboard refresh (NEW) ─────────────────────
+  useEffect(() => {
+    if (!org?.id) return;
+
+    // refreshWorkspace() is already defined below.
+    // This subscribes to Supabase Realtime and refreshes on any change.
+    const unsubscribe = subscribeToOrgRealtime(org.id, {
+      onAny: () => {
+        // Debounce: don't hammer the API if multiple events fire at once
+        void refreshWorkspace();
+      },
+    });
+
+    return unsubscribe; // cleanup on unmount / org change
+  }, [org?.id]);
+  // ── END REALTIME PATCH ─────────────────────────────────────────
+
   const handleLogin = async (email: string, password: string) => {
     const response = await api.login(email, password);
     setSessionToken(response.token);
     await loadWorkspace();
   };
 
-  const handleRegister = async (payload: { name: string; companyName: string; email: string; password: string }) => {
+  const handleRegister = async (payload: {
+    name: string;
+    companyName: string;
+    email: string;
+    password: string;
+  }) => {
     const response = await api.register(payload);
     setSessionToken(response.token);
     await loadWorkspace();
@@ -123,7 +165,7 @@ const App: React.FC = () => {
 
   const requireWorkspace = () => {
     if (!workspace || !org) {
-      throw new Error('Workspace is not ready yet.');
+      throw new Error("Workspace is not ready yet.");
     }
 
     return { workspace, org };
@@ -133,7 +175,10 @@ const App: React.FC = () => {
     return api.generateOnboardingFaqs(website);
   };
 
-  const handleOnboardingComplete = async (profile: BusinessProfile, agent: AgentConfig) => {
+  const handleOnboardingComplete = async (
+    profile: BusinessProfile,
+    agent: AgentConfig,
+  ) => {
     await api.completeOnboarding(profile, agent);
     await refreshWorkspace();
   };
@@ -158,7 +203,9 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleUpdateRules = async (ruleUpdates: Partial<AgentConfig['rules']>) => {
+  const handleUpdateRules = async (
+    ruleUpdates: Partial<AgentConfig["rules"]>,
+  ) => {
     const { org: currentOrg } = requireWorkspace();
     await api.updateAgent({
       rules: {
@@ -170,11 +217,17 @@ const App: React.FC = () => {
   };
 
   const handleAddFaq = async () => {
-    await api.createFaq('New FAQ question', 'Add the answer your agent should use.');
+    await api.createFaq(
+      "New FAQ question",
+      "Add the answer your agent should use.",
+    );
     await refreshWorkspace();
   };
 
-  const handleUpdateFaq = async (faqId: string, updates: { question?: string; answer?: string }) => {
+  const handleUpdateFaq = async (
+    faqId: string,
+    updates: { question?: string; answer?: string },
+  ) => {
     await api.updateFaq(faqId, updates);
     await refreshWorkspace();
   };
@@ -190,7 +243,10 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleImportChatbotFaqs = async (chatbotId: string, website: string) => {
+  const handleImportChatbotFaqs = async (
+    chatbotId: string,
+    website: string,
+  ) => {
     const faqs = await api.generateOnboardingFaqs(website);
     await api.updateChatbot(chatbotId, { faqs });
     await refreshWorkspace();
@@ -206,7 +262,10 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleUpdateChatbot = async (chatbotId: string, updates: Partial<ChatbotConfig>) => {
+  const handleUpdateChatbot = async (
+    chatbotId: string,
+    updates: Partial<ChatbotConfig>,
+  ) => {
     await api.updateChatbot(chatbotId, updates);
     await refreshWorkspace();
   };
@@ -221,15 +280,26 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleSendMessage = async (message: string, chatbotId?: string): Promise<ChatMessage> => {
+  const handleSendMessage = async (
+    message: string,
+    chatbotId?: string,
+  ): Promise<ChatMessage> => {
     const response = await api.sendMessengerMessage(message, chatbotId);
-    setWorkspace((currentWorkspace) => currentWorkspace ? { ...currentWorkspace, conversation: response.conversation } : currentWorkspace);
+    setWorkspace((currentWorkspace) =>
+      currentWorkspace
+        ? { ...currentWorkspace, conversation: response.conversation }
+        : currentWorkspace,
+    );
     return response.assistantMessage;
   };
 
   const handleResetConversation = async (chatbotId?: string) => {
     const response = await api.resetMessenger(chatbotId);
-    setWorkspace((currentWorkspace) => currentWorkspace ? { ...currentWorkspace, conversation: response.conversation } : currentWorkspace);
+    setWorkspace((currentWorkspace) =>
+      currentWorkspace
+        ? { ...currentWorkspace, conversation: response.conversation }
+        : currentWorkspace,
+    );
   };
 
   const handleSimulatorFinished = async (payload: {
@@ -249,7 +319,9 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleCreateLead = async (payload: Pick<Lead, 'name' | 'email' | 'phone' | 'reason'>) => {
+  const handleCreateLead = async (
+    payload: Pick<Lead, "name" | "email" | "phone" | "reason">,
+  ) => {
     await api.createLead(payload);
     await refreshWorkspace();
   };
@@ -258,7 +330,10 @@ const App: React.FC = () => {
     await api.exportLeadsCsv();
   };
 
-  const handleInviteMember = async (email: string, role: 'Admin' | 'Viewer') => {
+  const handleInviteMember = async (
+    email: string,
+    role: "Admin" | "Viewer",
+  ) => {
     await api.inviteMember(email, role);
     await refreshWorkspace();
   };
@@ -268,7 +343,7 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const handleUpdatePlan = async (plan: 'Starter' | 'Pro') => {
+  const handleUpdatePlan = async (plan: "Starter" | "Pro") => {
     await api.updatePlan(plan);
     await refreshWorkspace();
   };
@@ -291,7 +366,7 @@ const App: React.FC = () => {
       expectedVolume: `${currentWorkspace.organization.subscription.usage.calls} monthly calls`,
       message: `Interested in a custom SaaS plan for ${currentWorkspace.organization.profile.name}.`,
     });
-    window.alert('Sales inquiry sent successfully.');
+    window.alert("Sales inquiry sent successfully.");
   };
 
   const handleDownloadCallReport = async (callId: string) => {
@@ -312,7 +387,9 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
+    children,
+  }) => {
     if (isInitializing) {
       return <AppLoading />;
     }
@@ -326,11 +403,21 @@ const App: React.FC = () => {
     }
 
     if (!org.profile.onboarded) {
-      return <Onboarding onGenerateFaqs={handleGenerateFaqs} onComplete={handleOnboardingComplete} />;
+      return (
+        <Onboarding
+          onGenerateFaqs={handleGenerateFaqs}
+          onComplete={handleOnboardingComplete}
+        />
+      );
     }
 
     return (
-      <MainLayout org={org} user={user} setShowSimulator={setShowSimulator} onLogout={() => void handleLogout()}>
+      <MainLayout
+        org={org}
+        user={user}
+        setShowSimulator={setShowSimulator}
+        onLogout={() => void handleLogout()}
+      >
         {children}
       </MainLayout>
     );
@@ -344,79 +431,164 @@ const App: React.FC = () => {
     <Router>
       <Suspense fallback={<AppLoading />}>
         <Routes>
-          <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
-          <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
-          <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
-          <Route path="/faqs" element={<PublicLayout><FAQs /></PublicLayout>} />
-          <Route path="/pricing" element={<PublicLayout><Pricing /></PublicLayout>} />
-          <Route path="/terms" element={<PublicLayout><Terms /></PublicLayout>} />
-          <Route path="/privacy" element={<PublicLayout><Privacy /></PublicLayout>} />
+          <Route
+            path="/"
+            element={
+              <PublicLayout>
+                <Home />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/about"
+            element={
+              <PublicLayout>
+                <About />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/contact"
+            element={
+              <PublicLayout>
+                <Contact />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/faqs"
+            element={
+              <PublicLayout>
+                <FAQs />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/pricing"
+            element={
+              <PublicLayout>
+                <Pricing />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/terms"
+            element={
+              <PublicLayout>
+                <Terms />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/privacy"
+            element={
+              <PublicLayout>
+                <Privacy />
+              </PublicLayout>
+            }
+          />
           <Route
             path="/login"
-            element={user ? <Navigate to="/dashboard" /> : (
-              <Login
-                onLogin={handleLogin}
-                onRegister={handleRegister}
-                onSendMagicLink={handleSendMagicLink}
-                onVerifyMagicLink={handleVerifyMagicLink}
-              />
-            )}
+            element={
+              user ? (
+                <Navigate to="/dashboard" />
+              ) : (
+                <Login
+                  onLogin={handleLogin}
+                  onRegister={handleRegister}
+                  onSendMagicLink={handleSendMagicLink}
+                  onVerifyMagicLink={handleVerifyMagicLink}
+                />
+              )
+            }
           />
 
           <Route
             path="/features"
-            element={user && org ? <ProtectedRoute><Features /></ProtectedRoute> : <PublicLayout><Features /></PublicLayout>}
+            element={
+              user && org ? (
+                <ProtectedRoute>
+                  <Features />
+                </ProtectedRoute>
+              ) : (
+                <PublicLayout>
+                  <Features />
+                </PublicLayout>
+              )
+            }
           />
-          <Route path="/dashboard" element={org && dashboard ? <ProtectedRoute><Dashboard org={org} dashboard={dashboard} /></ProtectedRoute> : <Navigate to="/login" />} />
+          <Route
+            path="/dashboard"
+            element={
+              org && dashboard ? (
+                <ProtectedRoute>
+                  <Dashboard org={org} dashboard={dashboard} />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
           <Route
             path="/agent"
-            element={org ? (
-              <ProtectedRoute>
-                <AgentSettings
-                  org={org}
-                  onUpdateAgent={handleUpdateAgent}
-                  onCreateVoiceAgent={handleCreateVoiceAgent}
-                  onActivateVoiceAgent={handleActivateVoiceAgent}
-                  onDeleteVoiceAgent={handleDeleteVoiceAgent}
-                  onUpdateRules={handleUpdateRules}
-                  onAddFaq={handleAddFaq}
-                  onUpdateFaq={handleUpdateFaq}
-                  onRemoveFaq={handleRemoveFaq}
-                  onSyncFaqs={handleSyncFaqs}
-                  onRestartAgent={handleRestartAgent}
-                />
-              </ProtectedRoute>
-            ) : <Navigate to="/login" />}
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <AgentSettings
+                    org={org}
+                    onUpdateAgent={handleUpdateAgent}
+                    onCreateVoiceAgent={handleCreateVoiceAgent}
+                    onActivateVoiceAgent={handleActivateVoiceAgent}
+                    onDeleteVoiceAgent={handleDeleteVoiceAgent}
+                    onUpdateRules={handleUpdateRules}
+                    onAddFaq={handleAddFaq}
+                    onUpdateFaq={handleUpdateFaq}
+                    onRemoveFaq={handleRemoveFaq}
+                    onSyncFaqs={handleSyncFaqs}
+                    onRestartAgent={handleRestartAgent}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
           />
           <Route
             path="/messenger"
-            element={org ? (
-              <ProtectedRoute>
-                <Messenger
-                  org={org}
-                  messages={conversation}
-                  onSendMessage={handleSendMessage}
-                  onResetConversation={handleResetConversation}
-                  onCreateChatbot={handleCreateChatbot}
-                  onUpdateChatbot={handleUpdateChatbot}
-                  onImportChatbotFaqs={handleImportChatbotFaqs}
-                  onActivateChatbot={handleActivateChatbot}
-                  onDeleteChatbot={handleDeleteChatbot}
-                />
-              </ProtectedRoute>
-            ) : <Navigate to="/login" />}
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <Messenger
+                    org={org}
+                    messages={conversation}
+                    onSendMessage={handleSendMessage}
+                    onResetConversation={handleResetConversation}
+                    onCreateChatbot={handleCreateChatbot}
+                    onUpdateChatbot={handleUpdateChatbot}
+                    onImportChatbotFaqs={handleImportChatbotFaqs}
+                    onActivateChatbot={handleActivateChatbot}
+                    onDeleteChatbot={handleDeleteChatbot}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
           />
           <Route
             path="/calls"
-            element={(
+            element={
               <ProtectedRoute>
-                <CallLogs calls={calls} onDownloadReport={handleDownloadCallReport} />
+                <CallLogs
+                  calls={calls}
+                  onDownloadReport={handleDownloadCallReport}
+                />
               </ProtectedRoute>
-            )}
+            }
           />
           <Route
             path="/leads"
-            element={(
+            element={
               <ProtectedRoute>
                 <Leads
                   leads={leads}
@@ -425,37 +597,53 @@ const App: React.FC = () => {
                   onExport={handleExportLeads}
                 />
               </ProtectedRoute>
-            )}
+            }
           />
           <Route
             path="/team"
-            element={org ? (
-              <ProtectedRoute>
-                <Team org={org} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember} />
-              </ProtectedRoute>
-            ) : <Navigate to="/login" />}
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <Team
+                    org={org}
+                    onInvite={handleInviteMember}
+                    onRemoveMember={handleRemoveMember}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
           />
           <Route
             path="/billing"
-            element={org ? (
-              <ProtectedRoute>
-                <Billing
-                  org={org}
-                  onUpdatePlan={handleUpdatePlan}
-                  onCancelPlan={handleCancelPlan}
-                  onDownloadInvoice={handleDownloadInvoice}
-                  onContactSales={handleContactSales}
-                />
-              </ProtectedRoute>
-            ) : <Navigate to="/login" />}
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <Billing
+                    org={org}
+                    onUpdatePlan={handleUpdatePlan}
+                    onCancelPlan={handleCancelPlan}
+                    onDownloadInvoice={handleDownloadInvoice}
+                    onContactSales={handleContactSales}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
           />
           <Route
             path="/settings"
-            element={org ? (
-              <ProtectedRoute>
-                <Settings org={org} onSave={handleSaveSettings} />
-              </ProtectedRoute>
-            ) : <Navigate to="/login" />}
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <Settings org={org} onSave={handleSaveSettings} />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
           />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
