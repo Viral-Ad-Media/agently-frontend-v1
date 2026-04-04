@@ -175,7 +175,6 @@ export const api = {
       method: 'POST',
       body: { website },
     });
-
     return response.faqs;
   },
 
@@ -241,11 +240,21 @@ export const api = {
   },
 
   async syncFaqs(website?: string) {
-    return request<{ website: string; faqs: FAQ[] }>('/api/agent/faqs/sync', {
+    const response = await request<{ website: string; faqs: FAQ[] }>('/api/agent/faqs/sync', {
       method: 'POST',
       body: { website },
     });
+    return response.faqs;
   },
+
+  // ==================== NEW METHOD ====================
+  async importChatbotWebsite(chatbotId: string, website: string) {
+    return request<{ success: boolean; faqs: any[]; chunksStored: number; strategy: string; message: string }>(
+      `/api/chatbots/${chatbotId}/import-website`,
+      { method: 'POST', body: { website } }
+    );
+  },
+  // ====================================================
 
   async restartAgent() {
     return request<{ success: boolean; message: string; restartedAt: string }>('/api/agent/restart', {

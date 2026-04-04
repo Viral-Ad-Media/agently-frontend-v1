@@ -22,7 +22,7 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
-import { subscribeToOrgRealtime } from "./services/realtime"; // <-- NEW IMPORT
+import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -66,7 +66,6 @@ const App: React.FC = () => {
     return nextWorkspace;
   };
 
-  // ── BOOTSTRAP (existing) ──────────────────────────────────────
   useEffect(() => {
     const token = getSessionToken();
     if (!token) {
@@ -101,22 +100,17 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // ── REALTIME: live dashboard refresh (NEW) ─────────────────────
   useEffect(() => {
     if (!org?.id) return;
 
-    // refreshWorkspace() is already defined below.
-    // This subscribes to Supabase Realtime and refreshes on any change.
     const unsubscribe = subscribeToOrgRealtime(org.id, {
       onAny: () => {
-        // Debounce: don't hammer the API if multiple events fire at once
         void refreshWorkspace();
       },
     });
 
-    return unsubscribe; // cleanup on unmount / org change
+    return unsubscribe;
   }, [org?.id]);
-  // ── END REALTIME PATCH ─────────────────────────────────────────
 
   const handleLogin = async (email: string, password: string) => {
     const response = await api.login(email, password);
@@ -167,7 +161,6 @@ const App: React.FC = () => {
     if (!workspace || !org) {
       throw new Error("Workspace is not ready yet.");
     }
-
     return { workspace, org };
   };
 
@@ -243,14 +236,20 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
+  // ==================== PATCHED FUNCTION ====================
   const handleImportChatbotFaqs = async (
     chatbotId: string,
     website: string,
   ) => {
-    const faqs = await api.generateOnboardingFaqs(website);
-    await api.updateChatbot(chatbotId, { faqs });
+    // Calls the new /api/chatbots/:id/import-website endpoint
+    // which runs the full scrape → chunk → Supabase save → FAQ generation pipeline
+    const response = await api.importChatbotWebsite(chatbotId, website);
+    // The server returns { faqs, chunksStored, strategy, message }
+    // Refresh workspace so the new FAQs appear in the UI
     await refreshWorkspace();
+    return response;
   };
+  // ==========================================================
 
   const handleRestartAgent = async () => {
     const response = await api.restartAgent();

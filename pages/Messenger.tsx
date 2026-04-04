@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ChatMessage, ChatbotConfig, Organization } from '../types';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ChatMessage, ChatbotConfig, FAQ, Organization } from "../types";
 
 interface MessengerProps {
   org: Organization;
@@ -7,11 +7,29 @@ interface MessengerProps {
   onSendMessage: (message: string, chatbotId?: string) => Promise<ChatMessage>;
   onResetConversation: (chatbotId?: string) => Promise<void>;
   onCreateChatbot: () => Promise<void>;
-  onUpdateChatbot: (chatbotId: string, updates: Partial<ChatbotConfig>) => Promise<void>;
+  onUpdateChatbot: (
+    chatbotId: string,
+    updates: Partial<ChatbotConfig>,
+  ) => Promise<void>;
   onImportChatbotFaqs: (chatbotId: string, website: string) => Promise<void>;
   onActivateChatbot: (chatbotId: string) => Promise<void>;
   onDeleteChatbot: (chatbotId: string) => Promise<void>;
 }
+
+const COLOR_PRESETS = [
+  "#4f46e5",
+  "#7c3aed",
+  "#db2777",
+  "#dc2626",
+  "#ea580c",
+  "#d97706",
+  "#16a34a",
+  "#0891b2",
+  "#0284c7",
+  "#1e293b",
+  "#374151",
+  "#065f46",
+];
 
 const Messenger: React.FC<MessengerProps> = ({
   org,
@@ -24,200 +42,256 @@ const Messenger: React.FC<MessengerProps> = ({
   onActivateChatbot,
   onDeleteChatbot,
 }) => {
-  const activeChatbot = org.chatbots.find((chatbot) => chatbot.id === org.activeChatbotId) || org.chatbots[0];
-  const linkedVoiceAgent = org.voiceAgents.find((agent) => agent.id === activeChatbot.voiceAgentId) || org.agent;
+  const activeChatbot =
+    org.chatbots.find((c) => c.id === org.activeChatbotId) ?? org.chatbots[0];
+  const linkedAgent =
+    org.voiceAgents.find((a) => a.id === activeChatbot?.voiceAgentId) ??
+    org.agent;
 
-  const [draftChatbot, setDraftChatbot] = useState(activeChatbot);
-  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [draft, setDraft] = useState<ChatbotConfig>(activeChatbot);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [knowledgeWebsite, setKnowledgeWebsite] = useState(org.profile.website);
+  const [scrapeUrl, setScrapeUrl] = useState(org.profile.website || "");
+  const [scrapeStatus, setScrapeStatus] = useState<
+    "idle" | "loading" | "done" | "error"
+  >("idle");
+  const [scrapeMsg, setScrapeMsg] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setDraftChatbot(activeChatbot);
-  }, [activeChatbot]);
-
-  useEffect(() => {
-    setKnowledgeWebsite(org.profile.website);
-  }, [org.profile.website, activeChatbot.id]);
-
+    if (activeChatbot) setDraft(activeChatbot);
+  }, [activeChatbot?.id]);
   useEffect(() => {
     setLocalMessages(messages);
   }, [messages]);
-
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [localMessages]);
+  }, [localMessages, isTyping]);
 
-  const runAction = async (actionKey: string, action: () => Promise<void>) => {
-    setBusyAction(actionKey);
-    setError('');
+  const runAction = useCallback(
+    async (key: string, fn: () => Promise<void>) => {
+      setBusyAction(key);
+      setError("");
+      setSaveSuccess("");
+      try {
+        await fn();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [],
+  );
 
-    try {
-      await action();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Unable to complete that action.');
-    } finally {
-      setBusyAction(null);
-    }
-  };
+  const patch = (updates: Partial<ChatbotConfig>) =>
+    setDraft((d) => ({ ...d, ...updates }));
 
   const saveCustomization = async () => {
-    await runAction('save-chatbot', async () => {
+    await runAction("save", async () => {
       await onUpdateChatbot(activeChatbot.id, {
-        name: draftChatbot.name,
-        voiceAgentId: draftChatbot.voiceAgentId,
-        faqs: draftChatbot.faqs,
-        headerTitle: draftChatbot.headerTitle,
-        welcomeMessage: draftChatbot.welcomeMessage,
-        placeholder: draftChatbot.placeholder,
-        launcherLabel: draftChatbot.launcherLabel,
-        accentColor: draftChatbot.accentColor,
-        position: draftChatbot.position,
-        avatarLabel: draftChatbot.avatarLabel,
-        customPrompt: draftChatbot.customPrompt,
+        name: draft.name,
+        voiceAgentId: draft.voiceAgentId,
+        headerTitle: draft.headerTitle,
+        welcomeMessage: draft.welcomeMessage,
+        placeholder: draft.placeholder,
+        launcherLabel: draft.launcherLabel,
+        accentColor: draft.accentColor,
+        position: draft.position,
+        avatarLabel: draft.avatarLabel,
+        customPrompt: draft.customPrompt,
+        suggestedPrompts: draft.suggestedPrompts,
+        faqs: draft.faqs,
       });
+      setSaveSuccess("Saved!");
+      setTimeout(() => setSaveSuccess(""), 2500);
     });
   };
 
-  const saveKnowledgeBase = async () => {
-    await runAction('save-chatbot-knowledge', async () => {
-      await onUpdateChatbot(activeChatbot.id, {
-        faqs: draftChatbot.faqs,
-      });
-    });
-  };
-
-  const handleCopyScript = async () => {
+  const handleImport = async () => {
+    if (!scrapeUrl.trim()) return;
+    setScrapeStatus("loading");
+    setScrapeMsg("");
+    setError("");
     try {
-      await navigator.clipboard.writeText(activeChatbot.embedScript);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setError('Unable to copy the embed script automatically.');
+      const apiBase = (
+        (import.meta as any).env?.VITE_API_BASE_URL || ""
+      ).replace(/\/$/, "");
+      const token = localStorage.getItem("agently.auth.token") || "";
+      const res = await fetch(`${apiBase}/api/scrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          url: scrapeUrl.trim(),
+          chatbotId: activeChatbot.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Scrape failed.");
+      const scrapedFaqs: FAQ[] = (data.faqs || []).map((f: FAQ) => ({
+        ...f,
+        source: "scraped",
+      }));
+      const manualFaqs = draft.faqs.filter((f: any) => f.source !== "scraped");
+      patch({ faqs: [...scrapedFaqs, ...manualFaqs] });
+      setScrapeStatus("done");
+      setScrapeMsg(
+        `✓ Scraped (${data.method}) · ${data.chunksStored} chunks saved · ${scrapedFaqs.length} FAQs generated. Click Save to apply.`,
+      );
+    } catch (e) {
+      setScrapeStatus("error");
+      setScrapeMsg(e instanceof Error ? e.message : "Scrape failed.");
     }
   };
 
-  const handleSend = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!input.trim() || isTyping) {
-      return;
-    }
-
-    const nextMessage = input;
-    const optimisticUserMessage: ChatMessage = {
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isTyping) return;
+    const text = input;
+    const optimistic: ChatMessage = {
       id: Date.now().toString(),
-      role: 'user',
-      text: nextMessage,
+      role: "user",
+      text,
       timestamp: new Date().toISOString(),
     };
-
-    setLocalMessages((currentMessages) => [...currentMessages, optimisticUserMessage]);
-    setInput('');
+    setLocalMessages((m) => [...m, optimistic]);
+    setInput("");
     setIsTyping(true);
-    setError('');
-
+    setError("");
     try {
-      const assistantMessage = await onSendMessage(nextMessage, activeChatbot.id);
-      setLocalMessages((currentMessages) => [...currentMessages, assistantMessage]);
-    } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : 'Unable to send that message right now.');
-      setLocalMessages((currentMessages) => currentMessages.filter((message) => message.id !== optimisticUserMessage.id));
+      const reply = await onSendMessage(text, activeChatbot.id);
+      setLocalMessages((m) => [...m, reply]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Send failed.");
+      setLocalMessages((m) => m.filter((msg) => msg.id !== optimistic.id));
     } finally {
       setIsTyping(false);
     }
   };
 
-  const updateFaq = (faqId: string, field: 'question' | 'answer', value: string) => {
-    setDraftChatbot((current) => ({
-      ...current,
-      faqs: current.faqs.map((faq) => (faq.id === faqId ? { ...faq, [field]: value } : faq)),
-    }));
-  };
-
-  const addFaq = () => {
-    setDraftChatbot((current) => ({
-      ...current,
+  const addFaq = () =>
+    patch({
       faqs: [
-        ...current.faqs,
-        {
-          id: `chatbot_faq_${Date.now()}`,
-          question: 'New chatbot knowledge topic',
-          answer: 'Add the detailed response this chatbot should use.',
-        },
+        ...draft.faqs,
+        { id: `faq-${Date.now()}`, question: "", answer: "" },
       ],
-    }));
+    });
+  const updateFaq = (id: string, field: "question" | "answer", val: string) =>
+    patch({
+      faqs: draft.faqs.map((f) => (f.id === id ? { ...f, [field]: val } : f)),
+    });
+  const removeFaq = (id: string) =>
+    patch({ faqs: draft.faqs.filter((f) => f.id !== id) });
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(activeChatbot.embedScript);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Copy failed — please select and copy manually.");
+    }
   };
 
-  const removeFaq = (faqId: string) => {
-    setDraftChatbot((current) => ({
-      ...current,
-      faqs: current.faqs.filter((faq) => faq.id !== faqId),
-    }));
-  };
+  if (!activeChatbot)
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <p className="text-slate-400 font-medium mb-4">No chatbot yet.</p>
+        <button
+          onClick={() => void runAction("create", onCreateChatbot)}
+          className="rounded-2xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white"
+        >
+          + Create Chatbot
+        </button>
+      </div>
+    );
+
+  const previewColor = draft.accentColor || "#4f46e5";
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Chatbot selector */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Chatbot Agent Studio</h2>
-            <p className="text-sm text-slate-500 mt-2">Create multiple embedded chatbots, link each one to a voice agent, and tailor the widget to match each site or campaign.</p>
+            <h2 className="text-2xl font-black text-slate-900">
+              Chatbot Agent Studio
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Design, train and deploy embeddable chat widgets — preview updates
+              live.
+            </p>
           </div>
           <button
-            type="button"
-            onClick={() => void runAction('create-chatbot', onCreateChatbot)}
-            className="rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700"
+            onClick={() => void runAction("create", onCreateChatbot)}
+            disabled={busyAction === "create"}
+            className="rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
           >
-            + New Chatbot
+            {busyAction === "create" ? "Creating…" : "+ New Chatbot"}
           </button>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {org.chatbots.map((chatbot) => {
-            const isActive = chatbot.id === org.activeChatbotId;
-            const chatbotVoiceAgent = org.voiceAgents.find((agent) => agent.id === chatbot.voiceAgentId);
-
+          {org.chatbots.map((bot) => {
+            const isActive = bot.id === org.activeChatbotId;
+            const agent = org.voiceAgents.find(
+              (a) => a.id === bot.voiceAgentId,
+            );
             return (
               <div
-                key={chatbot.id}
-                className={`rounded-3xl border p-5 transition-all ${isActive ? 'border-indigo-200 bg-indigo-50/70 shadow-sm' : 'border-slate-200 bg-slate-50'}`}
+                key={bot.id}
+                className={`rounded-3xl border p-5 transition-all ${isActive ? "border-indigo-200 bg-indigo-50/60 shadow-sm" : "border-slate-200 bg-slate-50"}`}
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-2 mb-3">
                   <div>
-                    <p className="text-sm font-black text-slate-900">{chatbot.name}</p>
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Powered by {chatbotVoiceAgent?.name || 'Voice Agent'}
+                    <p className="font-black text-slate-900 text-sm">
+                      {bot.name}
+                    </p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
+                      {agent?.name ?? "Voice Agent"}
                     </p>
                   </div>
-                  {isActive && (
-                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-100">
-                      Active
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-4 h-4 rounded-full border-2 border-white shadow"
+                      style={{ background: bot.accentColor }}
+                    />
+                    {isActive && (
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-100">
+                        Active
+                      </span>
+                    )}
+                  </div>
                 </div>
-
-                <div className="mt-4 flex items-center gap-2">
+                <div className="flex gap-2">
                   {!isActive && (
                     <button
-                      type="button"
-                      onClick={() => void runAction(`activate-${chatbot.id}`, () => onActivateChatbot(chatbot.id))}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
+                      onClick={() =>
+                        void runAction(`activate-${bot.id}`, () =>
+                          onActivateChatbot(bot.id),
+                        )
+                      }
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
                     >
                       Open
                     </button>
                   )}
                   <button
-                    type="button"
-                    onClick={() => void runAction(`delete-${chatbot.id}`, () => onDeleteChatbot(chatbot.id))}
+                    onClick={() =>
+                      void runAction(`delete-${bot.id}`, () =>
+                        onDeleteChatbot(bot.id),
+                      )
+                    }
                     disabled={org.chatbots.length <= 1}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-red-200 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-red-200 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Delete
                   </button>
@@ -228,333 +302,497 @@ const Messenger: React.FC<MessengerProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)] gap-8">
-        <div className="space-y-8">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-            <h3 className="text-xl font-black text-slate-900 mb-6">Customization</h3>
-            <div className="space-y-5">
+      {/* Studio grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] gap-8 items-start">
+        {/* LEFT: config */}
+        <div className="space-y-6">
+          {error && (
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+              {error}
+            </div>
+          )}
+          {saveSuccess && (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+              {saveSuccess}
+            </div>
+          )}
+
+          {/* Appearance */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7 space-y-4">
+            <h3 className="text-lg font-black text-slate-900">Appearance</h3>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Chatbot Name
+              </label>
+              <input
+                type="text"
+                value={draft.name}
+                onChange={(e) => patch({ name: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Linked Voice Agent
+              </label>
+              <select
+                value={draft.voiceAgentId}
+                onChange={(e) => patch({ voiceAgentId: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {org.voiceAgents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Chatbot Name</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                  Header Title
+                </label>
                 <input
                   type="text"
-                  value={draftChatbot.name}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, name: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={draft.headerTitle}
+                  onChange={(e) => patch({ headerTitle: e.target.value })}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Linked Voice Agent</label>
-                <select
-                  value={draftChatbot.voiceAgentId}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, voiceAgentId: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {org.voiceAgents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Header Title</label>
-                  <input
-                    type="text"
-                    value={draftChatbot.headerTitle}
-                    onChange={(event) => setDraftChatbot((current) => ({ ...current, headerTitle: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Launcher Label</label>
-                  <input
-                    type="text"
-                    value={draftChatbot.launcherLabel}
-                    onChange={(event) => setDraftChatbot((current) => ({ ...current, launcherLabel: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Accent Color</label>
-                  <input
-                    type="text"
-                    value={draftChatbot.accentColor}
-                    onChange={(event) => setDraftChatbot((current) => ({ ...current, accentColor: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Widget Side</label>
-                  <select
-                    value={draftChatbot.position}
-                    onChange={(event) => setDraftChatbot((current) => ({ ...current, position: event.target.value as ChatbotConfig['position'] }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="right">Right</option>
-                    <option value="left">Left</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Welcome Message</label>
-                <textarea
-                  rows={3}
-                  value={draftChatbot.welcomeMessage}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, welcomeMessage: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Input Placeholder</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                  Avatar Label
+                </label>
                 <input
                   type="text"
-                  value={draftChatbot.placeholder}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, placeholder: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={draft.avatarLabel}
+                  maxLength={6}
+                  onChange={(e) =>
+                    patch({ avatarLabel: e.target.value.toUpperCase() })
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium uppercase outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Avatar Label</label>
-                <input
-                  type="text"
-                  value={draftChatbot.avatarLabel}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, avatarLabel: event.target.value.toUpperCase().slice(0, 6) }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium uppercase outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Custom Prompt</label>
-                <textarea
-                  rows={4}
-                  value={draftChatbot.customPrompt}
-                  onChange={(event) => setDraftChatbot((current) => ({ ...current, customPrompt: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="mt-2 text-xs text-slate-400">This shapes the chatbot's fallback personality when no FAQ is a direct match.</p>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between gap-4 mb-3">
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Training & Knowledge</label>
-                    <p className="mt-1 text-xs text-slate-400">These entries belong to this chatbot only and are checked before the linked voice agent knowledge base.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addFaq}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
-                  >
-                    + Add Entry
-                  </button>
-                </div>
-
-                <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Import from Website URL</label>
-                  <div className="flex flex-col md:flex-row gap-3">
+            {/* Accent color with picker + presets */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                Accent Color
+              </label>
+              <div className="space-y-3">
+                <div className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm">
+                      #
+                    </span>
                     <input
                       type="text"
-                      value={knowledgeWebsite}
-                      onChange={(event) => setKnowledgeWebsite(event.target.value)}
-                      placeholder="www.example.com"
-                      className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={draft.accentColor.replace("#", "")}
+                      onChange={(e) => {
+                        const v = e.target.value
+                          .replace(/[^0-9a-fA-F]/g, "")
+                          .slice(0, 6);
+                        if (v.length === 6) patch({ accentColor: "#" + v });
+                      }}
+                      maxLength={6}
+                      placeholder="4f46e5"
+                      className="w-full rounded-2xl border border-slate-200 pl-8 pr-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                    <button
-                      type="button"
-                      onClick={() => void runAction(`import-chatbot-faqs-${activeChatbot.id}`, () => onImportChatbotFaqs(activeChatbot.id, knowledgeWebsite))}
-                      disabled={!knowledgeWebsite.trim()}
-                      className="rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Import Website Data
-                    </button>
                   </div>
-                  <p className="mt-3 text-xs text-slate-400">We pull visible website content into chatbot knowledge when possible, and fall back to starter content if the site blocks parsing.</p>
+                  {/* Native color picker */}
+                  <label className="cursor-pointer relative" title="Pick color">
+                    <input
+                      type="color"
+                      value={draft.accentColor}
+                      onChange={(e) => patch({ accentColor: e.target.value })}
+                      className="sr-only"
+                    />
+                    <div
+                      className="w-11 h-11 rounded-2xl border-2 border-white shadow-lg ring-1 ring-slate-200 hover:scale-105 transition-transform"
+                      style={{ background: previewColor }}
+                    />
+                  </label>
                 </div>
-
-                <div className="space-y-3">
-                  {draftChatbot.faqs.map((faq) => (
-                    <div key={faq.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Knowledge Entry</p>
-                        <button
-                          type="button"
-                          onClick={() => removeFaq(faq.id)}
-                          className="text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors hover:text-red-600"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(event) => updateFaq(faq.id, 'question', event.target.value)}
-                        className="mb-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Question or topic"
-                      />
-                      <textarea
-                        rows={3}
-                        value={faq.answer}
-                        onChange={(event) => updateFaq(faq.id, 'answer', event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Detailed answer"
-                      />
-                    </div>
+                {/* Preset swatches */}
+                <div className="flex flex-wrap gap-2">
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => patch({ accentColor: c })}
+                      title={c}
+                      className={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${draft.accentColor === c ? "border-slate-900 scale-110 shadow-lg" : "border-white shadow"}`}
+                      style={{ background: c }}
+                    />
                   ))}
                 </div>
+              </div>
+            </div>
 
-                <div className="mt-4 flex justify-end">
+            {/* Position */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                Widget Position
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["right", "left"] as const).map((pos) => (
                   <button
+                    key={pos}
                     type="button"
-                    onClick={() => void saveKnowledgeBase()}
-                    className="rounded-2xl bg-indigo-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700"
+                    onClick={() => patch({ position: pos })}
+                    className={`rounded-2xl border py-3 text-xs font-black uppercase tracking-widest transition-all ${draft.position === pos ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-indigo-200"}`}
                   >
-                    Save Knowledge Base
+                    {pos === "right" ? "→ Right" : "← Left"}
                   </button>
-                </div>
+                ))}
               </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => void saveCustomization()}
-                className="w-full rounded-2xl bg-slate-900 px-5 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800"
-              >
-                Save Chatbot Customization
-              </button>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Welcome Message
+              </label>
+              <textarea
+                rows={3}
+                value={draft.welcomeMessage}
+                onChange={(e) => patch({ welcomeMessage: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Input Placeholder
+              </label>
+              <input
+                type="text"
+                value={draft.placeholder}
+                onChange={(e) => patch({ placeholder: e.target.value })}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Custom AI Prompt (optional)
+              </label>
+              <textarea
+                rows={3}
+                value={draft.customPrompt}
+                onChange={(e) => patch({ customPrompt: e.target.value })}
+                placeholder="Shape the AI's personality and instructions…"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
           </div>
 
-          <div className="bg-slate-900 rounded-3xl shadow-2xl p-8 text-white">
-            <div className="flex items-center justify-between gap-4 mb-4">
+          {/* Knowledge base */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
+            <div className="flex items-center justify-between mb-5">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.25em] text-indigo-300">Embed Script</p>
-                <h3 className="text-xl font-black mt-2">Deploy this chatbot anywhere</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleCopyScript()}
-                className="rounded-2xl bg-white/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-white/20"
-              >
-                {copied ? 'Copied' : 'Copy Script'}
-              </button>
-            </div>
-            <p className="text-sm text-indigo-100/80 mb-4">Paste this script tag into any site, CMS, or landing-page builder where you want the chatbot widget to appear.</p>
-            <pre className="overflow-x-auto rounded-2xl bg-black/30 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all">{activeChatbot.embedScript}</pre>
-          </div>
-        </div>
-
-        <div className="flex flex-col h-[calc(100vh-220px)] bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <div className="flex items-center gap-4">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ backgroundColor: activeChatbot.accentColor }}
-              >
-                <span className="text-sm font-black text-white">{activeChatbot.avatarLabel}</span>
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-slate-900">{activeChatbot.headerTitle}</h2>
-                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: activeChatbot.accentColor }}>
-                  Linked to {linkedVoiceAgent.name}
+                <h3 className="text-lg font-black text-slate-900">
+                  Knowledge Base
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Scraped content is stored in Supabase and used by the AI.
                 </p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => void onResetConversation(activeChatbot.id)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-indigo-200 hover:text-indigo-600"
+                onClick={addFaq}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
               >
-                Reset Thread
+                + Add Entry
               </button>
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Live Preview</span>
+            </div>
+
+            {/* Scraper */}
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Import from Website URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void handleImport()}
+                  placeholder="https://yourwebsite.com"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleImport()}
+                  disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
+                  className="rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                >
+                  {scrapeStatus === "loading" ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Importing…
+                    </>
+                  ) : (
+                    "Import Website"
+                  )}
+                </button>
+              </div>
+              {scrapeMsg && (
+                <p
+                  className={`mt-2 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
+                >
+                  {scrapeMsg}
+                </p>
+              )}
+              <p className="mt-2 text-[11px] text-slate-400">
+                Content is chunked and stored in Supabase. FAQs are generated
+                automatically.
+              </p>
+            </div>
+
+            {/* FAQ list */}
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+              {draft.faqs.length === 0 ? (
+                <p className="text-center text-slate-400 text-sm py-6">
+                  No entries yet. Import a site or add manually.
+                </p>
+              ) : (
+                draft.faqs.map((faq) => (
+                  <div
+                    key={faq.id}
+                    className={`rounded-2xl border p-4 ${(faq as any).source === "scraped" ? "border-indigo-100 bg-indigo-50/40" : "border-slate-200 bg-slate-50"}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className={`text-[9px] font-black uppercase tracking-widest ${(faq as any).source === "scraped" ? "text-indigo-400" : "text-slate-400"}`}
+                      >
+                        {(faq as any).source === "scraped"
+                          ? "🕷 Scraped"
+                          : "Manual"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFaq(faq.id)}
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={faq.question}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "question", e.target.value)
+                      }
+                      placeholder="Question / topic"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                    />
+                    <textarea
+                      rows={2}
+                      value={faq.answer}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "answer", e.target.value)
+                      }
+                      placeholder="Answer"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-50/30">
-            {localMessages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] p-4 rounded-2xl shadow-sm ${
-                    message.role === 'user'
-                      ? 'text-white rounded-tr-none'
-                      : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
-                  }`}
-                  style={message.role === 'user' ? { backgroundColor: activeChatbot.accentColor } : undefined}
+          <button
+            type="button"
+            onClick={() => void saveCustomization()}
+            disabled={busyAction === "save"}
+            className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3"
+          >
+            {busyAction === "save" ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save All Changes"
+            )}
+          </button>
+        </div>
+
+        {/* RIGHT: live preview + embed */}
+        <div className="space-y-6 sticky top-6">
+          {/* Preview */}
+          <div className="bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="px-7 py-5 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                  Live Preview
+                </p>
+                <p className="text-white font-black text-lg mt-0.5">
+                  {draft.headerTitle || "Chat Preview"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void onResetConversation(activeChatbot.id)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10"
                 >
-                  <p className="text-sm font-medium leading-relaxed">{message.text}</p>
-                  <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${message.role === 'user' ? 'text-white/70' : 'text-slate-400'}`}>
-                    {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  Reset
+                </button>
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/50">
+                  Live
+                </span>
+              </div>
+            </div>
+
+            <div
+              className="m-6 rounded-2xl overflow-hidden border border-white/10 flex flex-col"
+              style={{ height: "480px" }}
+            >
+              {/* Widget header — uses draft.accentColor */}
+              <div
+                className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
+                style={{ background: previewColor }}
+              >
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 text-white"
+                  style={{ background: "rgba(255,255,255,0.22)" }}
+                >
+                  {draft.avatarLabel || "A"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm truncate">
+                    {draft.headerTitle || "Chat with us"}
+                  </p>
+                  <p className="text-white/75 text-xs flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-green-300 rounded-full inline-block" />
+                    Online · Instant replies
                   </p>
                 </div>
               </div>
-            ))}
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm">
-                  <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce"></div>
-                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+
+              {/* Messages */}
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-800/50 custom-scrollbar"
+              >
+                <div className="flex justify-start">
+                  <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-white/10 text-white/90 text-sm font-medium">
+                    {draft.welcomeMessage || "Hello! How can I help you today?"}
+                    <div className="text-[10px] text-white/40 mt-1">
+                      Just now
+                    </div>
                   </div>
                 </div>
+                {localMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-sm font-medium ${msg.role === "user" ? "text-white rounded-tr-sm" : "bg-white/10 text-white/90 rounded-tl-sm"}`}
+                      style={
+                        msg.role === "user"
+                          ? { background: previewColor }
+                          : undefined
+                      }
+                    >
+                      {msg.text}
+                      <div
+                        className={`text-[10px] mt-1 ${msg.role === "user" ? "text-white/50" : "text-white/40"}`}
+                      >
+                        {new Date(msg.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white/10">
+                      <div className="flex gap-1">
+                        {[0, 200, 400].map((d) => (
+                          <div
+                            key={d}
+                            className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce"
+                            style={{ animationDelay: `${d}ms` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Input */}
+              <form
+                onSubmit={handleSend}
+                className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={draft.placeholder || "Type your message…"}
+                  className="flex-1 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 px-4 py-2.5 text-sm outline-none focus:border-white/30"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isTyping}
+                  className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-all"
+                  style={{ background: previewColor }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </form>
+            </div>
           </div>
 
-          <form onSubmit={handleSend} className="p-6 bg-white border-t border-slate-100">
-            {error && (
-              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                {error}
+          {/* Embed script */}
+          <div className="bg-slate-900 rounded-3xl shadow-2xl p-7 text-white">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                  Embed Script
+                </p>
+                <h3 className="text-lg font-black mt-1">Deploy anywhere</h3>
               </div>
-            )}
-            {!error && busyAction && (
-              <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-600">
-                Saving workspace changes...
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              {activeChatbot.suggestedPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => setInput(prompt)}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-indigo-200 hover:text-indigo-600"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder={activeChatbot.placeholder}
-                className="w-full pl-6 pr-16 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
-              />
               <button
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                className="absolute right-2 p-3 text-white rounded-xl transition-all disabled:opacity-50 shadow-lg"
-                style={{ backgroundColor: activeChatbot.accentColor }}
+                type="button"
+                onClick={() => void handleCopy()}
+                className="rounded-2xl bg-white/10 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/20 transition-all"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polyline points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                {copied ? "✓ Copied!" : "Copy Script"}
               </button>
             </div>
-            <p className="text-[10px] text-center mt-4 font-black text-slate-400 uppercase tracking-widest">
-              Website chatbot powered by {linkedVoiceAgent.name}
+            <p className="text-sm text-indigo-100/70 mb-4">
+              Paste before{" "}
+              <code className="text-indigo-300">&lt;/body&gt;</code> on any
+              site. Config changes are live immediately — no redeploy.
             </p>
-          </form>
+            <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
+              {activeChatbot.embedScript}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
