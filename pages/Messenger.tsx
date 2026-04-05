@@ -120,33 +120,9 @@ const Messenger: React.FC<MessengerProps> = ({
     setScrapeMsg("");
     setError("");
     try {
-      const apiBase = (
-        (import.meta as any).env?.VITE_API_BASE_URL || ""
-      ).replace(/\/$/, "");
-      const token = localStorage.getItem("agently.auth.token") || "";
-      const res = await fetch(`${apiBase}/api/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          url: scrapeUrl.trim(),
-          chatbotId: activeChatbot.id,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "Scrape failed.");
-      const scrapedFaqs: FAQ[] = (data.faqs || []).map((f: FAQ) => ({
-        ...f,
-        source: "scraped",
-      }));
-      const manualFaqs = draft.faqs.filter((f: any) => f.source !== "scraped");
-      patch({ faqs: [...scrapedFaqs, ...manualFaqs] });
+      await onImportChatbotFaqs(activeChatbot.id, scrapeUrl);
       setScrapeStatus("done");
-      setScrapeMsg(
-        `✓ Scraped (${data.method}) · ${data.chunksStored} chunks saved · ${scrapedFaqs.length} FAQs generated. Click Save to apply.`,
-      );
+      setScrapeMsg(`✓ Scraped successfully. FAQs added. Click Save to apply.`);
     } catch (e) {
       setScrapeStatus("error");
       setScrapeMsg(e instanceof Error ? e.message : "Scrape failed.");
@@ -403,7 +379,6 @@ const Messenger: React.FC<MessengerProps> = ({
                       className="w-full rounded-2xl border border-slate-200 pl-8 pr-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  {/* Native color picker */}
                   <label className="cursor-pointer relative" title="Pick color">
                     <input
                       type="color"
@@ -417,7 +392,6 @@ const Messenger: React.FC<MessengerProps> = ({
                     />
                   </label>
                 </div>
-                {/* Preset swatches */}
                 <div className="flex flex-wrap gap-2">
                   {COLOR_PRESETS.map((c) => (
                     <button
@@ -433,7 +407,6 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            {/* Position */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Widget Position
@@ -515,7 +488,7 @@ const Messenger: React.FC<MessengerProps> = ({
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Import from Website URL
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={scrapeUrl}
@@ -528,7 +501,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   type="button"
                   onClick={() => void handleImport()}
                   disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                  className="rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  className="rounded-2xl bg-slate-900 px-3 md:px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
                 >
                   {scrapeStatus === "loading" ? (
                     <>
@@ -547,60 +520,68 @@ const Messenger: React.FC<MessengerProps> = ({
                   {scrapeMsg}
                 </p>
               )}
-              <p className="mt-2 text-[11px] text-slate-400">
-                Content is chunked and stored in Supabase. FAQs are generated
-                automatically.
-              </p>
             </div>
 
-            {/* FAQ list */}
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+            {/* FAQ Carousel */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-black text-slate-900">FAQs</h4>
+                <button
+                  type="button"
+                  onClick={addFaq}
+                  className="text-xs font-black text-indigo-600"
+                >
+                  + Add
+                </button>
+              </div>
               {draft.faqs.length === 0 ? (
                 <p className="text-center text-slate-400 text-sm py-6">
-                  No entries yet. Import a site or add manually.
+                  No FAQs yet. Import a website or add manually.
                 </p>
               ) : (
-                draft.faqs.map((faq) => (
+                <div className="overflow-x-auto pb-2 custom-scrollbar">
                   <div
-                    key={faq.id}
-                    className={`rounded-2xl border p-4 ${(faq as any).source === "scraped" ? "border-indigo-100 bg-indigo-50/40" : "border-slate-200 bg-slate-50"}`}
+                    className="flex gap-4"
+                    style={{ minWidth: "max-content" }}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span
-                        className={`text-[9px] font-black uppercase tracking-widest ${(faq as any).source === "scraped" ? "text-indigo-400" : "text-slate-400"}`}
+                    {draft.faqs.map((faq) => (
+                      <div
+                        key={faq.id}
+                        className="w-80 flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                       >
-                        {(faq as any).source === "scraped"
-                          ? "🕷 Scraped"
-                          : "Manual"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFaq(faq.id)}
-                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={faq.question}
-                      onChange={(e) =>
-                        updateFaq(faq.id, "question", e.target.value)
-                      }
-                      placeholder="Question / topic"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
-                    />
-                    <textarea
-                      rows={2}
-                      value={faq.answer}
-                      onChange={(e) =>
-                        updateFaq(faq.id, "answer", e.target.value)
-                      }
-                      placeholder="Answer"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
-                    />
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            FAQ
+                          </span>
+                          <button
+                            onClick={() => removeFaq(faq.id)}
+                            className="text-slate-300 hover:text-red-500"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={faq.question}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "question", e.target.value)
+                          }
+                          placeholder="Question"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium mb-2 focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <textarea
+                          rows={3}
+                          value={faq.answer}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "answer", e.target.value)
+                          }
+                          placeholder="Answer"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))
+                </div>
               )}
             </div>
           </div>
@@ -654,7 +635,6 @@ const Messenger: React.FC<MessengerProps> = ({
               className="m-6 rounded-2xl overflow-hidden border border-white/10 flex flex-col"
               style={{ height: "480px" }}
             >
-              {/* Widget header — uses draft.accentColor */}
               <div
                 className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
                 style={{ background: previewColor }}
@@ -676,7 +656,6 @@ const Messenger: React.FC<MessengerProps> = ({
                 </div>
               </div>
 
-              {/* Messages */}
               <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-800/50 custom-scrollbar"
@@ -731,7 +710,6 @@ const Messenger: React.FC<MessengerProps> = ({
                 )}
               </div>
 
-              {/* Input */}
               <form
                 onSubmit={handleSend}
                 className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0"
