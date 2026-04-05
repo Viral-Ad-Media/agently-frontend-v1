@@ -515,7 +515,7 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
               {scrapeMsg && (
                 <p
-                  className={`mt-2 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
+                  className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
                 >
                   {scrapeMsg}
                 </p>
