@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChatMessage, ChatbotConfig, Organization } from "../types";
-import { api } from "../services/api";
+import { ChatMessage, ChatbotConfig, FAQ, Organization } from "../types";
 
 interface MessengerProps {
   org: Organization;
@@ -67,11 +66,9 @@ const Messenger: React.FC<MessengerProps> = ({
   useEffect(() => {
     if (activeChatbot) setDraft(activeChatbot);
   }, [activeChatbot?.id]);
-
   useEffect(() => {
     setLocalMessages(messages);
   }, [messages]);
-
   useEffect(() => {
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -96,31 +93,8 @@ const Messenger: React.FC<MessengerProps> = ({
   const patch = (updates: Partial<ChatbotConfig>) =>
     setDraft((d) => ({ ...d, ...updates }));
 
-  // Build embed script that points to backend widget endpoint (always fresh)
-  const buildEmbedScript = (chatbot: ChatbotConfig) => {
-    const backendUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(
-      /\/$/,
-      "",
-    );
-    const positionStyle =
-      chatbot.position === "left" ? "left:20px" : "right:20px";
-    return `<!-- Agently Chat Widget - configuration loaded live from server -->
-<iframe
-  id="agently-widget-${chatbot.id}"
-  src="${backendUrl}/widget/${chatbot.id}"
-  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"
-  scrolling="no"
-  frameborder="0"
-  allow="microphone"
-  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-  referrerpolicy="no-referrer-when-downgrade"
-></iframe>`;
-  };
-
   const saveCustomization = async () => {
     await runAction("save", async () => {
-      // Generate fresh embed script with latest config
-      const freshEmbedScript = buildEmbedScript(draft);
       await onUpdateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
@@ -134,9 +108,8 @@ const Messenger: React.FC<MessengerProps> = ({
         customPrompt: draft.customPrompt,
         suggestedPrompts: draft.suggestedPrompts,
         faqs: draft.faqs,
-        embedScript: freshEmbedScript,
       });
-      setSaveSuccess("Saved! Embed script updated.");
+      setSaveSuccess("Saved!");
       setTimeout(() => setSaveSuccess(""), 2500);
     });
   };
@@ -147,17 +120,9 @@ const Messenger: React.FC<MessengerProps> = ({
     setScrapeMsg("");
     setError("");
     try {
-      // This calls the backend endpoint that scrapes, chunks, and stores in knowledge_chunks
-      const result = await api.importChatbotWebsite(
-        activeChatbot.id,
-        scrapeUrl,
-      );
+      await onImportChatbotFaqs(activeChatbot.id, scrapeUrl);
       setScrapeStatus("done");
-      // ONLY show chunks stored – no auto‑FAQs
-      setScrapeMsg(
-        `✓ Scraped successfully. ${result.chunksStored || 0} chunks stored in knowledge base.`,
-      );
-      // DO NOT update FAQs from scrape result – keep manual FAQs only
+      setScrapeMsg(`✓ Scraped successfully. FAQs added. Click Save to apply.`);
     } catch (e) {
       setScrapeStatus("error");
       setScrapeMsg(e instanceof Error ? e.message : "Scrape failed.");
@@ -205,10 +170,7 @@ const Messenger: React.FC<MessengerProps> = ({
 
   const handleCopy = async () => {
     try {
-      // Always copy the latest embed script from the draft (or active chatbot)
-      const scriptToCopy =
-        activeChatbot.embedScript || buildEmbedScript(activeChatbot);
-      await navigator.clipboard.writeText(scriptToCopy);
+      await navigator.clipboard.writeText(activeChatbot.embedScript);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -501,7 +463,7 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
           </div>
 
-          {/* Knowledge Base - with scraper (no FAQ inside) */}
+          {/* Knowledge base */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -512,10 +474,17 @@ const Messenger: React.FC<MessengerProps> = ({
                   Scraped content is stored in Supabase and used by the AI.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={addFaq}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+              >
+                + Add Entry
+              </button>
             </div>
 
             {/* Scraper */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Import from Website URL
               </label>
@@ -552,72 +521,69 @@ const Messenger: React.FC<MessengerProps> = ({
                 </p>
               )}
             </div>
-          </div>
 
-          {/* FAQ Carousel – separate card, horizontally scrollable */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">FAQs</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Manually added – these override scraped content.
+            {/* FAQ Carousel */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-black text-slate-900">FAQs</h4>
+                <button
+                  type="button"
+                  onClick={addFaq}
+                  className="text-xs font-black text-indigo-600"
+                >
+                  + Add
+                </button>
+              </div>
+              {draft.faqs.length === 0 ? (
+                <p className="text-center text-slate-400 text-sm py-6">
+                  No FAQs yet. Import a website or add manually.
                 </p>
-              </div>
-              <button
-                type="button"
-                onClick={addFaq}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-              >
-                + Add Entry
-              </button>
-            </div>
-
-            {draft.faqs.length === 0 ? (
-              <p className="text-center text-slate-400 text-sm py-6">
-                No FAQs yet. Add your first entry.
-              </p>
-            ) : (
-              <div className="overflow-x-auto pb-2 custom-scrollbar">
-                <div className="flex gap-4" style={{ minWidth: "max-content" }}>
-                  {draft.faqs.map((faq) => (
-                    <div
-                      key={faq.id}
-                      className="w-80 flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                          FAQ
-                        </span>
-                        <button
-                          onClick={() => removeFaq(faq.id)}
-                          className="text-slate-300 hover:text-red-500"
-                        >
-                          ✕
-                        </button>
+              ) : (
+                <div className="overflow-x-auto pb-2 custom-scrollbar">
+                  <div
+                    className="flex gap-4"
+                    style={{ minWidth: "max-content" }}
+                  >
+                    {draft.faqs.map((faq) => (
+                      <div
+                        key={faq.id}
+                        className="w-80 flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            FAQ
+                          </span>
+                          <button
+                            onClick={() => removeFaq(faq.id)}
+                            className="text-slate-300 hover:text-red-500"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={faq.question}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "question", e.target.value)
+                          }
+                          placeholder="Question"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium mb-2 focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <textarea
+                          rows={3}
+                          value={faq.answer}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "answer", e.target.value)
+                          }
+                          placeholder="Answer"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(e) =>
-                          updateFaq(faq.id, "question", e.target.value)
-                        }
-                        placeholder="Question"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium mb-2 focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <textarea
-                        rows={3}
-                        value={faq.answer}
-                        onChange={(e) =>
-                          updateFaq(faq.id, "answer", e.target.value)
-                        }
-                        placeholder="Answer"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <button
@@ -802,7 +768,7 @@ const Messenger: React.FC<MessengerProps> = ({
               site. Config changes are live immediately — no redeploy.
             </p>
             <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
-              {activeChatbot.embedScript || buildEmbedScript(activeChatbot)}
+              {activeChatbot.embedScript}
             </pre>
           </div>
         </div>
