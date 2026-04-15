@@ -418,3 +418,107 @@ export const api = {
     });
   },
 };
+// ─────────────────────────────────────────────────────────────
+// Twilio Phone Number Management  (appended)
+// ─────────────────────────────────────────────────────────────
+export const twilioApi = {
+  /** List countries where Twilio supports numbers */
+  async listCountries() {
+    const res = await fetch(
+      `${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')}/api/twilio/numbers/countries`,
+      { headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` } }
+    );
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Failed');
+    return (await res.json()) as { countries: import('../types').PhoneCountry[] };
+  },
+
+  /** Search available phone numbers */
+  async searchNumbers(params: { country: string; type?: string; areaCode?: string; contains?: string; limit?: number }) {
+    const qs = new URLSearchParams({ country: params.country, type: params.type || 'Local' });
+    if (params.areaCode) qs.set('areaCode', params.areaCode);
+    if (params.contains) qs.set('contains', params.contains);
+    if (params.limit) qs.set('limit', String(params.limit));
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/search?${qs}`, {
+      headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Search failed');
+    return (await res.json()) as { numbers: import('../types').AvailablePhoneNumber[] };
+  },
+
+  /** List numbers already owned on the master account */
+  async listOwned() {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/owned`, {
+      headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Failed');
+    return (await res.json()) as { numbers: import('../types').OwnedPhoneNumber[] };
+  },
+
+  /** Purchase a new number and assign to a voice agent */
+  async purchaseNumber(phoneNumber: string, voiceAgentId?: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/purchase`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
+      },
+      body: JSON.stringify({ phoneNumber, voiceAgentId }),
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Purchase failed');
+    return res.json() as Promise<{ success: boolean; phoneNumber: string; phoneSid: string; agentId: string }>;
+  },
+
+  /** Assign an already-owned number to a voice agent */
+  async assignNumber(phoneSid: string, phoneNumber: string, voiceAgentId?: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/assign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
+      },
+      body: JSON.stringify({ phoneSid, phoneNumber, voiceAgentId }),
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Assign failed');
+    return res.json();
+  },
+
+  /** Release a number */
+  async releaseNumber(sid: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/${sid}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Release failed');
+    return res.json();
+  },
+
+  /** Get Twilio billing data for this month */
+  async getBilling() {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/billing`, {
+      headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
+    });
+    if (!res.ok) throw new Error('Failed to fetch billing');
+    return (await res.json()) as { billing: import('../types').TwilioBilling };
+  },
+
+  /** Initiate an outbound call */
+  async makeCall(toPhone: string, voiceAgentId?: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/outbound`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
+      },
+      body: JSON.stringify({ toPhone, voiceAgentId }),
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Call failed');
+    return res.json() as Promise<{ success: boolean; callSid: string; status: string }>;
+  },
+};

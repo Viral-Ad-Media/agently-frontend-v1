@@ -51,11 +51,12 @@ export interface CallRecord {
   id: string;
   callerName: string;
   callerPhone: string;
-  duration: number; // in seconds
+  duration: number;
   timestamp: string;
   outcome: CallOutcome;
   summary: string;
   transcript: { speaker: 'Agent' | 'Caller'; text: string }[];
+  recordingUrl?: string;
 }
 
 export interface FAQ {
@@ -71,14 +72,26 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+// Updated to use Twilio ConversationRelay voice options
+export type AgentVoice =
+  | 'Rachel'    // ElevenLabs – female, calm
+  | 'Domi'      // ElevenLabs – female, strong
+  | 'Bella'     // ElevenLabs – female, soft
+  | 'Josh'      // ElevenLabs – male, deep
+  | 'Arnold'    // ElevenLabs – male, crisp
+  | 'Wavenet-F' // Google – female
+  | 'Wavenet-D' // Google – male
+  | 'Polly-Joanna'  // Amazon – female
+  | 'Polly-Matthew'; // Amazon – male
+
 export interface AgentConfig {
   id: string;
   name: string;
   direction: 'inbound' | 'outbound';
   twilioPhoneNumber: string;
   twilioPhoneSid: string;
-  voice: 'Zephyr' | 'Puck' | 'Charon' | 'Kore' | 'Fenrir';
-  language: 'English' | 'Spanish' | 'French' | 'German';
+  voice: AgentVoice;
+  language: 'English' | 'Spanish' | 'French' | 'German' | 'Portuguese' | 'Italian';
   greeting: string;
   tone: 'Professional' | 'Friendly' | 'Empathetic';
   businessHours: string;
@@ -86,11 +99,45 @@ export interface AgentConfig {
   escalationPhone: string;
   voicemailFallback: boolean;
   dataCaptureFields: string[];
+  isActive: boolean;
   rules: {
     autoBook: boolean;
     autoEscalate: boolean;
     captureAllLeads: boolean;
   };
+}
+
+export interface AvailablePhoneNumber {
+  phoneNumber: string;
+  friendlyName: string;
+  locality: string;
+  region: string;
+  isoCountry: string;
+  capabilities: { voice: boolean; sms: boolean; mms: boolean };
+  addressRequired: string;
+}
+
+export interface OwnedPhoneNumber {
+  sid: string;
+  phoneNumber: string;
+  friendlyName: string;
+  voiceUrl: string;
+  dateCreated: string;
+  capabilities: { voice: boolean; sms: boolean };
+}
+
+export interface PhoneCountry {
+  country: string;
+  countryName: string;
+  hasLocal: boolean;
+  hasTollFree: boolean;
+  hasMobile: boolean;
+}
+
+export interface TwilioBilling {
+  periodStart: string;
+  voice: { count: string; minutes: string; cost: string; currency: string };
+  sms: { count: string; cost: string; currency: string };
 }
 
 export interface ChatbotConfig {
@@ -121,10 +168,6 @@ export interface BusinessProfile {
 }
 
 export interface TwilioSettings {
-  accountSid: string;
-  authTokenConfigured: boolean;
-  authTokenLastFour: string;
-  validateRequests: boolean;
   webhookBaseUrl: string;
 }
 

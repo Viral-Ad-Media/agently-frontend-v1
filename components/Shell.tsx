@@ -24,6 +24,12 @@ const NAV_ITEMS: Array<{
     description: "Configure lines, scripts, and knowledge",
   },
   {
+    to: "/phone-numbers",
+    icon: ICONS.PhoneNumber,
+    label: "Phone Numbers",
+    description: "Search, purchase, and assign Twilio numbers",
+  },
+  {
     to: "/messenger",
     icon: ICONS.MessageSquare,
     label: "Chatbot Agent",
@@ -92,6 +98,12 @@ const getPageMeta = (pathname: string, org: Organization) => {
       title: "Voice Agent Studio",
       description:
         "Manage every inbound and outbound voice agent, their numbers, and their knowledge base.",
+    },
+    "/phone-numbers": {
+      eyebrow: "Number Management",
+      title: "Phone Numbers",
+      description:
+        "Search, purchase, and assign Twilio numbers to your voice agents — all from your master account.",
     },
     "/features": {
       eyebrow: "Product Surface",

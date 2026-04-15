@@ -1,10 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Organization, AgentConfig, FAQ } from '../types';
+import { Organization, AgentConfig, FAQ, AgentVoice } from '../types';
 import { api } from '../services/api';
 
-const VOICES    = ['Zephyr','Puck','Charon','Kore','Fenrir'] as const;
+// Twilio ConversationRelay voices with provider labels
+const VOICES: { id: AgentVoice; label: string; provider: string; gender: string }[] = [
+  { id: 'Rachel',       label: 'Rachel',         provider: 'ElevenLabs', gender: 'Female' },
+  { id: 'Domi',         label: 'Domi',            provider: 'ElevenLabs', gender: 'Female' },
+  { id: 'Bella',        label: 'Bella',           provider: 'ElevenLabs', gender: 'Female' },
+  { id: 'Josh',         label: 'Josh',            provider: 'ElevenLabs', gender: 'Male'   },
+  { id: 'Arnold',       label: 'Arnold',          provider: 'ElevenLabs', gender: 'Male'   },
+  { id: 'Wavenet-F',    label: 'Wavenet F',       provider: 'Google',     gender: 'Female' },
+  { id: 'Wavenet-D',    label: 'Wavenet D',       provider: 'Google',     gender: 'Male'   },
+  { id: 'Polly-Joanna', label: 'Joanna',          provider: 'Amazon',     gender: 'Female' },
+  { id: 'Polly-Matthew',label: 'Matthew',         provider: 'Amazon',     gender: 'Male'   },
+];
 const TONES     = ['Professional','Friendly','Empathetic'] as const;
-const LANGUAGES = ['English','Spanish','French','German'] as const;
+const LANGUAGES = ['English','Spanish','French','German','Portuguese','Italian'] as const;
 
 interface AgentSettingsProps {
   org: Organization;
@@ -213,11 +224,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <option value="outbound">Outbound</option>
                 </Sel>
               </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <Label>Voice Profile</Label>
                 <Sel value={draft.voice} onChange={e => saveDraftField('voice', e.target.value as AgentConfig['voice'])}>
-                  {VOICES.map(v => <option key={v}>{v}</option>)}
+                  {['ElevenLabs','Google','Amazon'].map(provider => (
+                    <optgroup key={provider} label={`${provider}`}>
+                      {VOICES.filter(v => v.provider === provider).map(v => (
+                        <option key={v.id} value={v.id}>{v.label} ({v.gender})</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </Sel>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {(() => { const v = VOICES.find(x => x.id === draft.voice); return v ? `${v.provider} · ${v.gender} voice` : ''; })()}
+                </p>
               </div>
               <div>
                 <Label>Language</Label>
@@ -226,16 +246,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </Sel>
               </div>
               <div>
-                <Label>Twilio Number</Label>
-                <Inp type="tel" placeholder="+1 (555) 000-0000" value={draft.twilioPhoneNumber}
-                  onChange={e => setDraft(d => ({...d, twilioPhoneNumber: e.target.value}))}
-                  onBlur={() => { if (draft.twilioPhoneNumber !== org.agent.twilioPhoneNumber) saveDraftField('twilioPhoneNumber', draft.twilioPhoneNumber); }} />
-              </div>
-              <div>
-                <Label>Phone SID</Label>
-                <Inp type="text" placeholder="PNxxx..." value={draft.twilioPhoneSid}
-                  onChange={e => setDraft(d => ({...d, twilioPhoneSid: e.target.value}))}
-                  onBlur={() => { if (draft.twilioPhoneSid !== org.agent.twilioPhoneSid) saveDraftField('twilioPhoneSid', draft.twilioPhoneSid); }} />
+                <Label>Assigned Number</Label>
+                <div className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-slate-500 flex items-center gap-2">
+                  <span className="text-base">📱</span>
+                  {draft.twilioPhoneNumber || 'Not assigned'}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Manage in <strong>Phone Numbers</strong> section</p>
               </div>
             </div>
 
