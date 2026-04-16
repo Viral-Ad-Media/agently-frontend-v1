@@ -343,13 +343,10 @@ export const api = {
     triggerDownload(blob, 'agently-leads.csv');
   },
 
-  async inviteMember(email: string, role: Extract<UserRole, 'Admin' | 'Viewer'>) {
+  async inviteMember(email: string, role: Extract<UserRole, 'Admin' | 'Viewer'>, name?: string) {
     return request<{ member: User }>(
       '/api/team/invitations',
-      {
-        method: 'POST',
-        body: { email, role },
-      },
+      { method: 'POST', body: { email, role, name } },
     );
   },
 

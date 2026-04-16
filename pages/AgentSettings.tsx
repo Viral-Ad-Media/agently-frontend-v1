@@ -421,31 +421,37 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
             ) : (
               <>
-                {/* Horizontal scrollable carousel */}
-                <div ref={faqScrollRef} className="overflow-x-auto pb-2 -mx-1 px-1 custom-scrollbar">
-                  <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
+                {/* Horizontal scrollable carousel – wider cards, 2-3 visible */}
+                <div ref={faqScrollRef} className="overflow-x-auto pb-3 -mx-1 px-1 custom-scrollbar">
+                  <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
                     {draft.faqs.map((faq, i) => {
                       const orig = org.agent.faqs.find(f => f.id === faq.id);
                       return (
                         <div key={faq.id}
-                          className="w-72 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-2.5 group hover:border-amber-200 hover:bg-amber-50/20 transition-all">
+                          className="w-[420px] shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col gap-3 group hover:border-amber-200 hover:bg-amber-50/20 transition-all">
                           <div className="flex items-center justify-between">
                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">#{i+1}</span>
                             <button onClick={() => void run(`del-faq-${faq.id}`, () => onRemoveFaq(faq.id), 'Removed')}
-                              className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 opacity-0 group-hover:opacity-100 transition-all">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 opacity-0 group-hover:opacity-100 transition-all">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                           </div>
-                          <input type="text" value={faq.question}
-                            onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, question: e.target.value} : f) }))}
-                            onBlur={() => { if (faq.question !== (orig?.question || '')) void run(`q-${faq.id}`, () => onUpdateFaq(faq.id, { question: faq.question })); }}
-                            placeholder="Question"
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
-                          <textarea rows={3} value={faq.answer}
-                            onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, answer: e.target.value} : f) }))}
-                            onBlur={() => { if (faq.answer !== (orig?.answer || '')) void run(`a-${faq.id}`, () => onUpdateFaq(faq.id, { answer: faq.answer })); }}
-                            placeholder="Answer"
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs resize-none outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
+                            <input type="text" value={faq.question}
+                              onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, question: e.target.value} : f) }))}
+                              onBlur={() => { if (faq.question !== (orig?.question || '')) void run(`q-${faq.id}`, () => onUpdateFaq(faq.id, { question: faq.question })); }}
+                              placeholder="e.g. What are your hours?"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
+                            <textarea rows={5} value={faq.answer}
+                              onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, answer: e.target.value} : f) }))}
+                              onBlur={() => { if (faq.answer !== (orig?.answer || '')) void run(`a-${faq.id}`, () => onUpdateFaq(faq.id, { answer: faq.answer })); }}
+                              placeholder="e.g. We are open Monday–Friday, 9am–6pm."
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                          </div>
                         </div>
                       );
                     })}

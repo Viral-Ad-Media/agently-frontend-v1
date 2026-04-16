@@ -23,14 +23,13 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
-import PhoneNumbers from "./pages/PhoneNumbers";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const CallLogs = lazy(() => import("./pages/CallLogs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
-// const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
+const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Team = lazy(() => import("./pages/Team"));
 const Login = lazy(() => import("./pages/Login"));
@@ -334,8 +333,9 @@ const App: React.FC = () => {
   const handleInviteMember = async (
     email: string,
     role: "Admin" | "Viewer",
+    name: string,
   ) => {
-    await api.inviteMember(email, role);
+    await api.inviteMember(email, role, name);
     await refreshWorkspace();
   };
 
@@ -636,10 +636,7 @@ const App: React.FC = () => {
                   <PhoneNumbers
                     org={org}
                     onAgentUpdated={async (updates) => {
-                      await api.updateVoiceAgent(
-                        org.activeVoiceAgentId,
-                        updates,
-                      );
+                      await api.updateVoiceAgent(org.activeVoiceAgentId, updates);
                       await refreshWorkspace();
                     }}
                   />

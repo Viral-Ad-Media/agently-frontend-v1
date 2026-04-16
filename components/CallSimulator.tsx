@@ -58,15 +58,36 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose, onCallFin
   const startCall = () => {
     clearTimers();
     setStatus('calling');
-    connectTimeoutRef.current = setTimeout(() => {
+    connectTimeoutRef.current = setTimeout(async () => {
       setStatus('active');
-      setMessages([
-        { speaker: 'Agent', text: agent.greeting },
-        { speaker: 'You', text: scenario },
-      ]);
       setDuration(0);
       setIntent('Greeting');
-      timerRef.current = setInterval(() => setDuration((currentDuration) => currentDuration + 1), 1000);
+      // Show agent greeting immediately
+      setMessages([{ speaker: 'Agent', text: agent.greeting }]);
+      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+
+      // Get AI response to the caller's scenario
+      try {
+        const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+        const token = localStorage.getItem('agently_token') || sessionStorage.getItem('agently_token') || '';
+        const resp = await fetch(`${apiBase}/api/messenger/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ message: scenario }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const aiText = data.assistantMessage?.text || data.assistantMessage?.content || '';
+          if (aiText) {
+            setMessages([
+              { speaker: 'Agent', text: agent.greeting },
+              { speaker: 'You', text: scenario },
+              { speaker: 'Agent', text: aiText },
+            ]);
+            setIntent('Responding to inquiry');
+          }
+        }
+      } catch { /* fallback: static messages already set */ }
     }, 1500);
   };
 
@@ -131,13 +152,20 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose, onCallFin
   }, [duration, status]);
 
   useEffect(() => {
-    return () => {
-      clearTimers();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { clearTimers(); onClose(); }
     };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
+  useEffect(() => {
+    return () => { clearTimers(); };
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4"
+      onClick={e => { if (e.target === e.currentTarget) { clearTimers(); onClose(); } }}>
       <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-500 border border-white/20">
         
         {/* Header */}

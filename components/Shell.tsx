@@ -1,70 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ICONS } from "../constants";
 import { Organization, User } from "../types";
-
-type SidebarIcon = React.ComponentType<Record<string, never>>;
 
 const NAV_ITEMS: Array<{
   to: string;
-  icon: SidebarIcon;
+  icon: string;
   label: string;
   description: string;
 }> = [
-  {
-    to: "/dashboard",
-    icon: ICONS.Dashboard,
-    label: "Dashboard",
-    description: "Live performance and workload",
-  },
-  {
-    to: "/agent",
-    icon: ICONS.Robot,
-    label: "Voice Agent",
-    description: "Configure lines, scripts, and knowledge",
-  },
-  {
-    to: "/phone-numbers",
-    icon: ICONS.PhoneNumber,
-    label: "Phone Numbers",
-    description: "Search, purchase, and assign Twilio numbers",
-  },
-  {
-    to: "/messenger",
-    icon: ICONS.MessageSquare,
-    label: "Chatbot Agent",
-    description: "Widget design and chatbot knowledge",
-  },
-  {
-    to: "/calls",
-    icon: ICONS.Phone,
-    label: "Call Logs",
-    description: "Transcripts, outcomes, and reports",
-  },
-  {
-    to: "/leads",
-    icon: ICONS.Users,
-    label: "Lead CRM",
-    description: "Pipeline health and contact capture",
-  },
-  {
-    to: "/team",
-    icon: ICONS.Shield,
-    label: "Team",
-    description: "Members, permissions, and invites",
-  },
-  {
-    to: "/billing",
-    icon: ICONS.CreditCard,
-    label: "Billing",
-    description: "Plan usage, invoices, and upgrades",
-  },
-  {
-    to: "/settings",
-    icon: ICONS.Settings,
-    label: "Settings",
-    description: "Workspace, phone, and Twilio setup",
-  },
+  { to: "/dashboard",     icon: "fa-sharp fa-solid fa-chart-line",      label: "Dashboard",      description: "Live performance and workload" },
+  { to: "/agent",         icon: "fa-sharp fa-solid fa-microphone",      label: "Voice Agent",    description: "Configure lines, scripts, and knowledge" },
+  { to: "/phone-numbers", icon: "fa-sharp fa-solid fa-mobile-screen",   label: "Phone Numbers",  description: "Search, purchase, and assign numbers" },
+  { to: "/messenger",     icon: "fa-sharp fa-solid fa-message-bot",     label: "Chatbot Agent",  description: "Widget design and chatbot knowledge" },
+  { to: "/calls",         icon: "fa-sharp fa-solid fa-phone-volume",    label: "Call Logs",      description: "Transcripts, outcomes, and reports" },
+  { to: "/leads",         icon: "fa-sharp fa-solid fa-users",           label: "Lead CRM",       description: "Pipeline health and contact capture" },
+  { to: "/team",          icon: "fa-sharp fa-solid fa-user-shield",     label: "Team",           description: "Members, permissions, and invites" },
+  { to: "/billing",       icon: "fa-sharp fa-solid fa-credit-card",     label: "Billing",        description: "Plan usage, invoices, and upgrades" },
+  { to: "/settings",      icon: "fa-sharp fa-solid fa-gear",            label: "Settings",       description: "Workspace and phone setup" },
 ];
 
 const PUBLIC_NAV_ITEMS = [
@@ -208,11 +160,11 @@ const AppLoading: React.FC = () => (
 
 const SidebarLink: React.FC<{
   to: string;
-  icon: SidebarIcon;
+  icon: string;
   label: string;
   description: string;
   onNavigate?: () => void;
-}> = ({ to, icon: Icon, label, description, onNavigate }) => {
+}> = ({ to, icon, label, description, onNavigate }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
 
@@ -234,7 +186,7 @@ const SidebarLink: React.FC<{
             : "bg-slate-100 text-slate-700 group-hover:bg-white"
         }`}
       >
-        <Icon />
+        <i className={`${icon} text-base`} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-black tracking-tight">{label}</p>
@@ -299,7 +251,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             <div className="flex items-center justify-between">
               <Link to="/dashboard" className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
-                  <ICONS.Robot />
+                  <i className="fa-sharp fa-solid fa-robot text-xl" />
                 </div>
                 <div>
                   <p className="font-display text-xl text-slate-900">Agently</p>
@@ -435,12 +387,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     >
                       {org.subscription.plan}
                     </Link>
-                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-950 py-1.5 pl-1.5 pr-3 text-white shadow-[0_14px_32px_rgba(15,23,42,0.14)]">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/12 font-display text-sm">
+                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-950 py-1.5 pl-1.5 pr-4 text-white shadow-[0_14px_32px_rgba(15,23,42,0.14)]">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 font-display text-sm">
                         {user.name.charAt(0) || "A"}
                       </div>
-                      <div className="leading-tight">
-                        <p className="text-xs font-black">{user.name}</p>
+                      <div className="leading-tight min-w-0">
+                        <p className="text-xs font-black truncate max-w-[100px]">{user.name}</p>
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/55">
                           {user.role}
                         </p>
@@ -451,7 +403,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             </header>
 
-            <main className="mx-auto mt-6 max-w-7xl">{children}</main>
+            <main className="mx-auto mt-6 max-w-7xl">
+              {user.role === 'Viewer' && ['/agent','/phone-numbers','/settings','/team','/billing'].includes(location.pathname) ? (
+                <div className="relative">
+                  <div className="absolute inset-0 z-10 rounded-3xl bg-white/70 backdrop-blur-[2px] flex items-start justify-center pt-24 pointer-events-auto">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl px-8 py-6 text-center max-w-sm">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><rect width="11" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      </div>
+                      <p className="font-black text-slate-900 mb-1">Read-Only Access</p>
+                      <p className="text-xs text-slate-400">Your Viewer role doesn't allow editing. Contact an Admin or Owner to make changes.</p>
+                    </div>
+                  </div>
+                  <div className="pointer-events-none select-none opacity-40">{children}</div>
+                </div>
+              ) : children}
+            </main>
           </div>
         </div>
       </div>

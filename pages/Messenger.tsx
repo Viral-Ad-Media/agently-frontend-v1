@@ -519,20 +519,20 @@ const Messenger: React.FC<MessengerProps> = ({
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Import from Website URL
               </label>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2">
                 <input
                   type="text"
                   value={scrapeUrl}
                   onChange={(e) => setScrapeUrl(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void handleImport()}
                   placeholder="https://yourwebsite.com"
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={() => void handleImport()}
                   disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                  className="rounded-2xl bg-slate-900 px-3 md:px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {scrapeStatus === "loading" ? (
                     <>
@@ -540,7 +540,10 @@ const Messenger: React.FC<MessengerProps> = ({
                       Importing…
                     </>
                   ) : (
-                    "Import Website"
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      Import Website
+                    </>
                   )}
                 </button>
               </div>
@@ -577,42 +580,48 @@ const Messenger: React.FC<MessengerProps> = ({
                 No FAQs yet. Add your first entry.
               </p>
             ) : (
-              <div className="overflow-x-auto pb-2 custom-scrollbar">
+              <div className="overflow-x-auto pb-3 custom-scrollbar">
                 <div className="flex gap-4" style={{ minWidth: "max-content" }}>
                   {draft.faqs.map((faq) => (
                     <div
                       key={faq.id}
-                      className="w-80 flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      className="w-[420px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
                     >
-                      <div className="flex justify-between items-start mb-2">
+                      <div className="flex justify-between items-start">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                           FAQ
                         </span>
                         <button
                           onClick={() => removeFaq(faq.id)}
-                          className="text-slate-300 hover:text-red-500"
+                          className="text-slate-300 hover:text-red-500 transition-colors"
                         >
-                          ✕
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                       </div>
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(e) =>
-                          updateFaq(faq.id, "question", e.target.value)
-                        }
-                        placeholder="Question"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium mb-2 focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <textarea
-                        rows={3}
-                        value={faq.answer}
-                        onChange={(e) =>
-                          updateFaq(faq.id, "answer", e.target.value)
-                        }
-                        placeholder="Answer"
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500"
-                      />
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
+                        <input
+                          type="text"
+                          value={faq.question}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "question", e.target.value)
+                          }
+                          placeholder="e.g. What are your hours?"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
+                        <textarea
+                          rows={5}
+                          value={faq.answer}
+                          onChange={(e) =>
+                            updateFaq(faq.id, "answer", e.target.value)
+                          }
+                          placeholder="e.g. We are open Mon–Fri, 9am–6pm."
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
