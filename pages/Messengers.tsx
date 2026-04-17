@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChatMessage, ChatbotConfig, FAQ, Organization } from "../types";
+import { ChatMessage, ChatbotConfig, Organization } from "../types";
+import { api } from "../services/api";
 
 interface MessengerProps {
   org: Organization;
@@ -66,9 +67,11 @@ const Messenger: React.FC<MessengerProps> = ({
   useEffect(() => {
     if (activeChatbot) setDraft(activeChatbot);
   }, [activeChatbot?.id]);
+
   useEffect(() => {
     setLocalMessages(messages);
   }, [messages]);
+
   useEffect(() => {
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -93,8 +96,31 @@ const Messenger: React.FC<MessengerProps> = ({
   const patch = (updates: Partial<ChatbotConfig>) =>
     setDraft((d) => ({ ...d, ...updates }));
 
+  // Build embed script that points to backend widget endpoint (always fresh)
+  const buildEmbedScript = (chatbot: ChatbotConfig) => {
+    const backendUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(
+      /\/$/,
+      "",
+    );
+    const positionStyle =
+      chatbot.position === "left" ? "left:20px" : "right:20px";
+    return `<!-- Agently Chat Widget - configuration loaded live from server -->
+<iframe
+  id="agently-widget-${chatbot.id}"
+  src="${backendUrl}/widget/${chatbot.id}"
+  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"
+  scrolling="no"
+  frameborder="0"
+  allow="microphone"
+  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+  referrerpolicy="no-referrer-when-downgrade"
+></iframe>`;
+  };
+
   const saveCustomization = async () => {
     await runAction("save", async () => {
+      // Generate fresh embed script with latest config
+      const freshEmbedScript = buildEmbedScript(draft);
       await onUpdateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
@@ -108,8 +134,9 @@ const Messenger: React.FC<MessengerProps> = ({
         customPrompt: draft.customPrompt,
         suggestedPrompts: draft.suggestedPrompts,
         faqs: draft.faqs,
+        embedScript: freshEmbedScript,
       });
-      setSaveSuccess("Saved!");
+      setSaveSuccess("Saved! Embed script updated.");
       setTimeout(() => setSaveSuccess(""), 2500);
     });
   };
@@ -120,9 +147,17 @@ const Messenger: React.FC<MessengerProps> = ({
     setScrapeMsg("");
     setError("");
     try {
-      await onImportChatbotFaqs(activeChatbot.id, scrapeUrl);
+      // This calls the backend endpoint that scrapes, chunks, and stores in knowledge_chunks
+      const result = await api.importChatbotWebsite(
+        activeChatbot.id,
+        scrapeUrl,
+      );
       setScrapeStatus("done");
-      setScrapeMsg(`✓ Scraped successfully. FAQs added. Click Save to apply.`);
+      // ONLY show chunks stored – no auto‑FAQs
+      setScrapeMsg(
+        `✓ Scraped successfully. ${result.chunksStored || 0} chunks stored in knowledge base.`,
+      );
+      // DO NOT update FAQs from scrape result – keep manual FAQs only
     } catch (e) {
       setScrapeStatus("error");
       setScrapeMsg(e instanceof Error ? e.message : "Scrape failed.");
@@ -170,7 +205,10 @@ const Messenger: React.FC<MessengerProps> = ({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(activeChatbot.embedScript);
+      // Always copy the latest embed script from the draft (or active chatbot)
+      const scriptToCopy =
+        activeChatbot.embedScript || buildEmbedScript(activeChatbot);
+      await navigator.clipboard.writeText(scriptToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -463,7 +501,7 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
           </div>
 
-          {/* Knowledge base */}
+          {/* Knowledge Base - with scraper (no FAQ inside) */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -474,34 +512,27 @@ const Messenger: React.FC<MessengerProps> = ({
                   Scraped content is stored in Supabase and used by the AI.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={addFaq}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-              >
-                + Add Entry
-              </button>
             </div>
 
             {/* Scraper */}
-            <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Import from Website URL
               </label>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2">
                 <input
                   type="text"
                   value={scrapeUrl}
                   onChange={(e) => setScrapeUrl(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void handleImport()}
                   placeholder="https://yourwebsite.com"
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={() => void handleImport()}
                   disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                  className="rounded-2xl bg-slate-900 px-3 md:px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {scrapeStatus === "loading" ? (
                     <>
@@ -509,7 +540,10 @@ const Messenger: React.FC<MessengerProps> = ({
                       Importing…
                     </>
                   ) : (
-                    "Import Website"
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      Import Website
+                    </>
                   )}
                 </button>
               </div>
@@ -521,69 +555,78 @@ const Messenger: React.FC<MessengerProps> = ({
                 </p>
               )}
             </div>
+          </div>
 
-            {/* FAQ Carousel */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-black text-slate-900">FAQs</h4>
-                <button
-                  type="button"
-                  onClick={addFaq}
-                  className="text-xs font-black text-indigo-600"
-                >
-                  + Add
-                </button>
-              </div>
-              {draft.faqs.length === 0 ? (
-                <p className="text-center text-slate-400 text-sm py-6">
-                  No FAQs yet. Import a website or add manually.
+          {/* FAQ Carousel – separate card, horizontally scrollable */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">FAQs</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Manually added – these override scraped content.
                 </p>
-              ) : (
-                <div className="overflow-x-auto pb-2 custom-scrollbar">
-                  <div
-                    className="flex gap-4"
-                    style={{ minWidth: "max-content" }}
-                  >
-                    {draft.faqs.map((faq) => (
-                      <div
-                        key={faq.id}
-                        className="w-80 flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                            FAQ
-                          </span>
-                          <button
-                            onClick={() => removeFaq(faq.id)}
-                            className="text-slate-300 hover:text-red-500"
-                          >
-                            ✕
-                          </button>
-                        </div>
+              </div>
+              <button
+                type="button"
+                onClick={addFaq}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+              >
+                + Add Entry
+              </button>
+            </div>
+
+            {draft.faqs.length === 0 ? (
+              <p className="text-center text-slate-400 text-sm py-6">
+                No FAQs yet. Add your first entry.
+              </p>
+            ) : (
+              <div className="overflow-x-auto pb-3 custom-scrollbar">
+                <div className="flex gap-4" style={{ minWidth: "max-content" }}>
+                  {draft.faqs.map((faq) => (
+                    <div
+                      key={faq.id}
+                      className="w-[420px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
+                    >
+                      <div className="flex justify-between items-start">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          FAQ
+                        </span>
+                        <button
+                          onClick={() => removeFaq(faq.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
                         <input
                           type="text"
                           value={faq.question}
                           onChange={(e) =>
                             updateFaq(faq.id, "question", e.target.value)
                           }
-                          placeholder="Question"
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium mb-2 focus:ring-2 focus:ring-indigo-500"
+                          placeholder="e.g. What are your hours?"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
                         />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
                         <textarea
-                          rows={3}
+                          rows={5}
                           value={faq.answer}
                           onChange={(e) =>
                             updateFaq(faq.id, "answer", e.target.value)
                           }
-                          placeholder="Answer"
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="e.g. We are open Mon–Fri, 9am–6pm."
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
                         />
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <button
@@ -768,7 +811,7 @@ const Messenger: React.FC<MessengerProps> = ({
               site. Config changes are live immediately — no redeploy.
             </p>
             <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
-              {activeChatbot.embedScript}
+              {activeChatbot.embedScript || buildEmbedScript(activeChatbot)}
             </pre>
           </div>
         </div>

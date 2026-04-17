@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Organization, User } from "../types";
+import { ICONS } from "@/constants";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -8,15 +9,60 @@ const NAV_ITEMS: Array<{
   label: string;
   description: string;
 }> = [
-  { to: "/dashboard",     icon: "fa-sharp fa-solid fa-chart-line",      label: "Dashboard",      description: "Live performance and workload" },
-  { to: "/agent",         icon: "fa-sharp fa-solid fa-microphone",      label: "Voice Agent",    description: "Configure lines, scripts, and knowledge" },
-  { to: "/phone-numbers", icon: "fa-sharp fa-solid fa-mobile-screen",   label: "Phone Numbers",  description: "Search, purchase, and assign numbers" },
-  { to: "/messenger",     icon: "fa-sharp fa-solid fa-message-bot",     label: "Chatbot Agent",  description: "Widget design and chatbot knowledge" },
-  { to: "/calls",         icon: "fa-sharp fa-solid fa-phone-volume",    label: "Call Logs",      description: "Transcripts, outcomes, and reports" },
-  { to: "/leads",         icon: "fa-sharp fa-solid fa-users",           label: "Lead CRM",       description: "Pipeline health and contact capture" },
-  { to: "/team",          icon: "fa-sharp fa-solid fa-user-shield",     label: "Team",           description: "Members, permissions, and invites" },
-  { to: "/billing",       icon: "fa-sharp fa-solid fa-credit-card",     label: "Billing",        description: "Plan usage, invoices, and upgrades" },
-  { to: "/settings",      icon: "fa-sharp fa-solid fa-gear",            label: "Settings",       description: "Workspace and phone setup" },
+  {
+    to: "/dashboard",
+    icon: "fa-sharp fa-solid fa-chart-line",
+    label: "Dashboard",
+    description: "Live performance and workload",
+  },
+  {
+    to: "/agent",
+    icon: "fa-sharp fa-solid fa-microphone",
+    label: "Voice Agent",
+    description: "Configure lines, scripts, and knowledge",
+  },
+  {
+    to: "/phone-numbers",
+    icon: "fa-sharp fa-solid fa-mobile-screen",
+    label: "Phone Numbers",
+    description: "Search, purchase, and assign numbers",
+  },
+  {
+    to: "/messenger",
+    icon: "fa-sharp fa-solid fa-message-bot",
+    label: "Chatbot Agent",
+    description: "Widget design and chatbot knowledge",
+  },
+  {
+    to: "/calls",
+    icon: "fa-sharp fa-solid fa-phone-volume",
+    label: "Call Logs",
+    description: "Transcripts, outcomes, and reports",
+  },
+  {
+    to: "/leads",
+    icon: "fa-sharp fa-solid fa-users",
+    label: "Lead CRM",
+    description: "Pipeline health and contact capture",
+  },
+  {
+    to: "/team",
+    icon: "fa-sharp fa-solid fa-user-shield",
+    label: "Team",
+    description: "Members, permissions, and invites",
+  },
+  {
+    to: "/billing",
+    icon: "fa-sharp fa-solid fa-credit-card",
+    label: "Billing",
+    description: "Plan usage, invoices, and upgrades",
+  },
+  {
+    to: "/settings",
+    icon: "fa-sharp fa-solid fa-gear",
+    label: "Settings",
+    description: "Workspace and phone setup",
+  },
 ];
 
 const PUBLIC_NAV_ITEMS = [
@@ -307,9 +353,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <button
                 onClick={() => setShowSimulator(true)}
-                className="w-full rounded-[1.35rem] bg-indigo-600 px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition hover:bg-indigo-700"
+                className="w-full rounded-[1.35rem] bg-indigo-600 px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition hover:bg-indigo-700 flex items-center justify-center gap-2"
               >
-                Launch Simulator
+                <i className="fa-sharp fa-solid fa-phone-volume text-sm" />
+                Test Your Agent
               </button>
 
               <button
@@ -392,7 +439,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                         {user.name.charAt(0) || "A"}
                       </div>
                       <div className="leading-tight min-w-0">
-                        <p className="text-xs font-black truncate max-w-[100px]">{user.name}</p>
+                        <p className="text-xs font-black truncate max-w-[100px]">
+                          {user.name}
+                        </p>
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/55">
                           {user.role}
                         </p>
@@ -404,20 +453,49 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </header>
 
             <main className="mx-auto mt-6 max-w-7xl">
-              {user.role === 'Viewer' && ['/agent','/phone-numbers','/settings','/team','/billing'].includes(location.pathname) ? (
+              {user.role === "Viewer" &&
+              [
+                "/agent",
+                "/phone-numbers",
+                "/settings",
+                "/team",
+                "/billing",
+              ].includes(location.pathname) ? (
                 <div className="relative">
                   <div className="absolute inset-0 z-10 rounded-3xl bg-white/70 backdrop-blur-[2px] flex items-start justify-center pt-24 pointer-events-auto">
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-xl px-8 py-6 text-center max-w-sm">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><rect width="11" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-slate-500"
+                        >
+                          <rect width="11" height="11" x="3" y="11" rx="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
                       </div>
-                      <p className="font-black text-slate-900 mb-1">Read-Only Access</p>
-                      <p className="text-xs text-slate-400">Your Viewer role doesn't allow editing. Contact an Admin or Owner to make changes.</p>
+                      <p className="font-black text-slate-900 mb-1">
+                        Read-Only Access
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Your Viewer role doesn't allow editing. Contact an Admin
+                        or Owner to make changes.
+                      </p>
                     </div>
                   </div>
-                  <div className="pointer-events-none select-none opacity-40">{children}</div>
+                  <div className="pointer-events-none select-none opacity-40">
+                    {children}
+                  </div>
                 </div>
-              ) : children}
+              ) : (
+                children
+              )}
             </main>
           </div>
         </div>

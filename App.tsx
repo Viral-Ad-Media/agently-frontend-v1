@@ -23,6 +23,7 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
+import Messenger from "./pages/Messenger";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -33,7 +34,7 @@ const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Team = lazy(() => import("./pages/Team"));
 const Login = lazy(() => import("./pages/Login"));
-const Messenger = lazy(() => import("./pages/Messenger"));
+// const Messenger = lazy(() => import("./pages/Messenger"));
 const Features = lazy(() => import("./pages/Features"));
 const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
@@ -636,7 +637,10 @@ const App: React.FC = () => {
                   <PhoneNumbers
                     org={org}
                     onAgentUpdated={async (updates) => {
-                      await api.updateVoiceAgent(org.activeVoiceAgentId, updates);
+                      await api.updateVoiceAgent(
+                        org.activeVoiceAgentId,
+                        updates,
+                      );
                       await refreshWorkspace();
                     }}
                   />
@@ -666,6 +670,7 @@ const App: React.FC = () => {
         <Suspense fallback={null}>
           <CallSimulator
             agent={org.agent}
+            org={org}
             onClose={() => setShowSimulator(false)}
             onCallFinished={handleSimulatorFinished}
           />

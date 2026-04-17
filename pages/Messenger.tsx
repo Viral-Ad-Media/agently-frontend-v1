@@ -32,6 +32,31 @@ const COLOR_PRESETS = [
   "#065f46",
 ];
 
+// OpenAI TTS voices (no provider badge)
+const OPENAI_VOICES = [
+  { id: "alloy", name: "Alloy", desc: "Neutral, balanced" },
+  { id: "echo", name: "Echo", desc: "Male, clear" },
+  { id: "fable", name: "Fable", desc: "Warm, expressive" },
+  { id: "onyx", name: "Onyx", desc: "Deep, authoritative" },
+  { id: "nova", name: "Nova", desc: "Female, energetic" },
+  { id: "shimmer", name: "Shimmer", desc: "Female, gentle" },
+];
+
+const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "de", name: "German", flag: "🇩🇪" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇧🇷" },
+  { code: "ar", name: "Arabic", flag: "🇸🇦" },
+  { code: "zh", name: "Chinese", flag: "🇨🇳" },
+  { code: "ja", name: "Japanese", flag: "🇯🇵" },
+  { code: "ko", name: "Korean", flag: "🇰🇷" },
+  { code: "hi", name: "Hindi", flag: "🇮🇳" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+];
+
 const Messenger: React.FC<MessengerProps> = ({
   org,
   messages,
@@ -45,11 +70,14 @@ const Messenger: React.FC<MessengerProps> = ({
 }) => {
   const activeChatbot =
     org.chatbots.find((c) => c.id === org.activeChatbotId) ?? org.chatbots[0];
-  const linkedAgent =
-    org.voiceAgents.find((a) => a.id === activeChatbot?.voiceAgentId) ??
-    org.agent;
 
-  const [draft, setDraft] = useState<ChatbotConfig>(activeChatbot);
+  const [draft, setDraft] = useState<
+    ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] }
+  >({
+    ...activeChatbot,
+    chatVoice: (activeChatbot as any).chatVoice || "alloy",
+    chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
+  });
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
@@ -62,10 +90,29 @@ const Messenger: React.FC<MessengerProps> = ({
     "idle" | "loading" | "done" | "error"
   >("idle");
   const [scrapeMsg, setScrapeMsg] = useState("");
+
+  // Voice recording state
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioWave, setAudioWave] = useState<number[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const waveAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Voice preview state
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (activeChatbot) setDraft(activeChatbot);
+    if (activeChatbot) {
+      setDraft({
+        ...activeChatbot,
+        chatVoice: (activeChatbot as any).chatVoice || "alloy",
+        chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
+      });
+    }
   }, [activeChatbot?.id]);
 
   useEffect(() => {
@@ -93,33 +140,32 @@ const Messenger: React.FC<MessengerProps> = ({
     [],
   );
 
-  const patch = (updates: Partial<ChatbotConfig>) =>
-    setDraft((d) => ({ ...d, ...updates }));
+  const patch = (
+    updates: Partial<
+      ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] }
+    >,
+  ) => setDraft((d) => ({ ...d, ...updates }));
 
-  // Build embed script that points to backend widget endpoint (always fresh)
-  const buildEmbedScript = (chatbot: ChatbotConfig) => {
+  const linkedAgentName =
+    org.voiceAgents.find((a) => a.id === draft.voiceAgentId)?.name ||
+    "AI assistant";
+
+  const buildEmbedScript = (
+    chatbot: ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] },
+  ) => {
     const backendUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(
       /\/$/,
       "",
     );
     const positionStyle =
       chatbot.position === "left" ? "left:20px" : "right:20px";
-    return `<!-- Agently Chat Widget - configuration loaded live from server -->
-<iframe
-  id="agently-widget-${chatbot.id}"
-  src="${backendUrl}/widget/${chatbot.id}"
-  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"
-  scrolling="no"
-  frameborder="0"
-  allow="microphone"
-  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-  referrerpolicy="no-referrer-when-downgrade"
-></iframe>`;
+    const languages = (chatbot.chatLanguages || ["en"]).join(",");
+    const voice = chatbot.chatVoice || "alloy";
+    return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${backendUrl}/widget/${chatbot.id}?voice=${voice}&languages=${languages}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"\n  referrerpolicy="no-referrer-when-downgrade"\n></iframe>`;
   };
 
   const saveCustomization = async () => {
     await runAction("save", async () => {
-      // Generate fresh embed script with latest config
       const freshEmbedScript = buildEmbedScript(draft);
       await onUpdateChatbot(activeChatbot.id, {
         name: draft.name,
@@ -135,7 +181,9 @@ const Messenger: React.FC<MessengerProps> = ({
         suggestedPrompts: draft.suggestedPrompts,
         faqs: draft.faqs,
         embedScript: freshEmbedScript,
-      });
+        chatVoice: draft.chatVoice,
+        chatLanguages: draft.chatLanguages,
+      } as any);
       setSaveSuccess("Saved! Embed script updated.");
       setTimeout(() => setSaveSuccess(""), 2500);
     });
@@ -147,17 +195,14 @@ const Messenger: React.FC<MessengerProps> = ({
     setScrapeMsg("");
     setError("");
     try {
-      // This calls the backend endpoint that scrapes, chunks, and stores in knowledge_chunks
       const result = await api.importChatbotWebsite(
         activeChatbot.id,
         scrapeUrl,
       );
       setScrapeStatus("done");
-      // ONLY show chunks stored – no auto‑FAQs
       setScrapeMsg(
         `✓ Scraped successfully. ${result.chunksStored || 0} chunks stored in knowledge base.`,
       );
-      // DO NOT update FAQs from scrape result – keep manual FAQs only
     } catch (e) {
       setScrapeStatus("error");
       setScrapeMsg(e instanceof Error ? e.message : "Scrape failed.");
@@ -189,6 +234,125 @@ const Messenger: React.FC<MessengerProps> = ({
     }
   };
 
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (waveAnimRef.current) {
+          clearInterval(waveAnimRef.current);
+          waveAnimRef.current = null;
+        }
+        setAudioWave([]);
+        setIsRecording(false);
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const transcribed = await transcribeAudio(blob);
+        if (transcribed) {
+          setIsVoiceMode(false);
+          setInput(transcribed);
+        }
+      };
+      recorder.start(100);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      waveAnimRef.current = setInterval(() => {
+        setAudioWave(Array.from({ length: 20 }, () => Math.random() * 32 + 4));
+      }, 80);
+    } catch {
+      setError("Microphone access denied. Please allow microphone access.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const transcribeAudio = async (blob: Blob): Promise<string> => {
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
+        /\/$/,
+        "",
+      );
+      const token =
+        localStorage.getItem("agently_token") ||
+        sessionStorage.getItem("agently_token") ||
+        "";
+      const resp = await fetch(`${apiBase}/api/messenger/transcribe`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        return data.text || "";
+      }
+    } catch {}
+    return "";
+  };
+
+  const previewVoice = async (voiceId: string) => {
+    if (previewingVoice === voiceId) {
+      previewAudioRef.current?.pause();
+      setPreviewingVoice(null);
+      return;
+    }
+    setPreviewingVoice(voiceId);
+    try {
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
+        /\/$/,
+        "",
+      );
+      const token =
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
+        "";
+      const previewText = `Hello, I'm ${linkedAgentName}. How can I assist you today?`;
+      const resp = await fetch(`${apiBase}/api/messenger/voice-preview`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ voice: voiceId, text: previewText }),
+      });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        if (previewAudioRef.current) previewAudioRef.current.pause();
+        previewAudioRef.current = new Audio(url);
+        previewAudioRef.current.onended = () => setPreviewingVoice(null);
+        await previewAudioRef.current.play();
+      } else {
+        setPreviewingVoice(null);
+      }
+    } catch {
+      setPreviewingVoice(null);
+    }
+  };
+
+  const toggleLanguage = (code: string) => {
+    const langs = draft.chatLanguages || ["en"];
+    if (langs.includes(code)) {
+      if (langs.length === 1) return;
+      patch({ chatLanguages: langs.filter((l) => l !== code) });
+    } else {
+      patch({ chatLanguages: [...langs, code] });
+    }
+  };
+
   const addFaq = () =>
     patch({
       faqs: [
@@ -205,9 +369,8 @@ const Messenger: React.FC<MessengerProps> = ({
 
   const handleCopy = async () => {
     try {
-      // Always copy the latest embed script from the draft (or active chatbot)
       const scriptToCopy =
-        activeChatbot.embedScript || buildEmbedScript(activeChatbot);
+        activeChatbot.embedScript || buildEmbedScript(draft as any);
       await navigator.clipboard.writeText(scriptToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -392,7 +555,7 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            {/* Accent color with picker + presets */}
+            {/* Accent color */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Accent Color
@@ -445,6 +608,7 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
+            {/* Widget position */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Widget Position
@@ -499,9 +663,103 @@ const Messenger: React.FC<MessengerProps> = ({
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none resize-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+
+            {/* ── Widget Voice Selection (no provider badge) ── */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Widget Voice
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Voice used when widget responds aloud
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {OPENAI_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => patch({ chatVoice: v.id } as any)}
+                    className={`relative flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all group ${(draft as any).chatVoice === v.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 bg-white"}`}
+                  >
+                    <div>
+                      <p
+                        className={`text-xs font-black ${(draft as any).chatVoice === v.id ? "text-indigo-700" : "text-slate-800"}`}
+                      >
+                        {v.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{v.desc}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void previewVoice(v.id);
+                      }}
+                      title="Preview voice"
+                      className={`ml-2 w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${previewingVoice === v.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600"}`}
+                    >
+                      {previewingVoice === v.id ? (
+                        <i className="fa-sharp fa-solid fa-stop text-[10px]" />
+                      ) : (
+                        <i className="fa-sharp fa-solid fa-play text-[10px]" />
+                      )}
+                    </button>
+                  </button>
+                ))}
+              </div>
+              {previewingVoice && (
+                <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest mt-2 flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse inline-block" />
+                  Playing preview…
+                </p>
+              )}
+            </div>
+
+            {/* ── Widget Languages ── */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="mb-3">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Widget Languages
+                </label>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Users can switch between selected languages in the widget
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SUPPORTED_LANGUAGES.map((lang) => {
+                  const selected = (draft.chatLanguages || ["en"]).includes(
+                    lang.code,
+                  );
+                  return (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => toggleLanguage(lang.code)}
+                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"}`}
+                    >
+                      <span>{lang.flag}</span>
+                      {lang.name}
+                      {selected && (
+                        <i className="fa-sharp fa-solid fa-check text-[10px] text-indigo-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {(draft.chatLanguages || []).length > 0 && (
+                <p className="text-[10px] text-slate-400 mt-2">
+                  {(draft.chatLanguages || ["en"]).length} language
+                  {(draft.chatLanguages || ["en"]).length > 1 ? "s" : ""}{" "}
+                  selected · these are embedded in the widget script
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Knowledge Base - with scraper (no FAQ inside) */}
+          {/* Knowledge Base */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -513,8 +771,6 @@ const Messenger: React.FC<MessengerProps> = ({
                 </p>
               </div>
             </div>
-
-            {/* Scraper */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Import from Website URL
@@ -541,7 +797,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     </>
                   ) : (
                     <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      <i className="fa-sharp fa-solid fa-upload text-xs" />
                       Import Website
                     </>
                   )}
@@ -555,78 +811,6 @@ const Messenger: React.FC<MessengerProps> = ({
                 </p>
               )}
             </div>
-          </div>
-
-          {/* FAQ Carousel – separate card, horizontally scrollable */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">FAQs</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Manually added – these override scraped content.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addFaq}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-              >
-                + Add Entry
-              </button>
-            </div>
-
-            {draft.faqs.length === 0 ? (
-              <p className="text-center text-slate-400 text-sm py-6">
-                No FAQs yet. Add your first entry.
-              </p>
-            ) : (
-              <div className="overflow-x-auto pb-3 custom-scrollbar">
-                <div className="flex gap-4" style={{ minWidth: "max-content" }}>
-                  {draft.faqs.map((faq) => (
-                    <div
-                      key={faq.id}
-                      className="w-[420px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
-                    >
-                      <div className="flex justify-between items-start">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                          FAQ
-                        </span>
-                        <button
-                          onClick={() => removeFaq(faq.id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
-                        <input
-                          type="text"
-                          value={faq.question}
-                          onChange={(e) =>
-                            updateFaq(faq.id, "question", e.target.value)
-                          }
-                          placeholder="e.g. What are your hours?"
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
-                        <textarea
-                          rows={5}
-                          value={faq.answer}
-                          onChange={(e) =>
-                            updateFaq(faq.id, "answer", e.target.value)
-                          }
-                          placeholder="e.g. We are open Mon–Fri, 9am–6pm."
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           <button
@@ -678,6 +862,7 @@ const Messenger: React.FC<MessengerProps> = ({
               className="m-6 rounded-2xl overflow-hidden border border-white/10 flex flex-col"
               style={{ height: "480px" }}
             >
+              {/* Header */}
               <div
                 className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
                 style={{ background: previewColor }}
@@ -697,8 +882,24 @@ const Messenger: React.FC<MessengerProps> = ({
                     Online · Instant replies
                   </p>
                 </div>
+                {/* Language flags preview */}
+                {(draft.chatLanguages || []).length > 1 && (
+                  <div className="flex gap-1">
+                    {(draft.chatLanguages || []).slice(0, 3).map((code) => {
+                      const lang = SUPPORTED_LANGUAGES.find(
+                        (l) => l.code === code,
+                      );
+                      return (
+                        <span key={code} className="text-sm" title={lang?.name}>
+                          {lang?.flag}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
+              {/* Messages */}
               <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-800/50 custom-scrollbar"
@@ -753,37 +954,84 @@ const Messenger: React.FC<MessengerProps> = ({
                 )}
               </div>
 
+              {/* Input area with voice toggle */}
               <form
                 onSubmit={handleSend}
-                className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0"
+                className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0 items-center"
               >
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={draft.placeholder || "Type your message…"}
-                  className="flex-1 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 px-4 py-2.5 text-sm outline-none focus:border-white/30"
-                />
+                {/* Voice toggle button */}
                 <button
-                  type="submit"
-                  disabled={!input.trim() || isTyping}
-                  className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-all"
-                  style={{ background: previewColor }}
+                  type="button"
+                  onClick={() => {
+                    if (isVoiceMode) {
+                      if (isRecording) stopRecording();
+                      setIsVoiceMode(false);
+                    } else {
+                      setIsVoiceMode(true);
+                    }
+                  }}
+                  title={isVoiceMode ? "Switch to text" : "Switch to voice"}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isVoiceMode ? "bg-rose-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"}`}
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="22" y1="2" x2="11" y2="13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
+                  <i
+                    className={`fa-sharp fa-solid ${isVoiceMode ? "fa-keyboard" : "fa-microphone"} text-sm`}
+                  />
                 </button>
+
+                {/* Input area (text or voice waveform) */}
+                {isVoiceMode ? (
+                  <div className="flex-1 h-9 flex items-center px-3 rounded-xl bg-white/10 border border-white/10 gap-1 overflow-hidden">
+                    {isRecording ? (
+                      <>
+                        {audioWave.map((h, i) => (
+                          <div
+                            key={i}
+                            className="w-0.5 rounded-full bg-rose-400 transition-all duration-75"
+                            style={{ height: `${h}px` }}
+                          />
+                        ))}
+                        <span className="text-[10px] text-rose-300 font-black uppercase tracking-widest ml-auto">
+                          Recording…
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-white/40">
+                        Press mic to record
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={draft.placeholder || "Type your message…"}
+                    className="flex-1 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 px-4 py-2.5 text-sm outline-none focus:border-white/30"
+                  />
+                )}
+
+                {/* Send / record button */}
+                {isVoiceMode ? (
+                  <button
+                    type="button"
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onTouchStart={startRecording}
+                    onTouchEnd={stopRecording}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isRecording ? "bg-rose-500 animate-pulse" : "bg-white/20 text-white hover:bg-white/30"}`}
+                  >
+                    <i className="fa-sharp fa-solid fa-microphone text-sm text-white" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isTyping}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all flex-shrink-0"
+                    style={{ background: previewColor }}
+                  >
+                    <i className="fa-sharp fa-solid fa-paper-plane text-sm text-white" />
+                  </button>
+                )}
               </form>
             </div>
           </div>
@@ -808,13 +1056,95 @@ const Messenger: React.FC<MessengerProps> = ({
             <p className="text-sm text-indigo-100/70 mb-4">
               Paste before{" "}
               <code className="text-indigo-300">&lt;/body&gt;</code> on any
-              site. Config changes are live immediately — no redeploy.
+              site. Voice & language settings are embedded automatically.
             </p>
             <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
-              {activeChatbot.embedScript || buildEmbedScript(activeChatbot)}
+              {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
           </div>
         </div>
+      </div>
+
+      {/* FAQ section - full width */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">FAQs</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Manually added – these override scraped content.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addFaq}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+          >
+            + Add Entry
+          </button>
+        </div>
+
+        {draft.faqs.length === 0 ? (
+          <p className="text-center text-slate-400 text-sm py-6">
+            No FAQs yet. Add your first entry.
+          </p>
+        ) : (
+          <div
+            className="overflow-x-auto pb-3 custom-scrollbar"
+            style={{ maxWidth: "100%" }}
+          >
+            <div
+              className="flex gap-4"
+              style={{ width: "max-content", maxWidth: "none" }}
+            >
+              {draft.faqs.map((faq) => (
+                <div
+                  key={faq.id}
+                  className="w-[380px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      FAQ
+                    </span>
+                    <button
+                      onClick={() => removeFaq(faq.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors"
+                    >
+                      <i className="fa-sharp fa-solid fa-xmark text-sm" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                      Question
+                    </p>
+                    <input
+                      type="text"
+                      value={faq.question}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "question", e.target.value)
+                      }
+                      placeholder="e.g. What are your hours?"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                      Answer
+                    </p>
+                    <textarea
+                      rows={5}
+                      value={faq.answer}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "answer", e.target.value)
+                      }
+                      placeholder="e.g. We are open Mon–Fri, 9am–6pm."
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
