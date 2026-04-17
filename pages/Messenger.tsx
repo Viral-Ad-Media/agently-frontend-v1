@@ -57,6 +57,29 @@ const SUPPORTED_LANGUAGES = [
   { code: "nl", name: "Dutch", flag: "🇳🇱" },
 ];
 
+const DEFAULT_BOT: ChatbotConfig & {
+  chatVoice: string;
+  chatLanguages: string[];
+} = {
+  id: "",
+  name: "My Chatbot",
+  voiceAgentId: "",
+  headerTitle: "Chat with us",
+  welcomeMessage: "Hello! How can I help you today?",
+  placeholder: "Type your message...",
+  launcherLabel: "Chat",
+  accentColor: "#4f46e5",
+  position: "right",
+  avatarLabel: "A",
+  customPrompt: "",
+  suggestedPrompts: [],
+  faqs: [],
+  embedScript: "",
+  widgetScriptUrl: "",
+  chatVoice: "alloy",
+  chatLanguages: ["en"],
+};
+
 const Messenger: React.FC<MessengerProps> = ({
   org,
   messages,
@@ -71,13 +94,18 @@ const Messenger: React.FC<MessengerProps> = ({
   const activeChatbot =
     org.chatbots.find((c) => c.id === org.activeChatbotId) ?? org.chatbots[0];
 
+  // Safe initialization – if activeChatbot is undefined, use DEFAULT_BOT
   const [draft, setDraft] = useState<
     ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] }
-  >({
-    ...activeChatbot,
-    chatVoice: (activeChatbot as any).chatVoice || "alloy",
-    chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
+  >(() => {
+    if (!activeChatbot) return DEFAULT_BOT;
+    return {
+      ...activeChatbot,
+      chatVoice: (activeChatbot as any).chatVoice || "alloy",
+      chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
+    };
   });
+
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
@@ -234,7 +262,7 @@ const Messenger: React.FC<MessengerProps> = ({
     }
   };
 
-  // Voice recording functions
+  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -287,8 +315,8 @@ const Messenger: React.FC<MessengerProps> = ({
         "",
       );
       const token =
-        localStorage.getItem("agently_token") ||
-        sessionStorage.getItem("agently_token") ||
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
         "";
       const resp = await fetch(`${apiBase}/api/messenger/transcribe`, {
         method: "POST",
@@ -370,7 +398,7 @@ const Messenger: React.FC<MessengerProps> = ({
   const handleCopy = async () => {
     try {
       const scriptToCopy =
-        activeChatbot.embedScript || buildEmbedScript(draft as any);
+        activeChatbot?.embedScript || buildEmbedScript(draft as any);
       await navigator.clipboard.writeText(scriptToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -379,7 +407,7 @@ const Messenger: React.FC<MessengerProps> = ({
     }
   };
 
-  if (!activeChatbot)
+  if (!activeChatbot) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-slate-400 font-medium mb-4">No chatbot yet.</p>
@@ -391,6 +419,7 @@ const Messenger: React.FC<MessengerProps> = ({
         </button>
       </div>
     );
+  }
 
   const previewColor = draft.accentColor || "#4f46e5";
 
