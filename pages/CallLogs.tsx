@@ -1,178 +1,220 @@
-
 import React, { useState } from 'react';
 import { CallRecord, CallOutcome } from '../types';
 
-const CallLogs: React.FC<{ calls: CallRecord[]; onDownloadReport: (callId: string) => Promise<void> }> = ({ calls, onDownloadReport }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('All');
-  const [selectedCall, setSelectedCall] = useState<CallRecord | null>(null);
-  const [error, setError] = useState('');
+const OUTCOME_STYLE: Record<string, string> = {
+  'Lead Captured':       'bg-emerald-50 text-emerald-700 border-emerald-100',
+  'Appointment Booked':  'bg-indigo-50 text-indigo-700 border-indigo-100',
+  'FAQ Answered':        'bg-blue-50 text-blue-600 border-blue-100',
+  'Escalated':           'bg-amber-50 text-amber-700 border-amber-100',
+  'Voicemail':           'bg-slate-100 text-slate-500 border-slate-200',
+};
 
-  const filteredCalls = calls.filter(call => {
-    const matchesSearch = (call.callerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (call.callerPhone || '').includes(searchTerm);
-    const matchesFilter = filter === 'All' || call.outcome === filter;
-    return matchesSearch && matchesFilter;
+const OUTCOME_DOT: Record<string, string> = {
+  'Lead Captured': 'bg-emerald-500', 'Appointment Booked': 'bg-indigo-500',
+  'FAQ Answered': 'bg-blue-400', 'Escalated': 'bg-amber-500', 'Voicemail': 'bg-slate-300',
+};
+
+const FILTERS = ['All', ...Object.values(CallOutcome)];
+
+const CallLogs: React.FC<{ calls: CallRecord[]; onDownloadReport: (callId: string) => Promise<void> }> = ({ calls, onDownloadReport }) => {
+  const [search, setSearch]         = useState('');
+  const [filter, setFilter]         = useState('All');
+  const [selected, setSelected]     = useState<CallRecord | null>(null);
+  const [error, setError]           = useState('');
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const filtered = calls.filter(c => {
+    const matchSearch = (c.callerName || '').toLowerCase().includes(search.toLowerCase()) ||
+                        (c.callerPhone || '').includes(search);
+    const matchFilter = filter === 'All' || c.outcome === filter;
+    return matchSearch && matchFilter;
   });
 
-  const handleDownload = async (callId: string) => {
-    setError('');
+  const stats = {
+    total:    calls.length,
+    leads:    calls.filter(c => c.outcome === CallOutcome.LEAD_CAPTURED || c.outcome === CallOutcome.APPOINTMENT_BOOKED).length,
+    missed:   calls.filter(c => c.outcome === CallOutcome.VOICEMAIL || c.outcome === CallOutcome.ESCALATED).length,
+    avgDur:   calls.length ? Math.round(calls.reduce((s, c) => s + c.duration, 0) / calls.length) : 0,
+  };
 
-    try {
-      await onDownloadReport(callId);
-    } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Unable to download that report.');
-    }
+  const handleDownload = async (callId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); setError(''); setDownloading(callId);
+    try { await onDownloadReport(callId); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Download failed'); }
+    finally { setDownloading(null); }
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {error && (
-        <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
-        </div>
-      )}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Call History</h2>
-          <p className="text-sm text-slate-500 font-medium">Every conversation is summarized and synced back to your workspace in real time.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-          <div className="relative">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input 
-              type="text" 
-              placeholder="Search by caller..." 
-              className="pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all w-full sm:w-64"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+    <div className="space-y-5 animate-fade-up">
+      {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">{error}</div>}
+
+      {/* Mini stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Calls',  value: stats.total,                      icon: 'fa-phone-volume',  color: 'text-indigo-600 bg-indigo-50' },
+          { label: 'Leads',        value: stats.leads,                      icon: 'fa-users',          color: 'text-emerald-600 bg-emerald-50' },
+          { label: 'Missed',       value: stats.missed,                     icon: 'fa-phone-slash',    color: 'text-amber-600 bg-amber-50' },
+          { label: 'Avg Duration', value: `${Math.floor(stats.avgDur/60)}m ${stats.avgDur%60}s`, icon: 'fa-stopwatch', color: 'text-blue-600 bg-blue-50' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>
+              <i className={`fa-sharp fa-solid ${s.icon} text-sm`} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+              <p className="font-black text-slate-900">{s.value}</p>
+            </div>
           </div>
-          <select 
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-indigo-100 transition-all cursor-pointer bg-white"
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          >
-            <option value="All">All Outcomes</option>
-            {Object.values(CallOutcome).map(outcome => (
-              <option key={outcome} value={outcome}>{outcome}</option>
-            ))}
+        ))}
+      </div>
+
+      {/* Header + filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Call History</h2>
+          <p className="text-xs text-slate-400">{filtered.length} of {calls.length} calls</p>
+        </div>
+        <div className="flex gap-3 sm:ml-auto flex-wrap">
+          <div className="relative">
+            <i className="fa-sharp fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+            <input type="text" placeholder="Search caller…" value={search} onChange={e => setSearch(e.target.value)}
+              className="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400 w-52" />
+          </div>
+          <select value={filter} onChange={e => setFilter(e.target.value)}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest outline-none bg-white focus:ring-2 focus:ring-amber-400">
+            {FILTERS.map(f => <option key={f} value={f}>{f === 'All' ? 'All Outcomes' : f}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {filteredCalls.length === 0 ? (
-           <div className="bg-white p-20 rounded-[2.5rem] border border-dashed border-slate-200 text-center flex flex-col items-center">
-             <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
-               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-             </div>
-             <p className="text-slate-400 font-bold">No calls found matching your search.</p>
-           </div>
-        ) : (
-          filteredCalls.map((call) => (
-            <div key={call.id} className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-8 hover:shadow-xl hover:border-indigo-100 transition-all group cursor-pointer" onClick={() => setSelectedCall(call)}>
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <span className={`w-3 h-3 rounded-full animate-pulse ${
-                    call.outcome === CallOutcome.LEAD_CAPTURED ? 'bg-emerald-500' :
-                    call.outcome === CallOutcome.APPOINTMENT_BOOKED ? 'bg-indigo-500' :
-                    call.outcome === CallOutcome.ESCALATED ? 'bg-amber-500' : 'bg-slate-300'
-                  }`}></span>
-                  <h3 className="font-black text-xl text-slate-900 tracking-tight">{call.callerName || 'Unknown Caller'}</h3>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full">{new Date(call.timestamp).toLocaleString()}</span>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 group-hover:bg-indigo-50/30 transition-colors">
-                  <p className="text-sm text-slate-600 font-medium leading-relaxed italic">
-                    "{call.summary}"
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl uppercase tracking-widest shadow-sm">
-                    {Math.floor(call.duration / 60)}m {call.duration % 60}s
-                  </span>
-                  <span className={`text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border ${
-                    call.outcome === CallOutcome.LEAD_CAPTURED ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 
-                    call.outcome === CallOutcome.ESCALATED ? 'text-amber-600 bg-amber-50 border-amber-100' :
-                    'text-slate-500 bg-white border-slate-100'
-                  }`}>
-                    {call.outcome}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="md:w-56 flex flex-col justify-center gap-3">
-                <button onClick={(event) => {
-                  event.stopPropagation();
-                  setSelectedCall(call);
-                }} className="w-full bg-slate-900 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-lg active:scale-95">
-                  Read Transcript
-                </button>
-                <button onClick={(event) => {
-                  event.stopPropagation();
-                  void handleDownload(call.id);
-                }} className="w-full bg-white text-slate-600 border-2 border-slate-100 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
-                  Download Report
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+      {/* Outcome filter pills */}
+      <div className="flex gap-2 flex-wrap">
+        {FILTERS.map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${filter === f ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+            {f}
+          </button>
+        ))}
       </div>
 
-      {/* Transcript Modal Simulation */}
-      {selectedCall && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in fade-in duration-300">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[2.5rem]">
-                 <div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Call Details</h3>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Caller: {selectedCall.callerPhone}</p>
-                 </div>
-                 <button onClick={() => setSelectedCall(null)} className="p-3 hover:bg-slate-200 rounded-2xl transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                 </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                 <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
-                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">AI Summary</h4>
-                    <p className="text-sm font-bold text-indigo-900 leading-relaxed">{selectedCall.summary}</p>
-                 </div>
-                 
-                 <div className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Transcript</h4>
-                    <div className="space-y-4">
-                      {(selectedCall.transcript.length > 0
-                        ? selectedCall.transcript
-                        : [
-                            { speaker: 'Agent', text: 'Hello! Thank you for calling. How can I help you today?' },
-                            { speaker: 'Caller', text: selectedCall.summary },
-                          ]).map((message, index) => {
-                        const isAgent = message.speaker === 'Agent';
-
-                        return (
-                          <div key={`${message.speaker}-${index}`} className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
-                            <span className={`text-[10px] font-black uppercase ${isAgent ? 'text-indigo-600' : 'text-slate-400'}`}>
-                              {message.speaker}
-                            </span>
-                            <p className={`px-5 py-3 rounded-2xl text-sm font-medium shadow-sm max-w-[80%] ${
-                              isAgent
-                                ? 'bg-indigo-50 text-indigo-900 rounded-tl-none'
-                                : 'bg-slate-100 text-slate-900 rounded-tr-none'
-                            }`}>
-                              {message.text}
-                            </p>
-                          </div>
-                        );
-                      })}
+      {/* Call cards */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 py-20 text-center">
+          <i className="fa-sharp fa-solid fa-phone-slash text-4xl text-slate-200 mb-4 block" />
+          <p className="text-slate-400 font-bold">No calls match your filters</p>
+          <p className="text-xs text-slate-300 mt-1">{calls.length === 0 ? 'Calls will appear here once your agent starts receiving them.' : 'Try a different filter or search term.'}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(call => (
+            <div key={call.id}
+              className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
+              onClick={() => setSelected(call)}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm shrink-0">
+                    {(call.callerName || 'U')[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-slate-900">{call.callerName || 'Unknown Caller'}</p>
+                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${OUTCOME_STYLE[call.outcome] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${OUTCOME_DOT[call.outcome] || 'bg-slate-400'}`} />
+                        {call.outcome}
+                      </span>
                     </div>
-                 </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-xs text-slate-400">{call.callerPhone}</p>
+                      <span className="text-slate-200">·</span>
+                      <p className="text-xs text-slate-400">{Math.floor(call.duration/60)}m {call.duration%60}s</p>
+                      <span className="text-slate-200">·</span>
+                      <p className="text-xs text-slate-400">{new Date(call.timestamp).toLocaleDateString()} {new Date(call.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={e => { e.stopPropagation(); setSelected(call); }}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">
+                    Transcript
+                  </button>
+                  <button onClick={e => void handleDownload(call.id, e)} disabled={downloading === call.id}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 disabled:opacity-50 transition-all">
+                    {downloading === call.id ? <i className="fa-sharp fa-solid fa-spinner fa-spin" /> : 'Report'}
+                  </button>
+                </div>
               </div>
-              <div className="p-8 border-t border-slate-100 flex gap-4 bg-slate-50/50 rounded-b-[2.5rem]">
-                 <button onClick={() => void handleDownload(selectedCall.id)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95">Download Report</button>
-                 <button onClick={() => setSelectedCall(null)} className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95">Close</button>
+              {call.summary && (
+                <p className="mt-3 text-xs text-slate-500 italic bg-slate-50 rounded-xl px-4 py-2.5 line-clamp-2">"{call.summary}"</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Transcript modal */}
+      {selected && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in fade-in">
+            <div className="p-6 border-b border-slate-100 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">{selected.callerName}</h3>
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="text-xs text-slate-400">{selected.callerPhone}</p>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${OUTCOME_STYLE[selected.outcome] || ''}`}>{selected.outcome}</span>
+                  <p className="text-xs text-slate-400">{Math.floor(selected.duration/60)}m {selected.duration%60}s</p>
+                </div>
               </div>
-           </div>
+              <button onClick={() => setSelected(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-all">
+                <i className="fa-sharp fa-solid fa-xmark text-sm" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {selected.summary && (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">AI Summary</p>
+                  <p className="text-sm text-amber-900 font-medium">{selected.summary}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Full Transcript</p>
+                <div className="space-y-3">
+                  {(selected.transcript.length > 0 ? selected.transcript : [
+                    { speaker: 'Agent', text: 'Hello! Thank you for calling. How can I help you today?' },
+                    { speaker: 'Caller', text: selected.summary || 'Caller inquiry.' },
+                  ]).map((m, i) => {
+                    const isAgent = m.speaker === 'Agent';
+                    return (
+                      <div key={i} className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
+                        <span className={`text-[10px] font-black uppercase ${isAgent ? 'text-amber-600' : 'text-slate-400'}`}>{m.speaker}</span>
+                        <p className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[82%] ${isAgent ? 'bg-slate-50 text-slate-800 rounded-tl-none' : 'bg-slate-900 text-white rounded-tr-none'}`}>
+                          {m.text}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {selected.recordingUrl && (
+                <div className="bg-slate-50 rounded-2xl p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recording</p>
+                  <audio controls src={selected.recordingUrl} className="w-full" />
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex gap-3">
+              <button onClick={e => void handleDownload(selected.id, e)} disabled={downloading === selected.id}
+                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-600 disabled:opacity-50 transition-all">
+                {downloading === selected.id ? 'Downloading…' : 'Download Report'}
+              </button>
+              <button onClick={() => setSelected(null)}
+                className="flex-1 border-2 border-slate-200 text-slate-600 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:border-slate-300 transition-all">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

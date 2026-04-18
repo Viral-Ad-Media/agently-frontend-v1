@@ -100,6 +100,9 @@ export interface AgentConfig {
   voicemailFallback: boolean;
   dataCaptureFields: string[];
   isActive: boolean;
+  webhookUrl?: string;
+  escalationWorkingHoursStart?: string;
+  escalationWorkingHoursEnd?: string;
   rules: {
     autoBook: boolean;
     autoEscalate: boolean;
@@ -219,6 +222,16 @@ export interface DashboardData {
     direction: 'inbound' | 'outbound';
   };
 }
+export interface AgentStats {
+  agentId: string;
+  agentName: string;
+  totalCalls: number;
+  leadsCaptured: number;
+  missedCalls: number;
+  avgDurationMinutes: number;
+  weeklyFlow: { name: string; calls: number; leads: number }[];
+  outcomeBreakdown: { label: string; count: number; color: string }[];
+}
 
 export interface WorkspaceBootstrap {
   user: User;
@@ -227,4 +240,5 @@ export interface WorkspaceBootstrap {
   calls: CallRecord[];
   conversation: ChatMessage[];
   dashboard: DashboardData;
+   agentStats?: AgentStats[];
 }

@@ -1,105 +1,269 @@
+import React, { useState } from "react";
+import { DashboardData, Organization, AgentConfig } from "../types";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
-import React from 'react';
-import { DashboardData, Organization } from '../types';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+const PIE_COLORS = ["#10b981", "#6366f1", "#3b82f6", "#f59e0b", "#94a3b8"];
 
-const STAT_ACCENT_CLASSES = {
-  indigo: 'bg-indigo-50',
-  emerald: 'bg-emerald-50',
-  rose: 'bg-rose-50',
-  amber: 'bg-amber-50',
-} as const;
+interface AgentStats {
+  agentId: string;
+  agentName: string;
+  totalCalls: number;
+  leadsCaptured: number;
+  missedCalls: number;
+  avgDurationMinutes: number;
+  weeklyFlow: { name: string; calls: number; leads: number }[];
+  outcomeBreakdown: { label: string; count: number; color: string }[];
+}
 
-const Dashboard: React.FC<{ org: Organization; dashboard: DashboardData }> = ({ org, dashboard }) => {
-  const averageDurationLabel = dashboard.stats.avgDurationMinutes > 0
-    ? `${dashboard.stats.avgDurationMinutes.toFixed(1)}m`
-    : '0m';
+interface DashboardProps {
+  org: Organization;
+  dashboard: DashboardData;
+  agentStats?: AgentStats[]; // added to WorkspaceBootstrap type
+}
+
+const StatCard: React.FC<{
+  label: string;
+  value: string;
+  icon: string;
+  accent: string;
+  sub?: string;
+}> = ({ label, value, icon, accent, sub }) => (
+  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+    <div
+      className={`absolute top-0 right-0 w-20 h-20 rounded-bl-full -mr-6 -mt-6 transition-transform group-hover:scale-125 ${accent}`}
+    />
+    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">
+      {label}
+    </p>
+    <div className="flex items-end justify-between relative z-10">
+      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">
+        {value}
+      </h3>
+      <i className={`fa-sharp fa-solid ${icon} text-slate-300 text-xl`} />
+    </div>
+    {sub && (
+      <p className="text-[10px] text-slate-400 mt-1 relative z-10">{sub}</p>
+    )}
+  </div>
+);
+
+const Dashboard: React.FC<DashboardProps> = ({
+  org,
+  dashboard,
+  agentStats = [],
+}) => {
+  const [selectedAgentId, setSelectedAgentId] = useState(
+    org.activeVoiceAgentId || agentStats[0]?.agentId || "",
+  );
+
+  const currentStats =
+    agentStats.find((s) => s.agentId === selectedAgentId) || agentStats[0];
+  const avgLabel = currentStats
+    ? `${currentStats.avgDurationMinutes.toFixed(1)}m`
+    : "0m";
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
+    <div className="space-y-7 animate-fade-up">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Total Calls', value: dashboard.stats.totalCalls.toString(), delta: 'Live', color: 'indigo' },
-          { label: 'Leads Captured', value: dashboard.stats.leadsCaptured.toString(), delta: 'Live', color: 'emerald' },
-          { label: 'Missed Calls', value: dashboard.stats.missedCalls.toString(), delta: 'Live', color: 'rose' },
-          { label: 'Avg Duration', value: averageDurationLabel, delta: 'Live', color: 'amber' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-            <div className={`absolute top-0 right-0 w-16 h-16 rounded-bl-full -mr-4 -mt-4 group-hover:scale-125 transition-transform ${STAT_ACCENT_CLASSES[stat.color as keyof typeof STAT_ACCENT_CLASSES]}`}></div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">{stat.label}</p>
-            <div className="flex items-end justify-between relative z-10">
-              <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{stat.value}</h3>
-              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{stat.delta}</span>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard
+          label="Total Calls"
+          value={String(currentStats?.totalCalls || 0)}
+          icon="fa-phone-volume"
+          accent="bg-indigo-50"
+          sub="This period"
+        />
+        <StatCard
+          label="Leads Captured"
+          value={String(currentStats?.leadsCaptured || 0)}
+          icon="fa-users"
+          accent="bg-emerald-50"
+          sub="From calls"
+        />
+        <StatCard
+          label="Missed / Escalated"
+          value={String(currentStats?.missedCalls || 0)}
+          icon="fa-phone-slash"
+          accent="bg-rose-50"
+          sub="Voicemail + escalated"
+        />
+        <StatCard
+          label="Avg Duration"
+          value={avgLabel}
+          icon="fa-stopwatch"
+          accent="bg-amber-50"
+          sub="Per call"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">Lead Generation Flow</h3>
-            <select className="bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-2 outline-none">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dashboard.weeklyFlow}>
-                <defs>
-                  <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
-                />
-                <Area type="monotone" dataKey="calls" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorCalls)" />
-                <Area type="monotone" dataKey="leads" stroke="#10b981" strokeWidth={4} fillOpacity={0} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Usage bar (global) */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Plan Usage — {org.subscription.plan}
+          </p>
+          <span className="text-xs font-black text-slate-600">
+            {dashboard.usage.minutes} / {dashboard.usage.minuteLimit} min
+          </span>
         </div>
-
-        {/* Breakdown Card */}
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-          <h3 className="text-xl font-black text-slate-900 mb-8 tracking-tight">Outcome Efficiency</h3>
-          <div className="space-y-8">
-            {dashboard.outcomeBreakdown.map((item, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-xs mb-3">
-                  <span className="font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
-                  <span className="font-black text-slate-900">{item.count}%</span>
-                </div>
-                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                  <div className={`${item.color} h-full rounded-full transition-all duration-1000`} style={{ width: `${item.count}%` }}></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-12 pt-8 border-t border-slate-100">
-            <div className="flex items-center gap-4 group">
-              <div className="p-4 bg-indigo-50 rounded-2xl group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              </div>
-              <div>
-                <p className="text-sm font-black text-slate-900 uppercase tracking-tighter">AI Shield Live</p>
-                <p className="text-xs text-slate-500 font-medium italic">
-                  {dashboard.agentStatus.direction === 'outbound' ? 'Outbound' : 'Inbound'} agent {org.agent.name} is live on {dashboard.agentStatus.phoneNumber}.
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-1000"
+            style={{
+              width: `${Math.min(100, (dashboard.usage.minutes / Math.max(dashboard.usage.minuteLimit, 1)) * 100)}%`,
+            }}
+          />
+        </div>
+        <div className="flex justify-between mt-1.5 text-[10px] text-slate-400">
+          <span>{dashboard.usage.calls} calls used</span>
+          <span>
+            {dashboard.usage.callLimit - dashboard.usage.calls} calls remaining
+          </span>
         </div>
       </div>
+
+      {/* Agent Selector & Performance */}
+      {agentStats.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <h3 className="text-base font-black text-slate-900">
+              Agent Performance
+            </h3>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">
+              {agentStats.map((agent) => (
+                <button
+                  key={agent.agentId}
+                  onClick={() => setSelectedAgentId(agent.agentId)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                    selectedAgentId === agent.agentId
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:bg-slate-200"
+                  }`}
+                >
+                  {agent.agentName}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                Agent Name
+              </p>
+              <p className="text-sm font-black text-slate-900">
+                {currentStats?.agentName || "—"}
+              </p>
+            </div>
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                Direction
+              </p>
+              <p className="text-sm font-black text-slate-900 capitalize">
+                {org.voiceAgents.find((a) => a.id === selectedAgentId)
+                  ?.direction || "—"}
+              </p>
+            </div>
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                Phone Number
+              </p>
+              <p className="text-sm font-black text-slate-900">
+                {org.voiceAgents.find((a) => a.id === selectedAgentId)
+                  ?.twilioPhoneNumber || "Not assigned"}
+              </p>
+            </div>
+          </div>
+          {currentStats && (
+            <>
+              <div className="h-64 mb-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={currentStats.weeklyFlow}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#f1f5f9"
+                    />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 700 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 700 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "12px",
+                        border: "none",
+                        boxShadow: "0 10px 40px rgba(0,0,0,.1)",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Bar
+                      dataKey="calls"
+                      name="Calls"
+                      fill="#6366f1"
+                      radius={[6, 6, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="leads"
+                      name="Leads"
+                      fill="#10b981"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={currentStats.outcomeBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      dataKey="count"
+                      nameKey="label"
+                    >
+                      {currentStats.outcomeBreakdown.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "10px",
+                        border: "none",
+                        fontSize: "12px",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
