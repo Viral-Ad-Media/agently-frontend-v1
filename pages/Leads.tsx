@@ -125,8 +125,8 @@ const Leads: React.FC<LeadsProps> = ({
     try {
       const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
       const token =
-        localStorage.getItem("agently_token") ||
-        sessionStorage.getItem("agently_token") ||
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
         "";
       const res = await fetch(`${base}/api/leads/bulk/tags`, {
         method: "PATCH",
@@ -138,16 +138,15 @@ const Leads: React.FC<LeadsProps> = ({
       });
       if (!res.ok)
         throw new Error((await res.json()).error?.message || "Failed");
-      const data = await res.json();
-      // Update local leads with new tags (optional – refresh workspace instead)
+      await res.json();
       toast(
         `Tags ${tagAction === "add" ? "added to" : tagAction === "remove" ? "removed from" : "set for"} ${selected.size} leads`,
       );
       setSelected(new Set());
       setShowTagModal(false);
       setTagInput("");
-      // Optionally refresh workspace – call parent refresh
-      window.location.reload(); // simple refresh – can be replaced with a refreshWorkspace callback
+      // Refresh the page to show updated tags
+      window.location.reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Tag update failed", true);
     } finally {
@@ -171,9 +170,10 @@ const Leads: React.FC<LeadsProps> = ({
     setImporting(true);
     try {
       const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+      // FIXED: use correct token key
       const token =
-        localStorage.getItem("agently_token") ||
-        sessionStorage.getItem("agently_token") ||
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
         "";
       const r = await fetch(`${base}/api/leads/import-csv`, {
         method: "POST",
@@ -188,6 +188,8 @@ const Leads: React.FC<LeadsProps> = ({
       toast(`✓ Imported ${d.imported} leads`);
       setShowImport(false);
       setCsvText("");
+      // Refresh the page to show new leads
+      window.location.reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Import failed", true);
     } finally {
