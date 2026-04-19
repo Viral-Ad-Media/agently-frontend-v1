@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CallRecord, CallOutcome } from '../types';
+import AppModal from '../components/AppModal';
 
 const OUTCOME_STYLE: Record<string, string> = {
   'Lead Captured':       'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -151,72 +152,65 @@ const CallLogs: React.FC<{ calls: CallRecord[]; onDownloadReport: (callId: strin
         </div>
       )}
 
-      {/* Transcript modal */}
-      {selected && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in fade-in">
-            <div className="p-6 border-b border-slate-100 flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">{selected.callerName}</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <p className="text-xs text-slate-400">{selected.callerPhone}</p>
-                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${OUTCOME_STYLE[selected.outcome] || ''}`}>{selected.outcome}</span>
-                  <p className="text-xs text-slate-400">{Math.floor(selected.duration/60)}m {selected.duration%60}s</p>
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-all">
-                <i className="fa-sharp fa-solid fa-xmark text-sm" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {selected.summary && (
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">AI Summary</p>
-                  <p className="text-sm text-amber-900 font-medium">{selected.summary}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Full Transcript</p>
-                <div className="space-y-3">
-                  {(selected.transcript.length > 0 ? selected.transcript : [
-                    { speaker: 'Agent', text: 'Hello! Thank you for calling. How can I help you today?' },
-                    { speaker: 'Caller', text: selected.summary || 'Caller inquiry.' },
-                  ]).map((m, i) => {
-                    const isAgent = m.speaker === 'Agent';
-                    return (
-                      <div key={i} className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
-                        <span className={`text-[10px] font-black uppercase ${isAgent ? 'text-amber-600' : 'text-slate-400'}`}>{m.speaker}</span>
-                        <p className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[82%] ${isAgent ? 'bg-slate-50 text-slate-800 rounded-tl-none' : 'bg-slate-900 text-white rounded-tr-none'}`}>
-                          {m.text}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {selected.recordingUrl && (
-                <div className="bg-slate-50 rounded-2xl p-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recording</p>
-                  <audio controls src={selected.recordingUrl} className="w-full" />
-                </div>
-              )}
-            </div>
-
-            <div className="p-5 border-t border-slate-100 flex gap-3">
-              <button onClick={e => void handleDownload(selected.id, e)} disabled={downloading === selected.id}
-                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-600 disabled:opacity-50 transition-all">
-                {downloading === selected.id ? 'Downloading…' : 'Download Report'}
-              </button>
-              <button onClick={() => setSelected(null)}
-                className="flex-1 border-2 border-slate-200 text-slate-600 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:border-slate-300 transition-all">
-                Close
-              </button>
-            </div>
+      <AppModal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected?.callerName || 'Call transcript'}
+        description={selected ? `${selected.callerPhone} · ${Math.floor(selected.duration / 60)}m ${selected.duration % 60}s` : undefined}
+        size="xl"
+        footer={selected ? (
+          <div className="flex gap-3">
+            <button onClick={e => void handleDownload(selected.id, e)} disabled={downloading === selected.id}
+              className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-600 disabled:opacity-50 transition-all">
+              {downloading === selected.id ? 'Downloading…' : 'Download Report'}
+            </button>
+            <button onClick={() => setSelected(null)}
+              className="flex-1 border-2 border-slate-200 text-slate-600 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:border-slate-300 transition-all">
+              Close
+            </button>
           </div>
-        </div>
-      )}
+        ) : null}
+      >
+        {selected ? (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${OUTCOME_STYLE[selected.outcome] || ''}`}>{selected.outcome}</span>
+              <p className="text-xs text-slate-400">{new Date(selected.timestamp).toLocaleDateString()} {new Date(selected.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+            {selected.summary && (
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">AI Summary</p>
+                <p className="text-sm text-amber-900 font-medium">{selected.summary}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Full Transcript</p>
+              <div className="space-y-3">
+                {(selected.transcript.length > 0 ? selected.transcript : [
+                  { speaker: 'Agent', text: 'Hello! Thank you for calling. How can I help you today?' },
+                  { speaker: 'Caller', text: selected.summary || 'Caller inquiry.' },
+                ]).map((m, i) => {
+                  const isAgent = m.speaker === 'Agent';
+                  return (
+                    <div key={i} className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
+                      <span className={`text-[10px] font-black uppercase ${isAgent ? 'text-amber-600' : 'text-slate-400'}`}>{m.speaker}</span>
+                      <p className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[82%] ${isAgent ? 'bg-slate-50 text-slate-800 rounded-tl-none' : 'bg-slate-900 text-white rounded-tr-none'}`}>
+                        {m.text}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {selected.recordingUrl && (
+              <div className="bg-slate-50 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recording</p>
+                <audio controls src={selected.recordingUrl} className="w-full" />
+              </div>
+            )}
+          </div>
+        ) : null}
+      </AppModal>
     </div>
   );
 };

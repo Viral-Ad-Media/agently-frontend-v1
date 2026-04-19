@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Organization, User, UserRole } from "../types";
+import { Organization, UserRole } from "../types";
+import AppModal from "../components/AppModal";
 
 interface TeamProps {
   org: Organization;
@@ -182,181 +183,129 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         </table>
       </div>
 
-      {/* ── Invite Modal (fixed overlay) ── */}
-      {showInvite && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowInvite(false);
-          }}
-        >
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">
-                  Invite Team Member
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Send a magic link to grant workspace access
-                </p>
-              </div>
-              <button
-                onClick={() => setShowInvite(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-all"
-              >
-                <i className="fa-sharp fa-solid fa-xmark text-base" />
-              </button>
-            </div>
-            <form onSubmit={handleInvite} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Jane Smith"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="jane@company.com"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                  Role
-                </label>
-                <select
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as any)}
-                >
-                  <option value="Admin">
-                    Admin — can manage agents and data
-                  </option>
-                  <option value="Viewer">Viewer — read-only access</option>
-                </select>
-              </div>
-              <div className="bg-slate-50 rounded-2xl p-4 text-xs text-slate-500">
-                <p className="font-black text-slate-700 mb-1">
-                  What happens next
-                </p>
-                An email will be sent to{" "}
-                <strong>{inviteEmail || "the invitee"}</strong> with a magic
-                sign-in link granting <strong>{inviteRole}</strong> access to
-                this workspace.
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInvite(false)}
-                  className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-amber-600 disabled:opacity-50 transition-all"
-                >
-                  {saving ? "Sending…" : "Send Invite"}
-                </button>
-              </div>
-            </form>
+      <AppModal
+        open={showInvite}
+        onClose={() => setShowInvite(false)}
+        title="Invite Team Member"
+        description="Send a magic link to grant workspace access."
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowInvite(false)}
+              className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="invite-member-form"
+              disabled={saving}
+              className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-amber-600 disabled:opacity-50 transition-all"
+            >
+              {saving ? "Sending…" : "Send Invite"}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="invite-member-form" onSubmit={handleInvite} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Full Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Jane Smith"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Email Address
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="jane@company.com"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Role
+            </label>
+            <select
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 outline-none text-sm font-medium"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as Extract<UserRole, "Admin" | "Viewer">)}
+            >
+              <option value="Admin">Admin — can manage agents and data</option>
+              <option value="Viewer">Viewer — read-only access</option>
+            </select>
+          </div>
+          <div className="bg-slate-50 rounded-2xl p-4 text-xs text-slate-500">
+            <p className="font-black text-slate-700 mb-1">What happens next</p>
+            An email will be sent to <strong>{inviteEmail || "the invitee"}</strong> with a magic sign-in link granting <strong>{inviteRole}</strong> access to this workspace.
+          </div>
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
+        </form>
+      </AppModal>
 
-      {/* ── Permissions Modal (fixed overlay) ── */}
-      {showPerms && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowPerms(false);
-          }}
-        >
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-8 animate-in zoom-in fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">
-                  Role Permissions
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  What each role can and cannot do
-                </p>
-              </div>
-              <button
-                onClick={() => setShowPerms(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-all"
-              >
-                <i className="fa-sharp fa-solid fa-xmark text-base" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              {Object.entries(ROLE_PERMISSIONS).map(([role, info]) => (
-                <div
-                  key={role}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+      <AppModal
+        open={showPerms}
+        onClose={() => setShowPerms(false)}
+        title="Role Permissions"
+        description="What each role can and cannot do."
+        size="lg"
+      >
+        <div className="space-y-4">
+          {Object.entries(ROLE_PERMISSIONS).map(([role, info]) => (
+            <div
+              key={role}
+              className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    role === "Owner"
+                      ? "bg-amber-100 text-amber-700"
+                      : role === "Admin"
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-200 text-slate-500"
+                  }`}
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        role === "Owner"
-                          ? "bg-amber-100 text-amber-700"
-                          : role === "Admin"
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-200 text-slate-500"
-                      }`}
-                    >
-                      {role}
-                    </span>
-                    <span className="text-xs text-slate-400 font-medium">
-                      {info.label}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      {info.can.map((c) => (
-                        <p
-                          key={c}
-                          className="text-emerald-600 flex items-center gap-1.5 mb-1"
-                        >
-                          <i className="fa-sharp fa-solid fa-check text-[10px]" />
-                          {c}
-                        </p>
-                      ))}
-                    </div>
-                    <div>
-                      {info.cannot.map((c) => (
-                        <p
-                          key={c}
-                          className="text-slate-400 flex items-center gap-1.5 mb-1"
-                        >
-                          <i className="fa-sharp fa-solid fa-xmark text-[10px]" />
-                          {c}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
+                  {role}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">{info.label}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2">
+                <div>
+                  {info.can.map((item) => (
+                    <p key={item} className="mb-1 flex items-center gap-1.5 text-emerald-600">
+                      <i className="fa-sharp fa-solid fa-check text-[10px]" />
+                      {item}
+                    </p>
+                  ))}
                 </div>
-              ))}
+                <div>
+                  {info.cannot.map((item) => (
+                    <p key={item} className="mb-1 flex items-center gap-1.5 text-slate-400">
+                      <i className="fa-sharp fa-solid fa-xmark text-[10px]" />
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
-      )}
+      </AppModal>
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 export enum CallOutcome {
   LEAD_CAPTURED = 'Lead Captured',
   APPOINTMENT_BOOKED = 'Appointment Booked',
@@ -44,7 +43,32 @@ export interface Lead {
   email: string;
   reason: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'new' | 'contacted' | 'closed';
+  source?: string;
+  tags?: string[];
+  voiceAgentId?: string;
+  assignmentContext?: string;
+}
+
+export interface LeadOutreachWindow {
+  weekdays: string[];
+  time: string;
+}
+
+export interface LeadOutreachSchedule {
+  id: string;
+  name: string;
+  targetType: 'lead' | 'tag';
+  leadId?: string;
+  tag?: string;
+  voiceAgentId: string;
+  windows: LeadOutreachWindow[];
+  timezone: string;
+  extraContext: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CallRecord {
@@ -72,17 +96,16 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-// Updated to use Twilio ConversationRelay voice options
 export type AgentVoice =
-  | 'Rachel'    // ElevenLabs – female, calm
-  | 'Domi'      // ElevenLabs – female, strong
-  | 'Bella'     // ElevenLabs – female, soft
-  | 'Josh'      // ElevenLabs – male, deep
-  | 'Arnold'    // ElevenLabs – male, crisp
-  | 'Wavenet-F' // Google – female
-  | 'Wavenet-D' // Google – male
-  | 'Polly-Joanna'  // Amazon – female
-  | 'Polly-Matthew'; // Amazon – male
+  | 'Rachel'
+  | 'Domi'
+  | 'Bella'
+  | 'Josh'
+  | 'Arnold'
+  | 'Wavenet-F'
+  | 'Wavenet-D'
+  | 'Polly-Joanna'
+  | 'Polly-Matthew';
 
 export interface AgentConfig {
   id: string;
@@ -159,6 +182,8 @@ export interface ChatbotConfig {
   suggestedPrompts: string[];
   embedScript: string;
   widgetScriptUrl: string;
+  chatVoice?: string;
+  chatLanguages?: string[];
 }
 
 export interface BusinessProfile {
@@ -222,6 +247,7 @@ export interface DashboardData {
     direction: 'inbound' | 'outbound';
   };
 }
+
 export interface AgentStats {
   agentId: string;
   agentName: string;
@@ -240,5 +266,4 @@ export interface WorkspaceBootstrap {
   calls: CallRecord[];
   conversation: ChatMessage[];
   dashboard: DashboardData;
-   agentStats?: AgentStats[];
 }

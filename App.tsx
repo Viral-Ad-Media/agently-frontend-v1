@@ -321,7 +321,7 @@ const App: React.FC = () => {
   };
 
   const handleCreateLead = async (
-    payload: Pick<Lead, "name" | "email" | "phone" | "reason">,
+    payload: Pick<Lead, "name" | "email" | "phone" | "reason"> & { tags?: string[]; voiceAgentId?: string; assignmentContext?: string },
   ) => {
     await api.createLead(payload);
     await refreshWorkspace();
@@ -591,6 +591,8 @@ const App: React.FC = () => {
                   onUpdateLead={handleUpdateLead}
                   onCreateLead={handleCreateLead}
                   onExport={handleExportLeads}
+                  org={org}
+                  onRefresh={refreshWorkspace}
                 />
               </ProtectedRoute>
             }

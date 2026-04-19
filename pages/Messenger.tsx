@@ -32,6 +32,7 @@ const COLOR_PRESETS = [
   "#065f46",
 ];
 
+// OpenAI TTS voices (no provider badge)
 const OPENAI_VOICES = [
   { id: "alloy", name: "Alloy", desc: "Neutral, balanced" },
   { id: "echo", name: "Echo", desc: "Male, clear" },
@@ -93,6 +94,7 @@ const Messenger: React.FC<MessengerProps> = ({
   const activeChatbot =
     org.chatbots.find((c) => c.id === org.activeChatbotId) ?? org.chatbots[0];
 
+  // Safe initialization – if activeChatbot is undefined, use DEFAULT_BOT
   const [draft, setDraft] = useState<
     ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] }
   >(() => {
@@ -117,6 +119,7 @@ const Messenger: React.FC<MessengerProps> = ({
   >("idle");
   const [scrapeMsg, setScrapeMsg] = useState("");
 
+  // Voice recording state
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioWave, setAudioWave] = useState<number[]>([]);
@@ -124,6 +127,7 @@ const Messenger: React.FC<MessengerProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const waveAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Voice preview state
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -174,7 +178,6 @@ const Messenger: React.FC<MessengerProps> = ({
     org.voiceAgents.find((a) => a.id === draft.voiceAgentId)?.name ||
     "AI assistant";
 
-  // 🔧 FIX: Use /chatbot-widget/ instead of /widget/
   const buildEmbedScript = (
     chatbot: ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] },
   ) => {
@@ -184,9 +187,7 @@ const Messenger: React.FC<MessengerProps> = ({
     );
     const positionStyle =
       chatbot.position === "left" ? "left:20px" : "right:20px";
-    const languages = (chatbot.chatLanguages || ["en"]).join(",");
-    const voice = chatbot.chatVoice || "alloy";
-    return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${backendUrl}/chatbot-widget/${chatbot.id}?voice=${voice}&languages=${languages}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"\n  referrerpolicy="no-referrer-when-downgrade"\n></iframe>`;
+        return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${backendUrl}/chatbot-widget/${chatbot.id}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);border:none;background:transparent;z-index:2147483646;overflow:hidden;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"\n  referrerpolicy="no-referrer-when-downgrade"\n></iframe>`;
   };
 
   const saveCustomization = async () => {
@@ -259,6 +260,7 @@ const Messenger: React.FC<MessengerProps> = ({
     }
   };
 
+  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -689,7 +691,7 @@ const Messenger: React.FC<MessengerProps> = ({
               />
             </div>
 
-            {/* Widget Voice Selection */}
+            {/* ── Widget Voice Selection (no provider badge) ── */}
             <div className="pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -743,7 +745,7 @@ const Messenger: React.FC<MessengerProps> = ({
               )}
             </div>
 
-            {/* Widget Languages */}
+            {/* ── Widget Languages ── */}
             <div className="pt-2 border-t border-slate-100">
               <div className="mb-3">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -907,6 +909,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     Online · Instant replies
                   </p>
                 </div>
+                {/* Language flags preview */}
                 {(draft.chatLanguages || []).length > 1 && (
                   <div className="flex gap-1">
                     {(draft.chatLanguages || []).slice(0, 3).map((code) => {
@@ -983,6 +986,7 @@ const Messenger: React.FC<MessengerProps> = ({
                 onSubmit={handleSend}
                 className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0 items-center"
               >
+                {/* Voice toggle button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1001,6 +1005,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   />
                 </button>
 
+                {/* Input area (text or voice waveform) */}
                 {isVoiceMode ? (
                   <div className="flex-1 h-9 flex items-center px-3 rounded-xl bg-white/10 border border-white/10 gap-1 overflow-hidden">
                     {isRecording ? (
@@ -1032,6 +1037,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   />
                 )}
 
+                {/* Send / record button */}
                 {isVoiceMode ? (
                   <button
                     type="button"

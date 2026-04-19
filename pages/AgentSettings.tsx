@@ -93,7 +93,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     setScrapeResult('');
     setChunks(0);
     try {
-      const res = await api.importChatbotWebsite(org.activeChatbotId || '', scrapeUrl);
+      const targetAgentId = draft.id || org.activeVoiceAgentId || org.agent.id;
+      const res = await api.importVoiceAgentKnowledge(targetAgentId, scrapeUrl);
       setScrapeStatus('done');
       setChunks(res.chunksStored ?? 0);
       setScrapeResult(res.message || `✓ ${res.chunksStored} chunks saved to knowledge base.`);

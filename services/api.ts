@@ -6,6 +6,7 @@ import {
   DashboardData,
   FAQ,
   Lead,
+  LeadOutreachSchedule,
   Organization,
   User,
   UserRole,
@@ -254,6 +255,13 @@ export const api = {
       { method: 'POST', body: { website } }
     );
   },
+
+  async importVoiceAgentKnowledge(agentId: string, website: string) {
+    return request<{ success: boolean; chunksStored: number; strategy: string; message: string }>(
+      `/api/voice-agents/${agentId}/import-knowledge`,
+      { method: 'POST', body: { website } }
+    );
+  },
   // ====================================================
 
   async restartAgent() {
@@ -329,7 +337,7 @@ export const api = {
     });
   },
 
-  async createLead(payload: Pick<Lead, 'name' | 'email' | 'phone' | 'reason'> & { status?: Lead['status'] }) {
+  async createLead(payload: Pick<Lead, 'name' | 'email' | 'phone' | 'reason'> & { status?: Lead['status']; tags?: string[]; voiceAgentId?: string; assignmentContext?: string }) {
     return request<Lead>('/api/leads', {
       method: 'POST',
       body: payload,
@@ -341,6 +349,68 @@ export const api = {
       responseType: 'blob',
     });
     triggerDownload(blob, 'agently-leads.csv');
+  },
+
+  async importLeadsCsv(csv: string) {
+    return request<{ success: boolean; imported: number; total: number }>('/api/leads/import-csv', {
+      method: 'POST',
+      body: { csv },
+    });
+  },
+
+  async bulkTagLeads(ids: string[], tags: string[], action: 'add' | 'remove' | 'set' = 'add') {
+    return request<{ success: boolean; leads: Lead[] }>('/api/leads/bulk/tags', {
+      method: 'PATCH',
+      body: { ids, tags, action },
+    });
+  },
+
+  async bulkAssignLeadAgent(ids: string[], voiceAgentId: string) {
+    return request<{ success: boolean; updated: number; leads: Lead[] }>('/api/leads/bulk/assign-agent', {
+      method: 'PATCH',
+      body: { ids, voiceAgentId },
+    });
+  },
+
+  async assignLeadAgentByTag(tag: string, voiceAgentId: string) {
+    return request<{ success: boolean; updated: number; leads: Lead[] }>('/api/leads/bulk/assign-agent-by-tag', {
+      method: 'PATCH',
+      body: { tag, voiceAgentId },
+    });
+  },
+
+  async listLeadSchedules() {
+    return request<{ schedules: LeadOutreachSchedule[] }>('/api/leads/schedules');
+  },
+
+  async createLeadSchedule(payload: {
+    name?: string;
+    targetType: 'lead' | 'tag';
+    leadIds?: string[];
+    tag?: string;
+    voiceAgentId: string;
+    windows: { weekdays: string[]; time: string }[];
+    timezone?: string;
+    extraContext?: string;
+    syncExistingLeads?: boolean;
+  }) {
+    return request<{ schedules: LeadOutreachSchedule[] }>('/api/leads/schedules', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async updateLeadSchedule(id: string, updates: Partial<LeadOutreachSchedule>) {
+    return request<{ schedule: LeadOutreachSchedule }>(`/api/leads/schedules/${id}`, {
+      method: 'PATCH',
+      body: updates,
+    });
+  },
+
+  async deleteLeadSchedule(id: string) {
+    return request<{ success: boolean }>(`/api/leads/schedules/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   async inviteMember(email: string, role: Extract<UserRole, 'Admin' | 'Viewer'>, name?: string) {

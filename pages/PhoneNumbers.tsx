@@ -7,6 +7,7 @@ import {
   AgentConfig,
 } from "../types";
 import { twilioApi } from "../services/api";
+import AppModal from "../components/AppModal";
 
 // ── Tiny helpers ─────────────────────────────────────────────
 const Inp = (p: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -95,6 +96,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const [targetAgentId, setTargetAgentId] = useState(
     org.activeVoiceAgentId || org.agent.id || "",
   );
+  const [confirmPurchase, setConfirmPurchase] = useState<AvailablePhoneNumber | null>(null);
+  const [confirmRelease, setConfirmRelease] = useState<OwnedPhoneNumber | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -143,22 +146,22 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   }, [country, numberType, areaCode, contains]);
 
-  const handlePurchase = async (number: AvailablePhoneNumber) => {
-    if (
-      !window.confirm(
-        `Purchase ${number.friendlyName}? This will be charged to your Twilio account.`,
-      )
-    )
-      return;
-    setBusy(`buy-${number.phoneNumber}`);
+  const confirmPurchaseNumber = (number: AvailablePhoneNumber) => {
+    setConfirmPurchase(number);
+  };
+
+  const handlePurchase = async () => {
+    if (!confirmPurchase) return;
+    setBusy(`buy-${confirmPurchase.phoneNumber}`);
     try {
       await twilioApi.purchaseNumber(
-        number.phoneNumber,
+        confirmPurchase.phoneNumber,
         targetAgentId || undefined,
       );
-      onAgentUpdated({ twilioPhoneNumber: number.phoneNumber });
-      showToast(`✓ ${number.friendlyName} purchased and assigned!`);
+      onAgentUpdated({ twilioPhoneNumber: confirmPurchase.phoneNumber });
+      showToast(`✓ ${confirmPurchase.friendlyName} purchased and assigned!`);
       setOwnedLoaded(false);
+      setConfirmPurchase(null);
     } catch (e: any) {
       showToast(e.message || "Purchase failed", false);
     } finally {
@@ -186,14 +189,18 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   };
 
-  const handleRelease = async (owned: OwnedPhoneNumber) => {
-    if (!window.confirm(`Release ${owned.phoneNumber}? This cannot be undone.`))
-      return;
-    setBusy(`release-${owned.sid}`);
+  const confirmReleaseNumber = (owned: OwnedPhoneNumber) => {
+    setConfirmRelease(owned);
+  };
+
+  const handleRelease = async () => {
+    if (!confirmRelease) return;
+    setBusy(`release-${confirmRelease.sid}`);
     try {
-      await twilioApi.releaseNumber(owned.sid);
-      setOwnedNumbers((prev) => prev.filter((n) => n.sid !== owned.sid));
-      showToast(`${owned.phoneNumber} released.`);
+      await twilioApi.releaseNumber(confirmRelease.sid);
+      setOwnedNumbers((prev) => prev.filter((n) => n.sid !== confirmRelease.sid));
+      showToast(`${confirmRelease.phoneNumber} released.`);
+      setConfirmRelease(null);
     } catch (e: any) {
       showToast(e.message || "Release failed", false);
     } finally {
@@ -237,6 +244,72 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
           {toast.msg}
         </div>
       )}
+
+      <AppModal
+        open={!!confirmPurchase}
+        onClose={() => (busy?.startsWith("buy-") ? null : setConfirmPurchase(null))}
+        title="Purchase number"
+        description="Confirm the purchase and assignment of this Twilio number."
+        size="md"
+      >
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-slate-700">
+            <p className="font-black text-slate-900">{confirmPurchase?.friendlyName || confirmPurchase?.phoneNumber}</p>
+            <p className="mt-1 text-xs text-slate-500">This number will be purchased on your Twilio account and assigned to {activeAgent?.name || "the selected agent"}.</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setConfirmPurchase(null)}
+              disabled={!!busy?.startsWith("buy-")}
+              className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handlePurchase}
+              disabled={!!busy?.startsWith("buy-")}
+              className="flex-1 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy?.startsWith("buy-") ? "Purchasing..." : "Confirm purchase"}
+            </button>
+          </div>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={!!confirmRelease}
+        onClose={() => (busy?.startsWith("release-") ? null : setConfirmRelease(null))}
+        title="Release number"
+        description="Release this number from Twilio and remove it from the workspace."
+        size="md"
+      >
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-slate-700">
+            <p className="font-black text-slate-900">{confirmRelease?.phoneNumber}</p>
+            <p className="mt-1 text-xs text-slate-500">This cannot be undone. The number will be removed from your Twilio account.</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setConfirmRelease(null)}
+              disabled={!!busy?.startsWith("release-")}
+              className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRelease}
+              disabled={!!busy?.startsWith("release-")}
+              className="flex-1 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy?.startsWith("release-") ? "Releasing..." : "Release number"}
+            </button>
+          </div>
+        </div>
+      </AppModal>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -544,7 +617,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                         )}
                       </div>
                       <button
-                        onClick={() => handlePurchase(num)}
+                        onClick={() => confirmPurchaseNumber(num)}
                         disabled={!!busy}
                         className="w-full rounded-xl bg-slate-900 text-white py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-50 transition-all active:scale-95"
                       >
@@ -635,7 +708,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                         </button>
                       )}
                       <button
-                        onClick={() => handleRelease(num)}
+                        onClick={() => confirmReleaseNumber(num)}
                         disabled={!!busy}
                         className="rounded-xl border border-red-200 text-red-400 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 hover:border-red-300 disabled:opacity-40 transition-all"
                       >

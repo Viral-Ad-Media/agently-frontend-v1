@@ -107,8 +107,8 @@ const Messenger: React.FC<MessengerProps> = ({
     return `<!-- Agently Chat Widget - configuration loaded live from server -->
 <iframe
   id="agently-widget-${chatbot.id}"
-  src="${backendUrl}/widget/${chatbot.id}"
-  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:999999;overflow:hidden;"
+  src="${backendUrl}/chatbot-widget/${chatbot.id}"
+  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);border:none;background:transparent;z-index:2147483646;overflow:hidden;"
   scrolling="no"
   frameborder="0"
   allow="microphone"

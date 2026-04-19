@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentConfig, CallOutcome, Lead, Organization } from "../types";
+import AppModal from "./AppModal";
 
 interface CallSimulatorProps {
   agent: AgentConfig;
@@ -88,37 +89,27 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
       return;
     }
 
-    // Try to initiate call via VAPI or backend
+    // Verify the Twilio-native voice test endpoint before connecting the simulator
     try {
       const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
         /\/$/,
         "",
       );
       const token =
-        localStorage.getItem("agently_token") ||
-        sessionStorage.getItem("agently_token") ||
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
         "";
-      const resp = await fetch(`${apiBase}/api/calls/web-call`, {
-        method: "POST",
+      const resp = await fetch(`${apiBase}/api/twilio/voice-test?agentId=${encodeURIComponent(agent.id)}`, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          agentId: agent.id,
-          phoneNumber: agent.twilioPhoneNumber,
-          callerName,
-          callerPhone,
-        }),
       });
 
-      if (!resp.ok) throw new Error("Failed to initiate web call");
-      const data = await resp.json();
+      if (!resp.ok) throw new Error("Failed to initiate test call");
+      const twiml = await resp.text();
 
-      // If VAPI token returned, use VAPI Web SDK
-      if (data.vapiToken || data.webCallToken) {
-        // VAPI Web call would be initialized here with their SDK
-        // For now, simulate connection success
+      if (twiml.includes("<ConversationRelay")) {
         setWebCallStatus("connected");
         setWebCallDuration(0);
         webCallTimerRef.current = setInterval(
@@ -128,7 +119,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
         return;
       }
 
-      // Fallback: direct SIP/PSTN call simulation
+      // Fallback: simulator mode if the browser does not support a full live relay
       setTimeout(() => {
         setWebCallStatus("connected");
         webCallTimerRef.current = setInterval(
@@ -185,8 +176,8 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
           "",
         );
         const token =
-          localStorage.getItem("agently_token") ||
-          sessionStorage.getItem("agently_token") ||
+          localStorage.getItem("agently.auth.token") ||
+          sessionStorage.getItem("agently.auth.token") ||
           "";
         const resp = await fetch(`${apiBase}/api/messenger/messages`, {
           method: "POST",
@@ -281,17 +272,20 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
   const hasNumber = !!agent.twilioPhoneNumber;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/85 backdrop-blur-md p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          clearTimers();
-          onClose();
-        }
+    <AppModal
+      open
+      onClose={() => {
+        clearTimers();
+        onClose();
       }}
+      title={agent.name}
+      size="xl"
+      hideHeader
+      className="overflow-hidden max-w-5xl"
+      bodyClassName="p-0"
     >
       <div
-        className="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-400 border border-white/20"
+        className="bg-white w-full rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-400 border border-white/20"
         style={{ maxHeight: "85vh" }}
       >
         {/* Header */}
@@ -679,7 +673,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </AppModal>
   );
 };
 
