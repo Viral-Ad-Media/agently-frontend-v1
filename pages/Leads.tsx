@@ -9,6 +9,8 @@ interface LeadsProps {
     payload: Pick<Lead, "name" | "email" | "phone" | "reason">,
   ) => Promise<void>;
   onExport: () => Promise<void>;
+  org?: any; // for voice agents list
+  onRefresh?: () => Promise<void>;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -27,10 +29,13 @@ const Leads: React.FC<LeadsProps> = ({
   onUpdateLead,
   onCreateLead,
   onExport,
+  org,
+  onRefresh,
 }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showAgentModal, setShowAgentModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -50,6 +55,9 @@ const Leads: React.FC<LeadsProps> = ({
   // Tagging state
   const [tagInput, setTagInput] = useState("");
   const [tagAction, setTagAction] = useState<"add" | "remove" | "set">("add");
+
+  // Agent assignment state
+  const [selectedAgentId, setSelectedAgentId] = useState("");
 
   const filtered = leads.filter((l) => {
     const matchSearch =
@@ -88,6 +96,7 @@ const Leads: React.FC<LeadsProps> = ({
       setForm({ name: "", email: "", phone: "", reason: "" });
       setShowAdd(false);
       toast("Lead created");
+      if (onRefresh) await onRefresh();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Failed", true);
     } finally {
@@ -104,6 +113,7 @@ const Leads: React.FC<LeadsProps> = ({
       );
       setSelected(new Set());
       toast(`${selected.size} leads updated`);
+      if (onRefresh) await onRefresh();
     } catch (e) {
       toast("Bulk update failed", true);
     } finally {
@@ -138,17 +148,53 @@ const Leads: React.FC<LeadsProps> = ({
       });
       if (!res.ok)
         throw new Error((await res.json()).error?.message || "Failed");
-      await res.json();
       toast(
         `Tags ${tagAction === "add" ? "added to" : tagAction === "remove" ? "removed from" : "set for"} ${selected.size} leads`,
       );
       setSelected(new Set());
       setShowTagModal(false);
       setTagInput("");
-      // Refresh the page to show updated tags
-      window.location.reload();
+      if (onRefresh) await onRefresh();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Tag update failed", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBulkAssignAgent = async () => {
+    if (!selected.size) return;
+    if (!selectedAgentId) {
+      toast("Please select an agent", true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+      const token =
+        localStorage.getItem("agently.auth.token") ||
+        sessionStorage.getItem("agently.auth.token") ||
+        "";
+      const res = await fetch(`${base}/api/leads/bulk/assign-agent`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ids: [...selected],
+          voiceAgentId: selectedAgentId,
+        }),
+      });
+      if (!res.ok)
+        throw new Error((await res.json()).error?.message || "Failed");
+      toast(`Assigned agent to ${selected.size} leads`);
+      setSelected(new Set());
+      setShowAgentModal(false);
+      setSelectedAgentId("");
+      if (onRefresh) await onRefresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Assignment failed", true);
     } finally {
       setSaving(false);
     }
@@ -170,7 +216,6 @@ const Leads: React.FC<LeadsProps> = ({
     setImporting(true);
     try {
       const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-      // FIXED: use correct token key
       const token =
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||
@@ -188,8 +233,7 @@ const Leads: React.FC<LeadsProps> = ({
       toast(`✓ Imported ${d.imported} leads`);
       setShowImport(false);
       setCsvText("");
-      // Refresh the page to show new leads
-      window.location.reload();
+      if (onRefresh) await onRefresh();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Import failed", true);
     } finally {
@@ -250,6 +294,13 @@ const Leads: React.FC<LeadsProps> = ({
               >
                 <i className="fa-sharp fa-solid fa-tag mr-1" /> Tag (
                 {selected.size})
+              </button>
+              <button
+                onClick={() => setShowAgentModal(true)}
+                className="rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 transition-all"
+              >
+                <i className="fa-sharp fa-solid fa-user-tie mr-1" /> Assign
+                Agent ({selected.size})
               </button>
             </>
           )}
@@ -424,10 +475,10 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       </div>
 
-      {/* Add Lead Modal */}
+      {/* Add Lead Modal - Correctly positioned */}
       {showAdd && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowAdd(false);
           }}
@@ -498,10 +549,10 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       )}
 
-      {/* CSV Import Modal */}
+      {/* CSV Import Modal - Correctly positioned */}
       {showImport && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowImport(false);
           }}
@@ -576,10 +627,10 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       )}
 
-      {/* Tagging Modal */}
+      {/* Tagging Modal - Correctly positioned */}
       {showTagModal && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowTagModal(false);
           }}
@@ -650,6 +701,64 @@ const Leads: React.FC<LeadsProps> = ({
                   className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-amber-600 disabled:opacity-50 transition-all"
                 >
                   {saving ? "Applying…" : "Apply to Selected"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Agent Modal - Correctly positioned */}
+      {showAgentModal && org && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAgentModal(false);
+          }}
+        >
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-xl font-black text-slate-900">
+                Assign Agent to Selected Leads
+              </h3>
+              <button
+                onClick={() => setShowAgentModal(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400"
+              >
+                <i className="fa-sharp fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  Select Voice Agent
+                </label>
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">-- Choose agent --</option>
+                  {org.voiceAgents?.map((agent: any) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name} ({agent.direction})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowAgentModal(false)}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-black text-slate-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkAssignAgent}
+                  disabled={saving || !selectedAgentId}
+                  className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-amber-600 disabled:opacity-50 transition-all"
+                >
+                  {saving ? "Assigning…" : "Assign to Selected"}
                 </button>
               </div>
             </div>
