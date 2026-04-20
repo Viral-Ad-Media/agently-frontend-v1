@@ -323,20 +323,31 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
+  // FIX: updateLead no longer calls refreshWorkspace — Leads.tsx updates optimistically
   const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
     await api.updateLead(leadId, updates);
-    await refreshWorkspace();
+    // Workspace refreshes via debounced realtime subscription — no manual reload needed
   };
 
   const handleCreateLead = async (
     payload: Pick<Lead, "name" | "email" | "phone" | "reason"> & { tags?: string[]; voiceAgentId?: string; assignmentContext?: string },
   ) => {
     await api.createLead(payload);
-    await refreshWorkspace();
+    await refreshWorkspace(); // keep for create — new lead must appear immediately
   };
 
   const handleExportLeads = async () => {
     await api.exportLeadsCsv();
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    await api.deleteLead(leadId);
+    await refreshWorkspace();
+  };
+
+  const handleBulkDeleteLeads = async (leadIds: string[]) => {
+    await api.bulkDeleteLeads(leadIds);
+    await refreshWorkspace();
   };
 
   const handleInviteMember = async (
@@ -598,6 +609,8 @@ const App: React.FC = () => {
                   leads={leads}
                   onUpdateLead={handleUpdateLead}
                   onCreateLead={handleCreateLead}
+                  onDeleteLead={handleDeleteLead}
+                  onBulkDeleteLeads={handleBulkDeleteLeads}
                   onExport={handleExportLeads}
                   org={org}
                   onRefresh={refreshWorkspace}
