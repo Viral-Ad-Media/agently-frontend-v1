@@ -58,6 +58,15 @@ const App: React.FC = () => {
   const conversation = workspace?.conversation ?? [];
   const dashboard = workspace?.dashboard ?? null;
 
+  // FIX: debounce realtime refresh to prevent loop when lead actions fire DB events
+  const refreshDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedRefresh = React.useCallback(() => {
+    if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+    refreshDebounceRef.current = setTimeout(() => {
+      void refreshWorkspace();
+    }, 800);
+  }, []);
+
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
   };
@@ -105,10 +114,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!org?.id) return;
 
+    // FIX: use debounced refresh so rapid DB events don't cascade into a loop
     const unsubscribe = subscribeToOrgRealtime(org.id, {
-      onAny: () => {
-        void refreshWorkspace();
-      },
+      onAny: debouncedRefresh,
     });
 
     return unsubscribe;
@@ -329,17 +337,6 @@ const App: React.FC = () => {
 
   const handleExportLeads = async () => {
     await api.exportLeadsCsv();
-  };
-
-  // FIX: delete lead handlers
-  const handleDeleteLead = async (leadId: string) => {
-    await api.deleteLead(leadId);
-    await refreshWorkspace();
-  };
-
-  const handleBulkDeleteLeads = async (leadIds: string[]) => {
-    await api.bulkDeleteLeads(leadIds);
-    await refreshWorkspace();
   };
 
   const handleInviteMember = async (
@@ -601,8 +598,6 @@ const App: React.FC = () => {
                   leads={leads}
                   onUpdateLead={handleUpdateLead}
                   onCreateLead={handleCreateLead}
-                  onDeleteLead={handleDeleteLead}
-                  onBulkDeleteLeads={handleBulkDeleteLeads}
                   onExport={handleExportLeads}
                   org={org}
                   onRefresh={refreshWorkspace}
