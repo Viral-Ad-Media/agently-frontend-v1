@@ -187,7 +187,11 @@ const Messenger: React.FC<MessengerProps> = ({
     );
     const positionStyle =
       chatbot.position === "left" ? "left:20px" : "right:20px";
-        return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${backendUrl}/chatbot-widget/${chatbot.id}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:700px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);border:none;background:transparent;z-index:2147483646;overflow:hidden;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"\n  referrerpolicy="no-referrer-when-downgrade"\n></iframe>`;
+    // FIX: embed langs and voice as query params so widget persists language selection
+    const langs = (chatbot.chatLanguages || ["en"]).join(",");
+    const voice = chatbot.chatVoice || "alloy";
+    const widgetSrc = `${backendUrl}/chatbot-widget/${chatbot.id}?langs=${langs}&voice=${encodeURIComponent(voice)}`;
+    return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${widgetSrc}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:800px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:2147483646;overflow:hidden;outline:none;display:block;visibility:visible;pointer-events:auto;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-storage-access-by-user-activation"\n  referrerpolicy="no-referrer-when-downgrade"\n  loading="eager"\n  onload="console.info('Agently widget iframe loaded')"\n  onerror="this.style.display='none'; console.error('Agently widget iframe failed to load')"\n  title="Chat widget"\n></iframe>`;
   };
 
   const saveCustomization = async () => {

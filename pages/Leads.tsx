@@ -14,6 +14,8 @@ interface LeadsProps {
       assignmentContext?: string;
     },
   ) => Promise<void>;
+  onDeleteLead: (leadId: string) => Promise<void>;
+  onBulkDeleteLeads: (leadIds: string[]) => Promise<void>;
   onExport: () => Promise<void>;
   org?: Organization;
   onRefresh?: () => Promise<void>;
@@ -64,6 +66,8 @@ const Leads: React.FC<LeadsProps> = ({
   leads,
   onUpdateLead,
   onCreateLead,
+  onDeleteLead,
+  onBulkDeleteLeads,
   onExport,
   org,
   onRefresh,
@@ -80,6 +84,8 @@ const Leads: React.FC<LeadsProps> = ({
   const [toast, setToast] = useState<{ ok: boolean; message: string } | null>(null);
   const [csvText, setCsvText] = useState("");
   const [schedules, setSchedules] = useState<LeadOutreachSchedule[]>([]);
+  // FIX: delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<{ ids: string[]; label: string } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [leadForm, setLeadForm] = useState({
@@ -250,6 +256,22 @@ const Leads: React.FC<LeadsProps> = ({
       setSelectedIds(new Set());
       await refreshAll();
       showMessage(`Updated ${selectedLeadIds.length} leads.`);
+    });
+  };
+
+  // FIX: delete lead(s) with two-step confirmation
+  const handleDeleteLeads = async () => {
+    if (!deleteTarget) return;
+    await withBusy("delete-leads", async () => {
+      if (deleteTarget.ids.length === 1) {
+        await onDeleteLead(deleteTarget.ids[0]);
+      } else {
+        await onBulkDeleteLeads(deleteTarget.ids);
+      }
+      setDeleteTarget(null);
+      setSelectedIds(new Set());
+      await refreshAll();
+      showMessage(`Deleted ${deleteTarget.ids.length} lead${deleteTarget.ids.length > 1 ? "s" : ""}.`);
     });
   };
 
@@ -499,6 +521,12 @@ const Leads: React.FC<LeadsProps> = ({
               >
                 Schedule Calls
               </button>
+              <button
+                onClick={() => setDeleteTarget({ ids: selectedLeadIds, label: `${selectedLeadIds.length} selected lead${selectedLeadIds.length > 1 ? "s" : ""}` })}
+                className="rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100"
+              >
+                Delete ({selectedLeadIds.length})
+              </button>
             </>
           ) : null}
           <button
@@ -655,6 +683,12 @@ const Leads: React.FC<LeadsProps> = ({
                             className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition-all hover:border-slate-300"
                           >
                             Schedule Call
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget({ ids: [lead.id], label: lead.name })}
+                            className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 transition-all hover:bg-red-50"
+                          >
+                            Delete
                           </button>
                         </div>
                       </div>
@@ -942,6 +976,39 @@ const Leads: React.FC<LeadsProps> = ({
             <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment notes</label>
             <textarea value={assignForm.assignmentContext} onChange={(event) => setAssignForm((current) => ({ ...current, assignmentContext: event.target.value }))} className={`${inputClass} min-h-[120px]`} placeholder="Talk about the enterprise offer and mention the webinar they attended." />
           </div>
+        </div>
+      </AppModal>
+
+      {/* FIX: Two-step delete confirmation modal */}
+      <AppModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete leads"
+        description={`Are you sure you want to permanently delete ${deleteTarget?.label ?? ""}? This cannot be undone.`}
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteLeads()}
+              disabled={busy === "delete-leads"}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white transition-all hover:bg-red-700 disabled:opacity-50"
+            >
+              {busy === "delete-leads" ? "Deleting…" : "Yes, delete"}
+            </button>
+          </div>
+        }
+      >
+        <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+          <strong>Warning:</strong> You are about to permanently delete{" "}
+          <strong>{deleteTarget?.label}</strong>. Associated schedules will remain but the lead(s) will no longer exist.
         </div>
       </AppModal>
 

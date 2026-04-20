@@ -331,6 +331,17 @@ const App: React.FC = () => {
     await api.exportLeadsCsv();
   };
 
+  // FIX: delete lead handlers
+  const handleDeleteLead = async (leadId: string) => {
+    await api.deleteLead(leadId);
+    await refreshWorkspace();
+  };
+
+  const handleBulkDeleteLeads = async (leadIds: string[]) => {
+    await api.bulkDeleteLeads(leadIds);
+    await refreshWorkspace();
+  };
+
   const handleInviteMember = async (
     email: string,
     role: "Admin" | "Viewer",
@@ -590,6 +601,8 @@ const App: React.FC = () => {
                   leads={leads}
                   onUpdateLead={handleUpdateLead}
                   onCreateLead={handleCreateLead}
+                  onDeleteLead={handleDeleteLead}
+                  onBulkDeleteLeads={handleBulkDeleteLeads}
                   onExport={handleExportLeads}
                   org={org}
                   onRefresh={refreshWorkspace}

@@ -412,6 +412,20 @@ export const api = {
       method: 'DELETE',
     });
   },
+  // FIX: individual lead deletion
+  async deleteLead(id: string) {
+    return request<{ success: boolean }>(`/api/leads/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // FIX: bulk lead deletion
+  async bulkDeleteLeads(ids: string[]) {
+    return request<{ success: boolean; deleted: number }>('/api/leads/bulk', {
+      method: 'DELETE',
+      body: { ids },
+    });
+  },
 
   async inviteMember(email: string, role: Extract<UserRole, 'Admin' | 'Viewer'>, name?: string) {
     return request<{ member: User }>(
