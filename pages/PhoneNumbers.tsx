@@ -415,13 +415,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* Info callout */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex gap-3">
-        <div className="text-xl shrink-0">ℹ️</div>
-        <div className="text-xs text-slate-500 leading-relaxed">
-          <strong className="text-slate-700">How it works:</strong> Numbers are purchased on your master Twilio account and assigned to individual voice agents. Each tenant's inbound calls are routed through your <strong>ConversationRelay</strong> server using their agent's configuration. Tenants never see your Twilio credentials.
-        </div>
-      </div>
+
     </div>
   );
 };
