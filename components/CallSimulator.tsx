@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentConfig, CallOutcome, Lead, Organization } from "../types";
-import AppModal from "./AppModal";
+import { createPortal } from "react-dom";
 
 interface CallSimulatorProps {
   agent: AgentConfig;
@@ -99,12 +99,15 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||
         "";
-      const resp = await fetch(`${apiBase}/api/twilio/voice-test?agentId=${encodeURIComponent(agent.id)}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const resp = await fetch(
+        `${apiBase}/api/twilio/voice-test?agentId=${encodeURIComponent(agent.id)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       if (!resp.ok) throw new Error("Failed to initiate test call");
       const twiml = await resp.text();
@@ -271,22 +274,20 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
 
   const hasNumber = !!agent.twilioPhoneNumber;
 
-  return (
-    <AppModal
-      open
-      onClose={() => {
-        clearTimers();
-        onClose();
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          clearTimers();
+          onClose();
+        }
       }}
-      title={agent.name}
-      size="xl"
-      hideHeader
-      className="overflow-hidden max-w-5xl"
-      bodyClassName="p-0"
     >
       <div
-        className="bg-white w-full rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-400 border border-white/20"
-        style={{ maxHeight: "85vh" }}
+        className="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
+        style={{ maxHeight: "min(680px, 92vh)" }}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="bg-slate-900 px-7 py-5 text-white flex items-center justify-between flex-shrink-0">
@@ -305,7 +306,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
             onClick={onClose}
             className="p-2.5 hover:bg-white/10 rounded-2xl transition-all"
           >
-            <i className="fa-sharp fa-solid fa-xmark text-lg" />
+            <i className="fa-solid fa-xmark text-lg" />
           </button>
         </div>
 
@@ -315,26 +316,26 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
             onClick={() => setMode("web")}
             className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "web" ? "bg-white text-slate-900 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
           >
-            <i className="fa-sharp fa-solid fa-phone-volume text-sm" />
+            <i className="fa-solid fa-phone-volume text-sm" />
             Live Web Call
           </button>
           <button
             onClick={() => setMode("sim")}
             className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "sim" ? "bg-white text-slate-900 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
           >
-            <i className="fa-sharp fa-solid fa-flask text-sm" />
+            <i className="fa-solid fa-flask text-sm" />
             Simulate Call
           </button>
         </div>
 
-        {/* Content - scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto max-h-[calc(min(680px,92vh)-140px)]">
           {/* ─── WEB CALL MODE ─── */}
           {mode === "web" && (
             <div className="p-6 space-y-5">
               {!hasNumber && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
-                  <i className="fa-sharp fa-solid fa-triangle-exclamation text-amber-500 mt-0.5" />
+                  <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5" />
                   <div>
                     <p className="text-sm font-black text-amber-800">
                       No number assigned to this agent
@@ -352,7 +353,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                   <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                        <i className="fa-sharp fa-solid fa-phone text-indigo-600 text-base" />
+                        <i className="fa-solid fa-phone text-indigo-600 text-base" />
                       </div>
                       <div>
                         <p className="font-black text-slate-900 text-sm">
@@ -392,7 +393,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                         Calling
                       </p>
                       <div className="flex items-center gap-2">
-                        <i className="fa-sharp fa-solid fa-phone-arrow-down-left text-emerald-500 text-sm" />
+                        <i className="fa-solid fa-phone-arrow-down-left text-emerald-500 text-sm" />
                         <p className="font-black text-slate-900">
                           {agent.twilioPhoneNumber || "No number assigned"}
                         </p>
@@ -411,15 +412,15 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                       disabled={!hasNumber}
                       className="w-full rounded-2xl bg-emerald-600 text-white py-3.5 text-xs font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
                     >
-                      <i className="fa-sharp fa-solid fa-phone text-sm" />
+                      <i className="fa-solid fa-phone text-sm" />
                       {hasNumber ? "Connect to Agent" : "Assign a Number First"}
                     </button>
                   </div>
 
                   <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <i className="fa-sharp fa-solid fa-circle-info text-xs" />{" "}
-                      How it works
+                      <i className="fa-solid fa-circle-info text-xs" /> How it
+                      works
                     </p>
                     <p className="text-xs text-slate-500 leading-relaxed">
                       This connects your browser's microphone directly to your
@@ -436,7 +437,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                 <div className="flex flex-col items-center justify-center py-10 text-center">
                   <div className="relative mb-6">
                     <div className="w-20 h-20 rounded-[2rem] bg-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-100">
-                      <i className="fa-sharp fa-solid fa-phone text-3xl text-white" />
+                      <i className="fa-solid fa-phone text-3xl text-white" />
                     </div>
                     <div className="absolute inset-0 rounded-[2rem] border-2 border-emerald-400 animate-ping opacity-30" />
                   </div>
@@ -455,7 +456,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                     <div className="relative mb-5">
                       <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20 scale-150" />
                       <div className="relative w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center shadow-2xl">
-                        <i className="fa-sharp fa-solid fa-microphone text-2xl text-white" />
+                        <i className="fa-solid fa-microphone text-2xl text-white" />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-1">
@@ -478,14 +479,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                       className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${isMuted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
                     >
                       <i
-                        className={`fa-sharp fa-solid ${isMuted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
+                        className={`fa-solid ${isMuted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
                       />
                       <span className="text-[10px] font-black uppercase tracking-widest">
                         {isMuted ? "Unmute" : "Mute"}
                       </span>
                     </button>
                     <button className="rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 py-3.5 flex flex-col items-center gap-1.5 hover:border-slate-300 transition-all">
-                      <i className="fa-sharp fa-solid fa-volume-high text-lg" />
+                      <i className="fa-solid fa-volume-high text-lg" />
                       <span className="text-[10px] font-black uppercase tracking-widest">
                         Speaker
                       </span>
@@ -494,7 +495,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                       onClick={endWebCall}
                       className="rounded-2xl bg-red-500 hover:bg-red-600 text-white py-3.5 flex flex-col items-center gap-1.5 transition-all shadow-lg shadow-red-100"
                     >
-                      <i className="fa-sharp fa-solid fa-phone-hangup text-lg" />
+                      <i className="fa-solid fa-phone-hangup text-lg" />
                       <span className="text-[10px] font-black uppercase tracking-widest">
                         End Call
                       </span>
@@ -506,7 +507,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
               {webCallStatus === "ended" && (
                 <div className="flex flex-col items-center py-10 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                    <i className="fa-sharp fa-solid fa-check text-2xl text-emerald-500" />
+                    <i className="fa-solid fa-check text-2xl text-emerald-500" />
                   </div>
                   <p className="text-xl font-black text-slate-900 mb-1">
                     Call Ended
@@ -577,7 +578,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
               {status === "calling" && (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
                   <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center mb-5 shadow-xl animate-pulse">
-                    <i className="fa-sharp fa-solid fa-phone-arrow-down-left text-2xl" />
+                    <i className="fa-solid fa-phone-arrow-down-left text-2xl" />
                   </div>
                   <p className="text-xl font-black text-slate-900">
                     {agent.direction === "outbound" ? "Dialing…" : "Ringing…"}
@@ -630,14 +631,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                       onClick={handleTransfer}
                       className="bg-white border-2 border-slate-100 text-slate-900 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:border-indigo-100 flex items-center justify-center gap-2 transition-all"
                     >
-                      <i className="fa-sharp fa-solid fa-right-left text-sm" />
+                      <i className="fa-solid fa-right-left text-sm" />
                       Transfer to Human
                     </button>
                     <button
                       onClick={() => void endCall()}
                       className="bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 transition-all"
                     >
-                      <i className="fa-sharp fa-solid fa-phone-hangup text-sm" />
+                      <i className="fa-solid fa-phone-hangup text-sm" />
                       End Session
                     </button>
                   </div>
@@ -647,7 +648,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
               {status === "transferring" && (
                 <div className="flex flex-col items-center py-10 text-center">
                   <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-5 border-2 border-amber-200 shadow-xl">
-                    <i className="fa-sharp fa-solid fa-phone-arrow-up-right text-2xl" />
+                    <i className="fa-solid fa-phone-arrow-up-right text-2xl" />
                   </div>
                   <p className="text-xl font-black text-slate-900">
                     Transferring to Human…
@@ -673,7 +674,8 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
           )}
         </div>
       </div>
-    </AppModal>
+    </div>,
+    document.body,
   );
 };
 

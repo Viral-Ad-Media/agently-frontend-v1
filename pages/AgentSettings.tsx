@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Organization, AgentConfig, FAQ, AgentVoice } from '../types';
+import { Organization, AgentConfig, FAQ, AgentVoice, LeadOutreachSchedule } from '../types';
 import { api } from '../services/api';
+import AppModal from '../components/AppModal';
 
 // Twilio ConversationRelay voices with provider labels
 const VOICES: { id: AgentVoice; label: string; provider: string; gender: string }[] = [
@@ -33,6 +34,11 @@ interface AgentSettingsProps {
 
 type Tab = 'persona' | 'knowledge' | 'rules';
 
+interface Schedule extends LeadOutreachSchedule {
+  startDate?: string;
+  endDate?: string;
+}
+
 /* ── tiny helpers ── */
 const Inp = (p: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input {...p} className={`w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all ${p.className ?? ''}`} />
@@ -53,6 +59,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [draft, setDraft]         = useState(org.agent);
   const [busy, setBusy]           = useState<string | null>(null);
   const [toast, setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Agent detail modal
+  const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
+  const [agentSchedules, setAgentSchedules] = useState<Schedule[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
 
   /* knowledge-base state */
   const [scrapeUrl, setScrapeUrl]     = useState(org.profile.website || '');
@@ -86,6 +97,23 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     void run(key as string, () => onUpdateAgent({ [key]: val }));
   };
 
+  // Open agent detail modal and load its schedules
+  const openAgentModal = async (agent: AgentConfig) => {
+    setSelectedAgent(agent);
+    setAgentSchedules([]);
+    setLoadingSchedules(true);
+    try {
+      const res = await api.listLeadSchedules();
+      const all = (res.schedules || []) as Schedule[];
+      // Filter schedules assigned to this agent
+      setAgentSchedules(all.filter(s => s.voiceAgentId === agent.id));
+    } catch {
+      setAgentSchedules([]);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
   /* ── website scraper ── */
   const handleScrape = async () => {
     if (!scrapeUrl.trim()) return;
@@ -93,8 +121,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     setScrapeResult('');
     setChunks(0);
     try {
-      const targetAgentId = draft.id || org.activeVoiceAgentId || org.agent.id;
-      const res = await api.importVoiceAgentKnowledge(targetAgentId, scrapeUrl);
+      const res = await api.importChatbotWebsite(org.activeChatbotId || '', scrapeUrl);
       setScrapeStatus('done');
       setChunks(res.chunksStored ?? 0);
       setScrapeResult(res.message || `✓ ${res.chunksStored} chunks saved to knowledge base.`);
@@ -120,6 +147,24 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     },
   ];
+
+  // Campaign progress helper
+  const getCampaignProgress = (sch: Schedule) => {
+    if (!(sch as any).startDate || !(sch as any).endDate) return null;
+    const allDays = sch.windows.flatMap(w => w.weekdays);
+    const DAY_IDX: Record<string,number> = {sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6};
+    let total = 0; let completed = 0;
+    const cur = new Date((sch as any).startDate);
+    const end = new Date((sch as any).endDate);
+    const today = new Date(); today.setHours(0,0,0,0);
+    while (cur <= end) {
+      const code = ['sun','mon','tue','wed','thu','fri','sat'][cur.getDay()];
+      if (allDays.includes(code)) { total++; if (cur < today) completed++; }
+      cur.setDate(cur.getDate() + 1);
+    }
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, remaining: Math.max(0, total - completed), pct, isComplete: total > 0 && completed >= total };
+  };
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -155,12 +200,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {tab === 'persona' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Voice agents fleet */}
+          {/* Voice agents fleet — clickable cards */}
           <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <div>
                 <h3 className="text-base font-black text-slate-900">Voice Agent Fleet</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Create multiple agents and switch the active one.</p>
+                <p className="text-xs text-slate-400 mt-0.5">Click any agent to view details and assigned schedules.</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => void run('create-in', () => onCreateVoiceAgent({ direction:'inbound' }), 'Agent created')}
@@ -176,29 +221,56 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {org.voiceAgents.map(agent => {
                 const isActive = agent.id === org.activeVoiceAgentId;
+                const isOutbound = agent.direction === 'outbound';
+                // We don't know schedule count without fetching, so show direction badge
                 return (
                   <div key={agent.id}
-                    className={`rounded-2xl p-4 border-2 transition-all ${isActive ? 'border-amber-400 bg-amber-50/40' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
-                    <div className="flex items-start justify-between mb-3">
+                    onClick={() => void openAgentModal(agent)}
+                    className={`rounded-2xl p-4 border-2 transition-all cursor-pointer group
+                      ${isActive
+                        ? 'border-amber-400 bg-amber-50/40 hover:border-amber-500'
+                        : 'border-slate-100 bg-slate-50 hover:border-amber-200 hover:bg-amber-50/20'}`}>
+                    {/* Header row */}
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-slate-900 truncate">{agent.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">{agent.direction} · {agent.voice}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">{agent.voice}</p>
                       </div>
-                      {isActive && <span className="shrink-0 ml-2 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest">Live</span>}
+                      <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
+                        {isActive && (
+                          <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest">Live</span>
+                        )}
+                        {/* Direction badge — outbound shows as "Outbound / Assigned" indicator */}
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest
+                          ${isOutbound
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'bg-slate-100 text-slate-500'}`}>
+                          {agent.direction}
+                        </span>
+                      </div>
                     </div>
+
                     <p className="text-xs text-slate-500 line-clamp-2 mb-3">{agent.greeting}</p>
-                    <div className="flex gap-2">
-                      {!isActive && (
-                        <button onClick={() => void run(`act-${agent.id}`, () => onActivateVoiceAgent(agent.id), 'Agent activated')}
-                          className="flex-1 rounded-xl bg-slate-900 text-white py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
-                          Activate
+
+                    {/* Click hint */}
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400 group-hover:text-amber-600 transition-colors flex items-center gap-1">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        View details
+                      </p>
+                      <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
+                        {!isActive && (
+                          <button onClick={e => { e.stopPropagation(); void run(`act-${agent.id}`, () => onActivateVoiceAgent(agent.id), 'Agent activated'); }}
+                            className="rounded-lg bg-slate-900 text-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all">
+                            Activate
+                          </button>
+                        )}
+                        <button onClick={e => { e.stopPropagation(); void run(`del-${agent.id}`, () => onDeleteVoiceAgent(agent.id), 'Deleted'); }}
+                          disabled={org.voiceAgents.length <= 1}
+                          className="rounded-lg border border-slate-200 text-slate-400 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest hover:border-red-200 hover:text-red-500 disabled:opacity-30 transition-all">
+                          Del
                         </button>
-                      )}
-                      <button onClick={() => void run(`del-${agent.id}`, () => onDeleteVoiceAgent(agent.id), 'Deleted')}
-                        disabled={org.voiceAgents.length <= 1}
-                        className="flex-1 rounded-xl border border-slate-200 text-slate-400 py-1.5 text-[10px] font-black uppercase tracking-widest hover:border-red-200 hover:text-red-500 disabled:opacity-30 transition-all">
-                        Delete
-                      </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -316,8 +388,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ KNOWLEDGE TAB */}
       {tab === 'knowledge' && (
         <div className="space-y-6">
-
-          {/* ── SECTION 1: Website Scraper ── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <div className="flex items-start justify-between mb-5">
               <div>
@@ -325,9 +395,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   Website Scraper
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Fetch your site's HTML, convert it to knowledge chunks, and save directly to Supabase.
-                </p>
+                <p className="text-xs text-slate-400 mt-0.5">Fetch your site's content and save it to the knowledge base.</p>
               </div>
               {scrapeStatus === 'done' && (
                 <span className="shrink-0 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
@@ -335,7 +403,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </span>
               )}
             </div>
-
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="flex-1 relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">https://</span>
@@ -349,63 +416,27 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 className="shrink-0 rounded-2xl bg-slate-900 text-white px-5 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-40 flex items-center gap-2 transition-all active:scale-95">
                 {scrapeStatus === 'loading'
                   ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Scraping…</>
-                  : <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      Import Website
-                    </>
-                }
+                  : 'Import Website'}
               </button>
             </div>
-
             {scrapeResult && (
-              <div className={`rounded-2xl px-4 py-3 text-xs font-medium flex items-start gap-2 ${scrapeStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                {scrapeStatus === 'done'
-                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                }
+              <div className={`rounded-2xl px-4 py-3 text-xs font-medium ${scrapeStatus === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
                 {scrapeResult}
               </div>
             )}
-
-            {/* What gets stored */}
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                { icon: '🔍', label: 'Fetches', desc: 'HTML from your public pages via Jina.ai' },
-                { icon: '✂️', label: 'Chunks', desc: 'Splits content into searchable knowledge blocks' },
-                { icon: '🗄️', label: 'Stores', desc: 'Saves chunks to Supabase knowledge_chunks table' },
-              ].map(item => (
-                <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-100 p-4 text-center">
-                  <div className="text-2xl mb-1.5">{item.icon}</div>
-                  <p className="text-xs font-black text-slate-700 mb-0.5">{item.label}</p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{item.desc}</p>
-                </div>
-              ))}
-            </div>
           </div>
 
-          {/* ── SECTION 2: FAQ Cards (horizontal carousel) ── */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-                  FAQ Knowledge Entries
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Short Q&A pairs the AI uses to answer callers. Max 3–4 visible at once — scroll for more.
-                </p>
+                <h3 className="text-base font-black text-slate-900">FAQ Knowledge Entries</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Q&A pairs the AI uses to answer callers.</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => void run('sync', () => onSyncFaqs(scrapeUrl || org.profile.website), 'FAQs regenerated')}
                   disabled={busy === 'sync'}
                   className="rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 transition-all flex items-center gap-1.5">
-                  {busy === 'sync'
-                    ? <><div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />Syncing…</>
-                    : <>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-                        Regenerate
-                      </>
-                  }
+                  {busy === 'sync' ? 'Syncing…' : 'Regenerate'}
                 </button>
                 <button onClick={() => void run('add-faq', onAddFaq, 'FAQ added')}
                   className="rounded-xl bg-slate-900 text-white px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
@@ -413,46 +444,38 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </button>
               </div>
             </div>
-
             {draft.faqs.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-200 py-12 text-center">
-                <div className="text-3xl mb-3">💡</div>
+                <p className="text-3xl mb-3">💡</p>
                 <p className="text-sm font-bold text-slate-400">No FAQ entries yet.</p>
-                <p className="text-xs text-slate-300 mt-1">Import a website or click + Add to create the first entry.</p>
+                <p className="text-xs text-slate-300 mt-1">Import a website or click + Add.</p>
               </div>
             ) : (
               <>
-                {/* Horizontal scrollable carousel – wider cards, 2-3 visible */}
-                <div ref={faqScrollRef} className="overflow-x-auto pb-3 -mx-1 px-1 custom-scrollbar">
-                  <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+                <div ref={faqScrollRef} className="overflow-x-auto pb-2 -mx-1 px-1">
+                  <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
                     {draft.faqs.map((faq, i) => {
                       const orig = org.agent.faqs.find(f => f.id === faq.id);
                       return (
                         <div key={faq.id}
-                          className="w-[420px] shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col gap-3 group hover:border-amber-200 hover:bg-amber-50/20 transition-all">
+                          className="w-72 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-2.5 group hover:border-amber-200 hover:bg-amber-50/20 transition-all">
                           <div className="flex items-center justify-between">
                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">#{i+1}</span>
                             <button onClick={() => void run(`del-faq-${faq.id}`, () => onRemoveFaq(faq.id), 'Removed')}
-                              className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 opacity-0 group-hover:opacity-100 transition-all">
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-300 hover:text-red-500 hover:border-red-200 opacity-0 group-hover:opacity-100 transition-all">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                           </div>
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
-                            <input type="text" value={faq.question}
-                              onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, question: e.target.value} : f) }))}
-                              onBlur={() => { if (faq.question !== (orig?.question || '')) void run(`q-${faq.id}`, () => onUpdateFaq(faq.id, { question: faq.question })); }}
-                              placeholder="e.g. What are your hours?"
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
-                            <textarea rows={5} value={faq.answer}
-                              onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, answer: e.target.value} : f) }))}
-                              onBlur={() => { if (faq.answer !== (orig?.answer || '')) void run(`a-${faq.id}`, () => onUpdateFaq(faq.id, { answer: faq.answer })); }}
-                              placeholder="e.g. We are open Monday–Friday, 9am–6pm."
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
-                          </div>
+                          <input type="text" value={faq.question}
+                            onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, question: e.target.value} : f) }))}
+                            onBlur={() => { if (faq.question !== (orig?.question || '')) void run(`q-${faq.id}`, () => onUpdateFaq(faq.id, { question: faq.question })); }}
+                            placeholder="Question"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                          <textarea rows={3} value={faq.answer}
+                            onChange={e => setDraft(d => ({ ...d, faqs: d.faqs.map(f => f.id === faq.id ? {...f, answer: e.target.value} : f) }))}
+                            onBlur={() => { if (faq.answer !== (orig?.answer || '')) void run(`a-${faq.id}`, () => onUpdateFaq(faq.id, { answer: faq.answer })); }}
+                            placeholder="Answer"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs resize-none outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
                         </div>
                       );
                     })}
@@ -461,16 +484,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <p className="text-[10px] text-slate-400 text-center mt-3">← scroll to see all {draft.faqs.length} entries →</p>
               </>
             )}
-
-            {/* Centred save button */}
-            <div className="mt-6 flex justify-center">
-              <button
-                onClick={() => showToast('All changes saved to database.')}
-                className="rounded-2xl bg-slate-900 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 active:scale-95 transition-all flex items-center gap-2">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                Save Knowledge Base
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -480,7 +493,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
             <h3 className="text-base font-black text-slate-900">Routing & Behaviour</h3>
-
             {([
               { key: 'captureAllLeads', label: 'Lead Capture', desc: 'Always collect caller name, phone & reason' },
               { key: 'autoBook',        label: 'Booking Engine', desc: 'Allow callers to schedule appointments' },
@@ -497,33 +509,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </button>
               </div>
             ))}
-
             <div>
               <Label>Escalation Phone Number</Label>
               <Inp type="tel" placeholder="+1 (555) 000-0000" value={draft.escalationPhone}
                 onChange={e => setDraft(d => ({...d, escalationPhone: e.target.value}))}
                 onBlur={() => { if (draft.escalationPhone !== org.agent.escalationPhone) saveDraftField('escalationPhone', draft.escalationPhone); }} />
             </div>
-
-            <div>
-              <Label>Escalation Working Hours</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] text-slate-400 mb-1">From</p>
-                  <Inp type="time" value={draft.escalationWorkingHoursStart ?? '09:00'}
-                    onChange={e => setDraft(d => ({...d, escalationWorkingHoursStart: e.target.value}))}
-                    onBlur={() => saveDraftField('escalationWorkingHoursStart', draft.escalationWorkingHoursStart ?? '09:00')} />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 mb-1">To</p>
-                  <Inp type="time" value={draft.escalationWorkingHoursEnd ?? '17:00'}
-                    onChange={e => setDraft(d => ({...d, escalationWorkingHoursEnd: e.target.value}))}
-                    onBlur={() => saveDraftField('escalationWorkingHoursEnd', draft.escalationWorkingHoursEnd ?? '17:00')} />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Outside these hours, the agent collects a message instead of calling the escalation number.</p>
-            </div>
-
             <div>
               <Label>Business Hours</Label>
               <Inp placeholder="Mon-Fri 9AM-6PM" value={draft.businessHours ?? ''}
@@ -553,20 +544,141 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
             <p className="text-xs text-slate-400 mt-4">These fields are requested from callers before ending the call.</p>
           </div>
+        </div>
+      )}
 
-          {/* Webhook URL */}
-          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-3">
-            <h3 className="text-base font-black text-slate-900">Webhook Integration</h3>
-            <p className="text-xs text-slate-400">Send captured leads and call outcomes to an external system (CRM, Zapier, Make, etc.)</p>
+      {/* ═══════════════════════════════════════════════ AGENT DETAIL MODAL */}
+      {selectedAgent && (
+        <AppModal
+          open
+          onClose={() => setSelectedAgent(null)}
+          title={selectedAgent.name}
+          description={`${selectedAgent.direction} agent · ${selectedAgent.voice} voice · ${selectedAgent.twilioPhoneNumber || 'No number assigned'}`}
+          size="lg"
+          footer={
+            <div className="flex gap-3">
+              <button onClick={() => setSelectedAgent(null)}
+                className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">
+                Close
+              </button>
+              {selectedAgent.id !== org.activeVoiceAgentId && (
+                <button onClick={() => void run(`act-${selectedAgent.id}`, async () => {
+                  await onActivateVoiceAgent(selectedAgent.id);
+                  setSelectedAgent(null);
+                }, 'Agent activated')}
+                  className="flex-1 rounded-xl bg-amber-500 py-3 text-sm font-black text-white hover:bg-amber-600">
+                  Activate This Agent
+                </button>
+              )}
+            </div>
+          }
+        >
+          <div className="space-y-5">
+            {/* Agent info grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Direction</p>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest
+                    ${selectedAgent.direction === 'outbound' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {selectedAgent.direction}
+                  </span>
+                  {selectedAgent.id === org.activeVoiceAgentId && (
+                    <span className="rounded-full bg-amber-100 text-amber-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">Live</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Phone number</p>
+                <p className="text-sm font-black text-slate-900">{selectedAgent.twilioPhoneNumber || '—'}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Voice</p>
+                <p className="text-sm font-black text-slate-900">{selectedAgent.voice}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Language</p>
+                <p className="text-sm font-black text-slate-900">{selectedAgent.language}</p>
+              </div>
+            </div>
+
+            {/* Greeting */}
+            {selectedAgent.greeting && (
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Greeting</p>
+                <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 italic">"{selectedAgent.greeting}"</p>
+              </div>
+            )}
+
+            {/* Assigned schedules */}
             <div>
-              <Label>Webhook URL</Label>
-              <Inp type="url" placeholder="https://hooks.zapier.com/hooks/catch/..." value={draft.webhookUrl ?? ''}
-                onChange={e => setDraft(d => ({...d, webhookUrl: e.target.value}))}
-                onBlur={() => saveDraftField('webhookUrl', draft.webhookUrl ?? '')} />
-              <p className="text-[10px] text-slate-400 mt-1">Agently will POST lead data as JSON to this URL after every captured call.</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outreach Schedules</p>
+                {!loadingSchedules && (
+                  <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest
+                    ${agentSchedules.length > 0
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-slate-100 text-slate-500'}`}>
+                    {agentSchedules.length > 0 ? `${agentSchedules.length} assigned` : 'Not assigned'}
+                  </span>
+                )}
+              </div>
+
+              {loadingSchedules ? (
+                <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4">
+                  <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                  <p className="text-sm text-slate-400">Loading schedules…</p>
+                </div>
+              ) : agentSchedules.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center">
+                  <p className="text-2xl mb-2">📅</p>
+                  <p className="text-sm font-bold text-slate-400">No outreach schedules assigned</p>
+                  <p className="text-xs text-slate-300 mt-1">Go to Lead CRM → Tag collections → Schedule to assign this agent.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {agentSchedules.map(sch => {
+                    const prog = getCampaignProgress(sch);
+                    return (
+                      <div key={sch.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <p className="font-black text-slate-900 text-sm">{sch.name || `Tag · ${sch.tag}`}</p>
+                            <p className="text-xs text-slate-400">
+                              {sch.targetType === 'tag' ? `Tag: #${sch.tag}` : `Lead schedule`}
+                              {(sch as any).startDate && ` · ${(sch as any).startDate} → ${(sch as any).endDate || '?'}`}
+                            </p>
+                            <p className="text-xs text-slate-400">{sch.timezone}</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {sch.windows.map(w => `${w.weekdays.join(', ')} @ ${w.time}`).join(' · ')}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
+                            ${sch.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                            {sch.isActive ? 'Active' : 'Paused'}
+                          </span>
+                        </div>
+                        {prog && (
+                          <div>
+                            <div className="flex justify-between text-[10px] font-black mb-1">
+                              {prog.isComplete
+                                ? <span className="text-emerald-600">✓ Campaign complete</span>
+                                : <span className="text-slate-500">{prog.completed} of {prog.total} calls reached</span>}
+                              <span className="text-slate-400">{prog.remaining} remaining</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${prog.pct}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </AppModal>
       )}
     </div>
   );

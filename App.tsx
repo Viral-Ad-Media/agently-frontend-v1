@@ -23,7 +23,6 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
-import Messenger from "./pages/Messenger";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -34,7 +33,7 @@ const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Team = lazy(() => import("./pages/Team"));
 const Login = lazy(() => import("./pages/Login"));
-// const Messenger = lazy(() => import("./pages/Messenger"));
+const Messenger = lazy(() => import("./pages/Messenger"));
 const Features = lazy(() => import("./pages/Features"));
 const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
@@ -57,15 +56,6 @@ const App: React.FC = () => {
   const leads = workspace?.leads ?? [];
   const conversation = workspace?.conversation ?? [];
   const dashboard = workspace?.dashboard ?? null;
-
-  // FIX: debounce realtime refresh to prevent loop when lead actions fire DB events
-  const refreshDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedRefresh = React.useCallback(() => {
-    if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
-    refreshDebounceRef.current = setTimeout(() => {
-      void refreshWorkspace();
-    }, 800);
-  }, []);
 
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
@@ -111,15 +101,17 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // FIX: debounce realtime so rapid DB writes don't cascade into reload loop
+  const realtimeDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!org?.id) return;
-
-    // FIX: use debounced refresh so rapid DB events don't cascade into a loop
     const unsubscribe = subscribeToOrgRealtime(org.id, {
-      onAny: debouncedRefresh,
+      onAny: () => {
+        if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+        realtimeDebounceRef.current = setTimeout(() => { void refreshWorkspace(); }, 1200);
+      },
     });
-
-    return unsubscribe;
+    return () => { unsubscribe(); if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current); };
   }, [org?.id]);
 
   const handleLogin = async (email: string, password: string) => {
@@ -323,17 +315,16 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  // FIX: updateLead no longer calls refreshWorkspace — Leads.tsx updates optimistically
+  // FIX: no refreshWorkspace — Leads.tsx handles optimistically; realtime debounce syncs later
   const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
     await api.updateLead(leadId, updates);
-    // Workspace refreshes via debounced realtime subscription — no manual reload needed
   };
 
   const handleCreateLead = async (
-    payload: Pick<Lead, "name" | "email" | "phone" | "reason"> & { tags?: string[]; voiceAgentId?: string; assignmentContext?: string },
+    payload: Pick<Lead, "name" | "email" | "phone" | "reason">,
   ) => {
     await api.createLead(payload);
-    await refreshWorkspace(); // keep for create — new lead must appear immediately
+    await refreshWorkspace();
   };
 
   const handleExportLeads = async () => {
@@ -341,21 +332,20 @@ const App: React.FC = () => {
   };
 
   const handleDeleteLead = async (leadId: string) => {
-    await api.deleteLead(leadId);
+    await (api as any).deleteLead(leadId);
     await refreshWorkspace();
   };
 
   const handleBulkDeleteLeads = async (leadIds: string[]) => {
-    await api.bulkDeleteLeads(leadIds);
+    await (api as any).bulkDeleteLeads(leadIds);
     await refreshWorkspace();
   };
 
   const handleInviteMember = async (
     email: string,
     role: "Admin" | "Viewer",
-    name: string,
   ) => {
-    await api.inviteMember(email, role, name);
+    await api.inviteMember(email, role);
     await refreshWorkspace();
   };
 
@@ -608,12 +598,10 @@ const App: React.FC = () => {
                 <Leads
                   leads={leads}
                   onUpdateLead={handleUpdateLead}
-                  onCreateLead={handleCreateLead}
                   onDeleteLead={handleDeleteLead}
                   onBulkDeleteLeads={handleBulkDeleteLeads}
+                  onCreateLead={handleCreateLead}
                   onExport={handleExportLeads}
-                  org={org}
-                  onRefresh={refreshWorkspace}
                 />
               </ProtectedRoute>
             }
@@ -660,10 +648,7 @@ const App: React.FC = () => {
                   <PhoneNumbers
                     org={org}
                     onAgentUpdated={async (updates) => {
-                      await api.updateVoiceAgent(
-                        org.activeVoiceAgentId,
-                        updates,
-                      );
+                      await api.updateVoiceAgent(org.activeVoiceAgentId, updates);
                       await refreshWorkspace();
                     }}
                   />
@@ -693,7 +678,6 @@ const App: React.FC = () => {
         <Suspense fallback={null}>
           <CallSimulator
             agent={org.agent}
-            org={org}
             onClose={() => setShowSimulator(false)}
             onCallFinished={handleSimulatorFinished}
           />

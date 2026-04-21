@@ -11,55 +11,55 @@ const NAV_ITEMS: Array<{
 }> = [
   {
     to: "/dashboard",
-    icon: "fa-sharp fa-solid fa-chart-line",
+    icon: "fa-solid fa-chart-line",
     label: "Dashboard",
     description: "Live performance and workload",
   },
   {
     to: "/agent",
-    icon: "fa-sharp fa-solid fa-microphone",
+    icon: "fa-solid fa-microphone",
     label: "Voice Agent",
     description: "Configure lines, scripts, and knowledge",
   },
   {
     to: "/phone-numbers",
-    icon: "fa-sharp fa-solid fa-mobile-screen",
+    icon: "fa-solid fa-mobile-screen",
     label: "Phone Numbers",
     description: "Search, purchase, and assign numbers",
   },
   {
     to: "/messenger",
-    icon: "fa-sharp fa-solid fa-message-bot",
+    icon: "fa-solid fa-robot",
     label: "Chatbot Agent",
     description: "Widget design and chatbot knowledge",
   },
   {
     to: "/calls",
-    icon: "fa-sharp fa-solid fa-phone-volume",
+    icon: "fa-solid fa-phone-volume",
     label: "Call Logs",
     description: "Transcripts, outcomes, and reports",
   },
   {
     to: "/leads",
-    icon: "fa-sharp fa-solid fa-users",
+    icon: "fa-solid fa-users",
     label: "Lead CRM",
     description: "Pipeline health and contact capture",
   },
   {
     to: "/team",
-    icon: "fa-sharp fa-solid fa-user-shield",
+    icon: "fa-solid fa-user-shield",
     label: "Team",
     description: "Members, permissions, and invites",
   },
   {
     to: "/billing",
-    icon: "fa-sharp fa-solid fa-credit-card",
+    icon: "fa-solid fa-credit-card",
     label: "Billing",
     description: "Plan usage, invoices, and upgrades",
   },
   {
     to: "/settings",
-    icon: "fa-sharp fa-solid fa-gear",
+    icon: "fa-solid fa-gear",
     label: "Settings",
     description: "Workspace and phone setup",
   },
@@ -297,7 +297,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             <div className="flex items-center justify-between">
               <Link to="/dashboard" className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
-                  <i className="fa-sharp fa-solid fa-robot text-xl" />
+                  <i className="fa-solid fa-robot text-xl" />
                 </div>
                 <div>
                   <p className="font-display text-xl text-slate-900">Agently</p>
@@ -355,7 +355,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onClick={() => setShowSimulator(true)}
                 className="w-full rounded-[1.35rem] bg-indigo-600 px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition hover:bg-indigo-700 flex items-center justify-center gap-2"
               >
-                <i className="fa-sharp fa-solid fa-phone-volume text-sm" />
+                <i className="fa-solid fa-phone-volume text-sm" />
                 Test Your Agent
               </button>
 
