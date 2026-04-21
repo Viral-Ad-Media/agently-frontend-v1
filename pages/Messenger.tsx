@@ -387,15 +387,26 @@ const Messenger: React.FC<MessengerProps> = ({
     patch({
       faqs: [
         ...draft.faqs,
-        { id: `faq-${Date.now()}`, question: "", answer: "" },
+        {
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? `faq-${crypto.randomUUID()}`
+              : `faq-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          question: "",
+          answer: "",
+        },
       ],
     });
   const updateFaq = (id: string, field: "question" | "answer", val: string) =>
     patch({
       faqs: draft.faqs.map((f) => (f.id === id ? { ...f, [field]: val } : f)),
     });
-  const removeFaq = (id: string) =>
-    patch({ faqs: draft.faqs.filter((f) => f.id !== id) });
+  const removeFaq = (id: string) => {
+    const idx = draft.faqs.findIndex((f) => f.id === id);
+    if (idx === -1) return;
+    const next = [...draft.faqs.slice(0, idx), ...draft.faqs.slice(idx + 1)];
+    patch({ faqs: next });
+  };
 
   const handleCopy = async () => {
     try {
@@ -511,9 +522,9 @@ const Messenger: React.FC<MessengerProps> = ({
       </div>
 
       {/* Studio grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] gap-8 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] gap-8 items-stretch">
         {/* LEFT: config */}
-        <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col">
           {error && (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               {error}
@@ -733,9 +744,9 @@ const Messenger: React.FC<MessengerProps> = ({
                       className={`ml-2 w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${previewingVoice === v.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600"}`}
                     >
                       {previewingVoice === v.id ? (
-                        <i className="fa-solid fa-stop text-[10px]" />
+                        <i className="fa-sharp fa-solid fa-stop text-[10px]" />
                       ) : (
-                        <i className="fa-solid fa-play text-[10px]" />
+                        <i className="fa-sharp fa-solid fa-play text-[10px]" />
                       )}
                     </button>
                   </button>
@@ -774,7 +785,7 @@ const Messenger: React.FC<MessengerProps> = ({
                       <span>{lang.flag}</span>
                       {lang.name}
                       {selected && (
-                        <i className="fa-solid fa-check text-[10px] text-indigo-500" />
+                        <i className="fa-sharp fa-solid fa-check text-[10px] text-indigo-500" />
                       )}
                     </button>
                   );
@@ -790,9 +801,78 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
           </div>
 
+          {/* Knowledge Base */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  Knowledge Base
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Scraped content is stored in Supabase and used by the AI.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Import from Website URL
+              </label>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void handleImport()}
+                  placeholder="https://yourwebsite.com"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleImport()}
+                  disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {scrapeStatus === "loading" ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Importing…
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-sharp fa-solid fa-upload text-xs" />
+                      Import Website
+                    </>
+                  )}
+                </button>
+              </div>
+              {scrapeMsg && (
+                <p
+                  className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
+                >
+                  {scrapeMsg}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void saveCustomization()}
+            disabled={busyAction === "save"}
+            className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3"
+          >
+            {busyAction === "save" ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save All Changes"
+            )}
+          </button>
         </div>
 
-        {/* RIGHT: live preview + embed + knowledge base + FAQs */}
+        {/* RIGHT: live preview + embed */}
         <div className="space-y-6 sticky top-6">
           {/* Preview */}
           <div className="bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
@@ -822,7 +902,7 @@ const Messenger: React.FC<MessengerProps> = ({
 
             <div
               className="m-6 rounded-2xl overflow-hidden border border-white/10 flex flex-col"
-              style={{ height: "320px" }}
+              style={{ height: "480px" }}
             >
               {/* Header */}
               <div
@@ -936,7 +1016,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isVoiceMode ? "bg-rose-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"}`}
                 >
                   <i
-                    className={`fa-solid ${isVoiceMode ? "fa-keyboard" : "fa-microphone"} text-sm`}
+                    className={`fa-sharp fa-solid ${isVoiceMode ? "fa-keyboard" : "fa-microphone"} text-sm`}
                   />
                 </button>
 
@@ -982,7 +1062,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     onTouchEnd={stopRecording}
                     className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isRecording ? "bg-rose-500 animate-pulse" : "bg-white/20 text-white hover:bg-white/30"}`}
                   >
-                    <i className="fa-solid fa-microphone text-sm text-white" />
+                    <i className="fa-sharp fa-solid fa-microphone text-sm text-white" />
                   </button>
                 ) : (
                   <button
@@ -991,7 +1071,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all flex-shrink-0"
                     style={{ background: previewColor }}
                   >
-                    <i className="fa-solid fa-paper-plane text-sm text-white" />
+                    <i className="fa-sharp fa-solid fa-paper-plane text-sm text-white" />
                   </button>
                 )}
               </form>
@@ -1024,53 +1104,17 @@ const Messenger: React.FC<MessengerProps> = ({
               {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
           </div>
-          {/* Knowledge Base — under embed script */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-            <h3 className="text-base font-black text-slate-900 mb-1">Knowledge Base</h3>
-            <p className="text-xs text-slate-400 mb-4">Train the AI with your website content.</p>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                Import from Website URL
-              </label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="text"
-                  value={scrapeUrl}
-                  onChange={(e) => setScrapeUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void handleImport()}
-                  placeholder="https://yourwebsite.com"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleImport()}
-                  disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {scrapeStatus === "loading" ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Importing…
-                    </>
-                  ) : "Import Website Content"}
-                </button>
-              </div>
-              {scrapeMsg && (
-                <p className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}>
-                  {scrapeMsg}
-                </p>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* FAQs — full width below the grid */}
+      {/* FAQ section - full width */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h3 className="text-lg font-black text-slate-900">FAQs</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Manually added — these take priority over imported content.</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Manually added – these override scraped content.
+            </p>
           </div>
           <button
             type="button"
@@ -1080,53 +1124,69 @@ const Messenger: React.FC<MessengerProps> = ({
             + Add Entry
           </button>
         </div>
+
         {draft.faqs.length === 0 ? (
-          <p className="text-center text-slate-400 text-sm py-6">No FAQs yet. Add your first entry.</p>
+          <p className="text-center text-slate-400 text-sm py-6">
+            No FAQs yet. Add your first entry.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {draft.faqs.map((faq) => (
-              <div key={faq.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col gap-3">
-                <div className="flex justify-between items-start">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">FAQ</span>
-                  <button onClick={() => removeFaq(faq.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                    <i className="fa-solid fa-xmark text-sm" />
-                  </button>
+          <div
+            className="overflow-x-auto pb-3 custom-scrollbar"
+            style={{ maxWidth: "100%" }}
+          >
+            <div
+              className="flex gap-4"
+              style={{ width: "max-content", maxWidth: "none" }}
+            >
+              {draft.faqs.map((faq) => (
+                <div
+                  key={faq.id}
+                  className="w-[380px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      FAQ
+                    </span>
+                    <button
+                      onClick={() => removeFaq(faq.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors"
+                    >
+                      <i className="fa-sharp fa-solid fa-xmark text-sm" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                      Question
+                    </p>
+                    <input
+                      type="text"
+                      value={faq.question}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "question", e.target.value)
+                      }
+                      placeholder="e.g. What are your hours?"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                      Answer
+                    </p>
+                    <textarea
+                      rows={5}
+                      value={faq.answer}
+                      onChange={(e) =>
+                        updateFaq(faq.id, "answer", e.target.value)
+                      }
+                      placeholder="e.g. We are open Mon–Fri, 9am–6pm."
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Question</p>
-                  <input type="text" value={faq.question}
-                    onChange={(e) => updateFaq(faq.id, "question", e.target.value)}
-                    placeholder="e.g. What are your hours?"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Answer</p>
-                  <textarea rows={4} value={faq.answer}
-                    onChange={(e) => updateFaq(faq.id, "answer", e.target.value)}
-                    placeholder="e.g. We are open Mon–Fri, 9am–6pm."
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none" />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Save All Changes — centered below everything */}
-      <div className="flex justify-center pb-4">
-        <button
-          type="button"
-          onClick={() => void saveCustomization()}
-          disabled={busyAction === "save"}
-          className="rounded-2xl bg-indigo-600 px-14 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3 min-w-[280px]"
-        >
-          {busyAction === "save" ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Saving…
-            </>
-          ) : "Save All Changes"}
-        </button>
       </div>
     </div>
   );
