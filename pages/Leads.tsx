@@ -269,27 +269,76 @@ const Leads: React.FC<LeadsProps> = ({
     return () => clearTimeout(t);
   }, [toast]);
 
-  const voiceAgents = org?.voiceAgents || [];
-  // Show ALL agents in the assign/schedule dropdown. Inbound agents can be used for outreach too;
-  // a warning is shown in the schedule UI if the agent has no phone number assigned.
+  // ─────────────────────────────────────────────────────────
+  // FETCH VOICE AGENTS DIRECTLY FROM THE DB
+  // Do not rely on org.voiceAgents (it's stale / can be empty during bootstrap races).
+  // This hits GET /api/voice-agents on mount, and refreshes whenever the schedule
+  // modal opens so a newly-created agent shows up without a page reload.
+  // ─────────────────────────────────────────────────────────
+  const [fetchedAgents, setFetchedAgents] = useState<any[]>(
+    () => org?.voiceAgents || [],
+  );
+
+  const refreshAgents = async () => {
+    try {
+      // Try the dedicated endpoint first (my new GET /api/voice-agents route)
+      const agents = await (api as any).listVoiceAgents?.();
+      if (Array.isArray(agents) && agents.length >= 0) {
+        setFetchedAgents(agents);
+        if (typeof window !== "undefined") {
+          console.log(
+            "[Leads] fetched voice agents from /api/voice-agents:",
+            agents.length,
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      // Fall through to bootstrap fallback
+    }
+    // Fallback: re-run bootstrap to refresh org (in case listVoiceAgents isn't wired up yet)
+    try {
+      const bootstrap: any = await (api as any).bootstrap();
+      const bootstrappedAgents = bootstrap?.organization?.voiceAgents || [];
+      setFetchedAgents(bootstrappedAgents);
+      if (typeof window !== "undefined") {
+        console.log(
+          "[Leads] fetched voice agents via bootstrap fallback:",
+          bootstrappedAgents.length,
+        );
+      }
+    } catch (err) {
+      console.error("[Leads] failed to refresh voice agents:", err);
+    }
+  };
+
+  useEffect(() => {
+    void refreshAgents();
+  }, []);
+  // Refetch whenever the schedule modal opens so new agents show immediately
+  useEffect(() => {
+    if (scheduleTarget) void refreshAgents();
+  }, [scheduleTarget]);
+
+  // Prefer freshly-fetched agents; fall back to whatever org had on mount
+  const voiceAgents = fetchedAgents.length
+    ? fetchedAgents
+    : org?.voiceAgents || [];
+  // Outbound agents only (direction === "outbound"). Matches what your DB has.
   const outboundAgents = useMemo(
-    () => voiceAgents.filter((a) => a.direction === "outbound"),
+    () => voiceAgents.filter((a: any) => a?.direction === "outbound"),
     [voiceAgents],
   );
-  // Debug: log what we're getting so we can verify
-  if (typeof window !== "undefined") {
-    (window as any).__agentlyVoiceAgents = voiceAgents;
-    console.log(
-      "[Leads] voiceAgents from org:",
-      voiceAgents.length,
-      "| outbound:",
-      voiceAgents.filter((a) => a.direction === "outbound").length,
-    );
-  }
   const agentById = useMemo(
-    () => new Map(voiceAgents.map((a) => [a.id, a])),
+    () => new Map(voiceAgents.map((a: any) => [a.id, a])),
     [voiceAgents],
   );
+
+  // Debug helper — inspect in browser console via: window.__agentlyAgents
+  if (typeof window !== "undefined") {
+    (window as any).__agentlyAgents = voiceAgents;
+    (window as any).__agentlyOutbound = outboundAgents;
+  }
 
   const tagStats = useMemo(() => {
     const m = new Map<string, number>();

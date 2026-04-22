@@ -193,6 +193,12 @@ export const api = {
     });
   },
 
+  async listVoiceAgents() {
+    // GET /api/voice-agents — returns the fresh agent list straight from the DB.
+    // Used by the Leads page dropdown so newly-created agents appear without a full reload.
+    return request<AgentConfig[]>('/api/voice-agents');
+  },
+
   async createVoiceAgent(payload: Partial<AgentConfig> = {}) {
     return request<AgentConfig>('/api/voice-agents', {
       method: 'POST',
