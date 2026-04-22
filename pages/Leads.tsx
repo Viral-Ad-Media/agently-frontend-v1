@@ -272,7 +272,20 @@ const Leads: React.FC<LeadsProps> = ({
   const voiceAgents = org?.voiceAgents || [];
   // Show ALL agents in the assign/schedule dropdown. Inbound agents can be used for outreach too;
   // a warning is shown in the schedule UI if the agent has no phone number assigned.
-  const outboundAgents = useMemo(() => voiceAgents, [voiceAgents]);
+  const outboundAgents = useMemo(
+    () => voiceAgents.filter((a) => a.direction === "outbound"),
+    [voiceAgents],
+  );
+  // Debug: log what we're getting so we can verify
+  if (typeof window !== "undefined") {
+    (window as any).__agentlyVoiceAgents = voiceAgents;
+    console.log(
+      "[Leads] voiceAgents from org:",
+      voiceAgents.length,
+      "| outbound:",
+      voiceAgents.filter((a) => a.direction === "outbound").length,
+    );
+  }
   const agentById = useMemo(
     () => new Map(voiceAgents.map((a) => [a.id, a])),
     [voiceAgents],
