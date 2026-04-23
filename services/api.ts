@@ -644,6 +644,7 @@ export const twilioApi = {
       callerIdSid: string;
       agentId: string | null;
       message: string;
+      canReceiveInbound: boolean;
     }>;
   },
 };

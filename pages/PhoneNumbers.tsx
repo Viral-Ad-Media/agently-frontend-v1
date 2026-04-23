@@ -109,6 +109,12 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const [verifyCallSid, setVerifyCallSid] = useState("");
   const [verifyInstructions, setVerifyInstructions] = useState("");
   const [verifyDoneMsg, setVerifyDoneMsg] = useState("");
+  const [verifyCanInbound, setVerifyCanInbound] = useState(true);
+  const [verifyError, setVerifyError] = useState<{
+    title: string;
+    body: string;
+    showPurchaseLink: boolean;
+  } | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -147,6 +153,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       setVerifyCallSid("");
       setVerifyInstructions("");
       setVerifyDoneMsg("");
+      setVerifyCanInbound(true);
+      setVerifyError(null);
     }
   }, [tab]);
 
@@ -257,19 +265,40 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         targetAgentId || undefined,
       );
       setVerifyDoneMsg(r.message || `${r.phoneNumber} verified and added!`);
+      // Flag whether this number can receive inbound calls
+      setVerifyCanInbound(r.canReceiveInbound !== false);
       setVerifyStep("done");
       onAgentUpdated({
         twilioPhoneNumber: r.phoneNumber,
         twilioPhoneSid: r.callerIdSid,
       });
-      setOwnedLoaded(false);
-      showToast(`✓ ${r.phoneNumber} verified and added!`);
+      setOwnedLoaded(false); // refresh owned list
+      showToast(`✓ ${r.phoneNumber} verified and added to Owned Numbers!`);
     } catch (e: any) {
-      showToast(
-        e.message ||
-          "Verification could not be confirmed. Make sure you completed the Twilio call.",
-        false,
-      );
+      const msg: string = e.message || "Verification failed.";
+      const code: string = e.code || "";
+
+      // NOT_VERIFIED_YET — user didn't answer the call
+      if (code === "NOT_VERIFIED_YET" || msg.includes("not been verified")) {
+        setVerifyError({
+          title: "Unable to verify phone number",
+          body: "It looks like the verification call was not answered, or the code was not confirmed. Please try again — make sure your phone is ready to receive the call.",
+          showPurchaseLink: false,
+        });
+      } else if (msg.includes("cannot be used") || msg.includes("inbound")) {
+        // Verified but cannot receive inbound calls
+        setVerifyError({
+          title: "Number verified but cannot be used for inbound calls",
+          body: "Your number was verified, but as a Caller ID it can only be used for outbound calls — it cannot receive incoming calls from your customers. If you need a number that can both make and receive calls, you'll need a dedicated Twilio number.",
+          showPurchaseLink: true,
+        });
+      } else {
+        setVerifyError({
+          title: "Unable to verify phone number",
+          body: msg,
+          showPurchaseLink: true,
+        });
+      }
     } finally {
       setBusy(null);
     }
@@ -840,15 +869,41 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                     {verifyCode}
                   </p>
                   <p className="text-xs text-amber-600 mt-2">
-                    When you answer the call, Twilio will read this code to you.
-                    You do not need to enter it anywhere — just listen and
-                    confirm below.
+                    Twilio will read this code out loud when you answer. You do
+                    not need to type it — just listen and confirm below once the
+                    call ends.
                   </p>
                 </div>
 
                 {verifyInstructions && (
                   <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
                     {verifyInstructions}
+                  </div>
+                )}
+
+                {/* Error notification */}
+                {verifyError && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <p className="text-sm font-black text-red-700 mb-1">
+                      {verifyError.title}
+                    </p>
+                    <p className="text-xs text-red-600 leading-relaxed">
+                      {verifyError.body}
+                    </p>
+                    {verifyError.showPurchaseLink && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Need a number that works fully?{" "}
+                        <button
+                          onClick={() => {
+                            setVerifyError(null);
+                            setTab("search");
+                          }}
+                          className="underline font-bold hover:text-red-700"
+                        >
+                          Purchase a Twilio number here →
+                        </button>
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -868,7 +923,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                     )}
                   </button>
                   <button
-                    onClick={() => setVerifyStep("input")}
+                    onClick={() => {
+                      setVerifyStep("input");
+                      setVerifyError(null);
+                    }}
                     disabled={!!busy}
                     className="rounded-2xl border border-slate-200 text-slate-500 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 disabled:opacity-40 transition-all"
                   >
@@ -883,16 +941,42 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               <div className="space-y-5 text-center py-4">
                 <div className="text-5xl">🎉</div>
                 <h3 className="text-lg font-black text-slate-900">
-                  Number verified!
+                  Number verified and added to Owned Numbers!
                 </h3>
                 <p className="text-sm text-slate-600 max-w-sm mx-auto">
                   {verifyDoneMsg}
                 </p>
+
+                {/* Caveat: CallerID vs IncomingPhoneNumber */}
+                {!verifyCanInbound && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left max-w-md mx-auto">
+                    <p className="text-sm font-black text-amber-700 mb-1">
+                      ⚠ Outbound only
+                    </p>
+                    <p className="text-xs text-amber-600 leading-relaxed">
+                      This verified number can be used as your caller ID when
+                      your agent makes outgoing calls. However, it{" "}
+                      <strong>cannot receive incoming calls</strong> from your
+                      customers — for that, you need a dedicated Twilio number.
+                    </p>
+                    <p className="text-xs text-amber-500 mt-2">
+                      Want full inbound + outbound?{" "}
+                      <button
+                        onClick={() => setTab("search")}
+                        className="underline font-bold hover:text-amber-700"
+                      >
+                        Purchase a Twilio number here →
+                      </button>
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
                     onClick={() => {
                       setVerifyStep("input");
                       setVerifyPhone("");
+                      setVerifyError(null);
                     }}
                     className="rounded-2xl border border-slate-200 text-slate-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:border-amber-400 hover:text-amber-600 transition-all"
                   >
