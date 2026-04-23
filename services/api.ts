@@ -605,4 +605,45 @@ export const twilioApi = {
     if (!res.ok) throw new Error((await res.json())?.error?.message || 'Call failed');
     return res.json() as Promise<{ success: boolean; callSid: string; status: string }>;
   },
+
+  /** Step 1: Start verification of an existing/user-owned number via Twilio Caller ID */
+  async verifyNumberStart(phoneNumber: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/verify-start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
+      },
+      body: JSON.stringify({ phoneNumber }),
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Verification start failed');
+    return res.json() as Promise<{
+      validationCode: string;
+      callSid: string;
+      phoneNumber: string;
+      instructions: string;
+    }>;
+  },
+
+  /** Step 2: Confirm verification is complete and save number to the agent */
+  async verifyNumberComplete(phoneNumber: string, voiceAgentId?: string) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${base}/api/twilio/numbers/verify-complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
+      },
+      body: JSON.stringify({ phoneNumber, voiceAgentId }),
+    });
+    if (!res.ok) throw new Error((await res.json())?.error?.message || 'Verification failed');
+    return res.json() as Promise<{
+      success: boolean;
+      phoneNumber: string;
+      callerIdSid: string;
+      agentId: string | null;
+      message: string;
+    }>;
+  },
 };
