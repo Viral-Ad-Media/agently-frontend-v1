@@ -913,7 +913,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 <div>
                   <Label>Phone number</Label>
                   <Inp
-                    placeholder="+2349084467821"
+                    placeholder="+234912345678"
                     value={vPhone}
                     onChange={(e) => setVPhone(e.target.value)}
                     onKeyDown={(e) => {
@@ -925,7 +925,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
                     Examples: +12125550100 (US) · +442071234567 (UK) ·
-                    +2349084467821 (Nigeria)
+                    +234912345678 (Nigeria)
                   </p>
                 </div>
                 <div>
