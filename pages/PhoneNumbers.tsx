@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Organization,
   AvailablePhoneNumber,
@@ -8,7 +8,6 @@ import {
 } from "../types";
 import { twilioApi } from "../services/api";
 
-// ── Tiny helpers ─────────────────────────────────────────────
 const Inp = (p: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input
     {...p}
@@ -33,15 +32,42 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   </p>
 );
 
+interface ErrBoxProps {
+  title: string;
+  body: string;
+  showPurchaseLink: boolean;
+  onPurchase?: () => void;
+}
+const ErrBox = ({ title, body, showPurchaseLink, onPurchase }: ErrBoxProps) => (
+  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+    <p className="text-sm font-black text-red-700 mb-1">{title}</p>
+    <p className="text-xs text-red-600 leading-relaxed">{body}</p>
+    {showPurchaseLink && onPurchase && (
+      <p className="text-xs text-red-500 mt-2">
+        Need a number that works fully?{" "}
+        <button
+          onClick={onPurchase}
+          className="underline font-bold hover:text-red-700"
+        >
+          Purchase a Twilio number here →
+        </button>
+      </p>
+    )}
+  </div>
+);
+
 interface PhoneNumbersProps {
   org: Organization;
   onAgentUpdated: (updates: Partial<AgentConfig>) => void;
 }
-
 type Tab = "assigned" | "search" | "owned" | "verify";
-
-// Verify step states
-type VerifyStep = "input" | "calling" | "confirming" | "done";
+type VerifyMode = "voice" | "sms";
+type VerifyStep = "input" | "calling" | "sms-sent" | "done";
+interface VErr {
+  title: string;
+  body: string;
+  showPurchaseLink: boolean;
+}
 
 const FLAG_MAP: Record<string, string> = {
   US: "🇺🇸",
@@ -80,7 +106,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  // Search state
+  // search
   const [countries, setCountries] = useState<PhoneCountry[]>([]);
   const [country, setCountry] = useState("US");
   const [numberType, setNumberType] = useState<"Local" | "TollFree" | "Mobile">(
@@ -93,35 +119,33 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   );
   const [searchDone, setSearchDone] = useState(false);
 
-  // Owned numbers
+  // owned
   const [ownedNumbers, setOwnedNumbers] = useState<OwnedPhoneNumber[]>([]);
   const [ownedLoaded, setOwnedLoaded] = useState(false);
 
-  // Agent selector (used in search + owned + verify tabs)
+  // agent selector
   const [targetAgentId, setTargetAgentId] = useState(
     org.activeVoiceAgentId || org.agent?.id || "",
   );
 
-  // ── Verify existing number state ──────────────────────────
-  const [verifyStep, setVerifyStep] = useState<VerifyStep>("input");
-  const [verifyPhone, setVerifyPhone] = useState("");
-  const [verifyCode, setVerifyCode] = useState("");
-  const [verifyCallSid, setVerifyCallSid] = useState("");
-  const [verifyInstructions, setVerifyInstructions] = useState("");
-  const [verifyDoneMsg, setVerifyDoneMsg] = useState("");
-  const [verifyCanInbound, setVerifyCanInbound] = useState(true);
-  const [verifyError, setVerifyError] = useState<{
-    title: string;
-    body: string;
-    showPurchaseLink: boolean;
-  } | null>(null);
+  // verify
+  const [vMode, setVMode] = useState<VerifyMode>("voice");
+  const [vStep, setVStep] = useState<VerifyStep>("input");
+  const [vPhone, setVPhone] = useState("");
+  const [vCode, setVCode] = useState("");
+  const [vCallSid, setVCallSid] = useState("");
+  const [vAttempt, setVAttempt] = useState(1);
+  const [vOtp, setVOtp] = useState("");
+  const [vDoneMsg, setVDoneMsg] = useState("");
+  const [vInbound, setVInbound] = useState(false);
+  const [vErr, setVErr] = useState<VErr | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 4500);
   };
 
-  // Load countries on mount
   useEffect(() => {
     twilioApi
       .listCountries()
@@ -129,7 +153,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       .catch(() => {});
   }, []);
 
-  // Load owned numbers when that tab opens
   useEffect(() => {
     if (tab === "owned" && !ownedLoaded) {
       setBusy("owned");
@@ -144,19 +167,184 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   }, [tab, ownedLoaded]);
 
-  // Reset verify flow when switching away and back
-  useEffect(() => {
-    if (tab !== "verify") {
-      setVerifyStep("input");
-      setVerifyPhone("");
-      setVerifyCode("");
-      setVerifyCallSid("");
-      setVerifyInstructions("");
-      setVerifyDoneMsg("");
-      setVerifyCanInbound(true);
-      setVerifyError(null);
+  const stopPoll = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
     }
-  }, [tab]);
+  };
+
+  const resetV = () => {
+    stopPoll();
+    setVMode("voice");
+    setVStep("input");
+    setVPhone("");
+    setVCode("");
+    setVCallSid("");
+    setVAttempt(1);
+    setVOtp("");
+    setVDoneMsg("");
+    setVInbound(false);
+    setVErr(null);
+  };
+
+  useEffect(() => {
+    if (tab !== "verify") resetV();
+  }, [tab]); // eslint-disable-line
+  useEffect(() => () => stopPoll(), []);
+
+  const startPoll = (callSid: string, attempt: number) => {
+    stopPoll();
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await twilioApi.verifyNumberStatus(callSid);
+        if (r.status === "pending") return;
+        stopPoll();
+        if (r.status === "success") {
+          setVDoneMsg(
+            r.message ||
+              `${r.phoneNumber} verified and added to Owned Numbers!`,
+          );
+          setVInbound(r.canReceiveInbound ?? false);
+          setVStep("done");
+          if (r.agentId) onAgentUpdated({ twilioPhoneNumber: r.phoneNumber });
+          setOwnedLoaded(false);
+          showToast(`✓ ${r.phoneNumber} verified and added to Owned Numbers!`);
+        } else {
+          const next = attempt + 1;
+          if (next > 3) {
+            setVErr({
+              title: "Unable to verify after 3 attempts",
+              body:
+                r.status === "no-answer"
+                  ? "The call went unanswered 3 times. Make sure the number can receive voice calls and is not going straight to voicemail. For virtual or internet-only numbers, try SMS verification instead."
+                  : r.status === "busy"
+                    ? "The number was busy each time. Please wait a moment and retry, or try SMS verification."
+                    : "The call failed to connect 3 times. This number may not support voice verification. Try SMS verification instead.",
+              showPurchaseLink: true,
+            });
+            setVStep("input");
+            setVAttempt(1);
+          } else {
+            showToast(
+              `Call attempt ${attempt} ${r.status} — retrying (${next}/3)…`,
+              false,
+            );
+            void doVoiceStart(vPhone, next);
+          }
+        }
+      } catch {
+        /* keep polling on network blip */
+      }
+    }, 3000);
+  };
+
+  const doVoiceStart = async (phone: string, attempt: number) => {
+    setBusy("verify-start");
+    try {
+      const r = await twilioApi.verifyNumberStart(
+        phone,
+        targetAgentId || undefined,
+        attempt,
+      );
+      setVCode(r.validationCode);
+      setVCallSid(r.callSid);
+      setVAttempt(r.attempt ?? attempt);
+      setVErr(null);
+      setVStep("calling");
+      startPoll(r.callSid, r.attempt ?? attempt);
+    } catch (e: any) {
+      const code = (e as any).code || "";
+      const msg: string = e.message || "Verification failed to start.";
+      if (code === "GEO_BLOCKED") {
+        setVErr({
+          title: "Country not enabled for outbound calls",
+          body: "Go to Twilio Console → Voice → Settings → Geo Permissions and enable this country. Or try SMS verification.",
+          showPurchaseLink: false,
+        });
+      } else if (code === "MAX_RETRIES_EXCEEDED") {
+        setVErr({
+          title: "Maximum attempts reached",
+          body: "Could not reach this number via voice call after 3 attempts. Try SMS verification or purchase a dedicated Twilio number.",
+          showPurchaseLink: true,
+        });
+      } else {
+        setVErr({
+          title: "Verification could not start",
+          body: msg,
+          showPurchaseLink: true,
+        });
+      }
+      setVStep("input");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleVoiceStart = async () => {
+    if (!vPhone.trim()) {
+      showToast("Please enter a phone number.", false);
+      return;
+    }
+    setVErr(null);
+    await doVoiceStart(vPhone.trim(), 1);
+  };
+
+  const handleSmsStart = async () => {
+    if (!vPhone.trim()) {
+      showToast("Please enter a phone number.", false);
+      return;
+    }
+    setBusy("verify-sms-start");
+    setVErr(null);
+    try {
+      await twilioApi.verifyNumberSmsStart(vPhone.trim());
+      setVStep("sms-sent");
+    } catch (e: any) {
+      const msg: string = e.message || "Could not send SMS.";
+      setVErr({
+        title: "SMS verification failed",
+        body: msg.includes("not configured")
+          ? "SMS verification is not set up on this service. Use voice verification or contact support."
+          : msg + " Make sure the number can receive SMS.",
+        showPurchaseLink: !msg.includes("not configured"),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSmsConfirm = async () => {
+    if (!vOtp.trim()) {
+      showToast("Please enter the 6-digit code.", false);
+      return;
+    }
+    setBusy("verify-sms-confirm");
+    setVErr(null);
+    try {
+      const r = await twilioApi.verifyNumberSmsConfirm(
+        vPhone.trim(),
+        vOtp.trim(),
+        targetAgentId || undefined,
+      );
+      setVDoneMsg(r.message || `${r.phoneNumber} verified and added!`);
+      setVInbound(r.canReceiveInbound ?? false);
+      setVStep("done");
+      if (r.agentId) onAgentUpdated({ twilioPhoneNumber: r.phoneNumber });
+      setOwnedLoaded(false);
+      showToast(
+        `✓ ${r.phoneNumber} verified via SMS and added to Owned Numbers!`,
+      );
+    } catch (e: any) {
+      setVErr({
+        title: "Incorrect code",
+        body: (e.message || "Code not accepted.") + " Check and try again.",
+        showPurchaseLink: false,
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const handleSearch = useCallback(async () => {
     setBusy("search");
@@ -179,21 +367,21 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   }, [country, numberType, areaCode, contains]);
 
-  const handlePurchase = async (number: AvailablePhoneNumber) => {
+  const handlePurchase = async (num: AvailablePhoneNumber) => {
     if (
       !window.confirm(
-        `Purchase ${number.friendlyName}? This will be charged to your Twilio account.`,
+        `Purchase ${num.friendlyName}? This charges your Twilio account.`,
       )
     )
       return;
-    setBusy(`buy-${number.phoneNumber}`);
+    setBusy(`buy-${num.phoneNumber}`);
     try {
       await twilioApi.purchaseNumber(
-        number.phoneNumber,
+        num.phoneNumber,
         targetAgentId || undefined,
       );
-      onAgentUpdated({ twilioPhoneNumber: number.phoneNumber });
-      showToast(`✓ ${number.friendlyName} purchased and assigned!`);
+      onAgentUpdated({ twilioPhoneNumber: num.phoneNumber });
+      showToast(`✓ ${num.friendlyName} purchased and assigned!`);
       setOwnedLoaded(false);
     } catch (e: any) {
       showToast(e.message || "Purchase failed", false);
@@ -214,7 +402,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         twilioPhoneNumber: owned.phoneNumber,
         twilioPhoneSid: owned.sid,
       });
-      showToast(`✓ ${owned.phoneNumber} assigned to agent!`);
+      showToast(`✓ ${owned.phoneNumber} assigned!`);
     } catch (e: any) {
       showToast(e.message || "Assign failed", false);
     } finally {
@@ -223,7 +411,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   };
 
   const handleRelease = async (owned: OwnedPhoneNumber) => {
-    if (!window.confirm(`Release ${owned.phoneNumber}? This cannot be undone.`))
+    if (!window.confirm(`Release ${owned.phoneNumber}? Cannot be undone.`))
       return;
     setBusy(`release-${owned.sid}`);
     try {
@@ -237,78 +425,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   };
 
-  // ── Verify handlers ───────────────────────────────────────
-  const handleVerifyStart = async () => {
-    if (!verifyPhone.trim()) {
-      showToast("Please enter a phone number.", false);
-      return;
-    }
-    setBusy("verify-start");
-    try {
-      const r = await twilioApi.verifyNumberStart(verifyPhone.trim());
-      setVerifyCallSid(r.callSid);
-      setVerifyCode(r.validationCode);
-      setVerifyInstructions(r.instructions);
-      setVerifyStep("calling");
-    } catch (e: any) {
-      showToast(e.message || "Verification could not be started.", false);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleVerifyComplete = async () => {
-    setBusy("verify-complete");
-    try {
-      const r = await twilioApi.verifyNumberComplete(
-        verifyPhone.trim(),
-        targetAgentId || undefined,
-      );
-      setVerifyDoneMsg(r.message || `${r.phoneNumber} verified and added!`);
-      // Flag whether this number can receive inbound calls
-      setVerifyCanInbound(r.canReceiveInbound !== false);
-      setVerifyStep("done");
-      onAgentUpdated({
-        twilioPhoneNumber: r.phoneNumber,
-        twilioPhoneSid: r.callerIdSid,
-      });
-      setOwnedLoaded(false); // refresh owned list
-      showToast(`✓ ${r.phoneNumber} verified and added to Owned Numbers!`);
-    } catch (e: any) {
-      const msg: string = e.message || "Verification failed.";
-      const code: string = e.code || "";
-
-      // NOT_VERIFIED_YET — user didn't answer the call
-      if (code === "NOT_VERIFIED_YET" || msg.includes("not been verified")) {
-        setVerifyError({
-          title: "Unable to verify phone number",
-          body: "It looks like the verification call was not answered, or the code was not confirmed. Please try again — make sure your phone is ready to receive the call.",
-          showPurchaseLink: false,
-        });
-      } else if (msg.includes("cannot be used") || msg.includes("inbound")) {
-        // Verified but cannot receive inbound calls
-        setVerifyError({
-          title: "Number verified but cannot be used for inbound calls",
-          body: "Your number was verified, but as a Caller ID it can only be used for outbound calls — it cannot receive incoming calls from your customers. If you need a number that can both make and receive calls, you'll need a dedicated Twilio number.",
-          showPurchaseLink: true,
-        });
-      } else {
-        setVerifyError({
-          title: "Unable to verify phone number",
-          body: msg,
-          showPurchaseLink: true,
-        });
-      }
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const TABS: { id: Tab; label: string; icon: string }[] = [
-    { id: "assigned", label: "Agent Numbers", icon: "📱" },
-    { id: "search", label: "Get a Number", icon: "🔍" },
-    { id: "owned", label: "All Owned", icon: "🗂️" },
-    { id: "verify", label: "Verify Existing", icon: "✅" },
+  const TABS = [
+    { id: "assigned" as Tab, label: "Agent Numbers", icon: "📱" },
+    { id: "search" as Tab, label: "Get a Number", icon: "🔍" },
+    { id: "owned" as Tab, label: "All Owned", icon: "🗂️" },
+    { id: "verify" as Tab, label: "Verify Existing", icon: "✅" },
   ];
 
   const activeAgent =
@@ -316,7 +437,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
 
   return (
     <div className="animate-fade-up space-y-6">
-      {/* Toast */}
       {toast && (
         <div
           className={`fixed top-5 right-5 z-[200] px-5 py-3 rounded-2xl shadow-xl text-sm font-bold flex items-center gap-2.5 ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
@@ -354,7 +474,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
@@ -376,7 +495,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       </div>
 
-      {/* Agent selector (used in search + owned + verify tabs) */}
       {tab !== "assigned" && (org.voiceAgents?.length ?? 0) > 1 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-4">
           <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center text-white text-sm">
@@ -398,7 +516,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* ═══════ ASSIGNED TAB ═══════ */}
+      {/* ASSIGNED */}
       {tab === "assigned" && (
         <div className="space-y-4">
           {(org.voiceAgents ?? []).map((agent) => {
@@ -408,27 +526,24 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 key={agent.id}
                 className={`bg-white rounded-3xl border-2 shadow-card p-6 ${isActive ? "border-amber-300" : "border-slate-100"}`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg ${isActive ? "bg-amber-100" : "bg-slate-100"}`}
-                    >
-                      {agent.direction === "inbound" ? "📥" : "📤"}
-                    </div>
-                    <div>
-                      <p className="font-black text-slate-900">{agent.name}</p>
-                      <p className="text-xs text-slate-400 uppercase tracking-wide">
-                        {agent.direction} · {agent.voice}
-                      </p>
-                    </div>
-                    {isActive && (
-                      <span className="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-                        Active
-                      </span>
-                    )}
+                <div className="flex items-center gap-3 mb-4">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg ${isActive ? "bg-amber-100" : "bg-slate-100"}`}
+                  >
+                    {agent.direction === "inbound" ? "📥" : "📤"}
                   </div>
+                  <div>
+                    <p className="font-black text-slate-900">{agent.name}</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide">
+                      {agent.direction} · {agent.voice}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <span className="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                      Active
+                    </span>
+                  )}
                 </div>
-
                 {agent.twilioPhoneNumber ? (
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-slate-50 rounded-2xl p-4">
                     <div className="flex-1">
@@ -454,7 +569,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                     <div className="text-2xl">📵</div>
                     <div className="flex-1">
                       <p className="text-sm font-black text-slate-500">
-                        No number assigned yet
+                        No number assigned
                       </p>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Purchase one, or verify a number you already own
@@ -488,14 +603,13 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* ═══════ SEARCH TAB ═══════ */}
+      {/* SEARCH */}
       {tab === "search" && (
         <div className="space-y-5">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <h3 className="text-base font-black text-slate-900 mb-5">
               Search Available Numbers
             </h3>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
               <div>
                 <Label>Country</Label>
@@ -512,15 +626,12 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                     ))
                   ) : (
                     <>
-                      <option value="US">🇺🇸 United States (US)</option>
-                      <option value="GB">🇬🇧 United Kingdom (GB)</option>
-                      <option value="CA">🇨🇦 Canada (CA)</option>
-                      <option value="AU">🇦🇺 Australia (AU)</option>
-                      <option value="DE">🇩🇪 Germany (DE)</option>
-                      <option value="FR">🇫🇷 France (FR)</option>
-                      <option value="NG">🇳🇬 Nigeria (NG)</option>
-                      <option value="GH">🇬🇭 Ghana (GH)</option>
-                      <option value="ZA">🇿🇦 South Africa (ZA)</option>
+                      <option value="US">🇺🇸 United States</option>
+                      <option value="GB">🇬🇧 United Kingdom</option>
+                      <option value="CA">🇨🇦 Canada</option>
+                      <option value="NG">🇳🇬 Nigeria</option>
+                      <option value="GH">🇬🇭 Ghana</option>
+                      <option value="ZA">🇿🇦 South Africa</option>
                     </>
                   )}
                 </Sel>
@@ -537,7 +648,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 </Sel>
               </div>
               <div>
-                <Label>Area Code (US/CA only)</Label>
+                <Label>Area Code (US/CA)</Label>
                 <Inp
                   placeholder="e.g. 212"
                   value={areaCode}
@@ -554,7 +665,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 />
               </div>
             </div>
-
             <button
               onClick={handleSearch}
               disabled={busy === "search"}
@@ -570,7 +680,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               )}
             </button>
           </div>
-
           {searchDone && (
             <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
               <div className="flex items-center justify-between mb-5">
@@ -585,15 +694,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                   </p>
                 )}
               </div>
-
               {searchResults.length === 0 ? (
                 <div className="rounded-2xl border-2 border-dashed border-slate-200 py-12 text-center">
                   <div className="text-3xl mb-3">🔭</div>
                   <p className="text-sm font-bold text-slate-400">
-                    No numbers found for these filters.
-                  </p>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Try a different country, type, or area code.
+                    No numbers found. Try different filters.
                   </p>
                 </div>
               ) : (
@@ -601,7 +706,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                   {searchResults.map((num) => (
                     <div
                       key={num.phoneNumber}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 hover:border-amber-300 hover:bg-amber-50/20 transition-all group"
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 hover:border-amber-300 hover:bg-amber-50/20 transition-all"
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -634,11 +739,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                             SMS
                           </span>
                         )}
-                        {num.capabilities.mms && (
-                          <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
-                            MMS
-                          </span>
-                        )}
                       </div>
                       <button
                         onClick={() => handlePurchase(num)}
@@ -658,7 +758,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* ═══════ OWNED TAB ═══════ */}
+      {/* OWNED */}
       {tab === "owned" && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
           <div className="flex items-center justify-between mb-5">
@@ -667,12 +767,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
             </h3>
             <button
               onClick={() => setOwnedLoaded(false)}
-              className="text-[10px] font-black text-slate-400 hover:text-amber-600 uppercase tracking-widest flex items-center gap-1"
+              className="text-[10px] font-black text-slate-400 hover:text-amber-600 uppercase tracking-widest"
             >
               ↻ Refresh
             </button>
           </div>
-
           {busy === "owned" ? (
             <div className="py-16 text-center">
               <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -683,9 +782,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               <div className="text-3xl mb-3">📭</div>
               <p className="text-sm font-bold text-slate-400">
                 No numbers on your account yet.
-              </p>
-              <p className="text-xs text-slate-300 mt-1">
-                Purchase one, or verify a number you already own.
               </p>
               <div className="flex gap-3 justify-center mt-4">
                 <button
@@ -727,11 +823,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                       <p className="text-xs text-slate-400 font-mono">
                         {num.sid}
                       </p>
-                      {num.dateCreated && (
-                        <p className="text-[10px] text-slate-300 mt-0.5">
-                          Added {new Date(num.dateCreated).toLocaleDateString()}
-                        </p>
-                      )}
                     </div>
                     <div className="flex gap-2 shrink-0">
                       {!assignedTo && (
@@ -763,10 +854,9 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      {/* ═══════ VERIFY EXISTING NUMBER TAB ═══════ */}
+      {/* VERIFY */}
       {tab === "verify" && (
         <div className="space-y-5">
-          {/* Explainer card */}
           <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-3xl p-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-sky-100 flex items-center justify-center text-2xl shrink-0">
@@ -777,190 +867,305 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                   Already own a verified number?
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  If you already have a Twilio number or any other phone number
-                  that can receive calls, you can verify it here and assign it
-                  to an agent — no need to purchase a new one.
+                  Verify any phone number you own — mobile, landline, VoIP, or
+                  another Twilio number — and assign it to an agent without
+                  purchasing a new one.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold text-sky-700">
-                  <span className="bg-sky-100 px-2 py-1 rounded-lg">
-                    Twilio numbers
-                  </span>
-                  <span className="bg-sky-100 px-2 py-1 rounded-lg">
-                    Landlines
-                  </span>
-                  <span className="bg-sky-100 px-2 py-1 rounded-lg">
-                    Mobile numbers
-                  </span>
-                  <span className="bg-sky-100 px-2 py-1 rounded-lg">
-                    VoIP numbers
-                  </span>
+                  {[
+                    "Physical SIM",
+                    "Twilio numbers",
+                    "Google Voice",
+                    "VoIP / virtual",
+                    "Landlines",
+                  ].map((t) => (
+                    <span key={t} className="bg-sky-100 px-2 py-1 rounded-lg">
+                      {t}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
-            {/* ── STEP 1: Input ── */}
-            {verifyStep === "input" && (
+            {/* INPUT */}
+            {vStep === "input" && (
               <div className="space-y-5">
                 <div>
                   <h3 className="text-base font-black text-slate-900 mb-1">
                     Enter your number
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Twilio will call this number and read a verification code.
-                    Make sure it can receive calls right now.
+                    Use international format — start with + and your country
+                    code.
                   </p>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Phone number (E.164 format)</Label>
-                    <Inp
-                      placeholder="+12125550100"
-                      value={verifyPhone}
-                      onChange={(e) => setVerifyPhone(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleVerifyStart();
-                      }}
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Include country code — e.g. +1 for US, +44 for UK, +234
-                      for Nigeria
-                    </p>
+                {vErr && (
+                  <ErrBox
+                    {...vErr}
+                    onPurchase={() => {
+                      setTab("search");
+                      setVErr(null);
+                    }}
+                  />
+                )}
+                <div>
+                  <Label>Phone number</Label>
+                  <Inp
+                    placeholder="+2349084467821"
+                    value={vPhone}
+                    onChange={(e) => setVPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && vMode === "voice")
+                        void handleVoiceStart();
+                      if (e.key === "Enter" && vMode === "sms")
+                        void handleSmsStart();
+                    }}
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Examples: +12125550100 (US) · +442071234567 (UK) ·
+                    +2349084467821 (Nigeria)
+                  </p>
+                </div>
+                <div>
+                  <Label>Verification method</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setVMode("voice")}
+                      className={`rounded-2xl border-2 p-4 text-left transition-all ${vMode === "voice" ? "border-sky-400 bg-sky-50" : "border-slate-200 hover:border-slate-300"}`}
+                    >
+                      <div className="text-2xl mb-1">📞</div>
+                      <p className="text-sm font-black text-slate-900">
+                        Voice call
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Twilio calls your number and reads a code. Best for
+                        SIMs, landlines, and most physical numbers.
+                      </p>
+                    </button>
+                    <button
+                      onClick={() => setVMode("sms")}
+                      className={`rounded-2xl border-2 p-4 text-left transition-all ${vMode === "sms" ? "border-sky-400 bg-sky-50" : "border-slate-200 hover:border-slate-300"}`}
+                    >
+                      <div className="text-2xl mb-1">💬</div>
+                      <p className="text-sm font-black text-slate-900">
+                        SMS code
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        A 6-digit code sent via SMS. Best for virtual numbers,
+                        Google Voice, TextNow, or internet-only numbers.
+                      </p>
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleVerifyStart}
-                  disabled={busy === "verify-start" || !verifyPhone.trim()}
-                  className="rounded-2xl bg-sky-600 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-sky-700 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-95"
-                >
-                  {busy === "verify-start" ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Starting verification…
-                    </>
-                  ) : (
-                    <>📞 Start Verification Call</>
-                  )}
-                </button>
+                {vMode === "voice" ? (
+                  <button
+                    onClick={handleVoiceStart}
+                    disabled={busy === "verify-start" || !vPhone.trim()}
+                    className="w-full rounded-2xl bg-sky-600 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-sky-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    {busy === "verify-start" ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Starting…
+                      </>
+                    ) : (
+                      <>📞 Start Verification Call</>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSmsStart}
+                    disabled={busy === "verify-sms-start" || !vPhone.trim()}
+                    className="w-full rounded-2xl bg-sky-600 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-sky-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    {busy === "verify-sms-start" ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Sending SMS…
+                      </>
+                    ) : (
+                      <>💬 Send SMS Code</>
+                    )}
+                  </button>
+                )}
               </div>
             )}
 
-            {/* ── STEP 2: Calling ── */}
-            {verifyStep === "calling" && (
+            {/* CALLING */}
+            {vStep === "calling" && (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 mb-1">
-                    Answer the verification call
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-900">
+                    Verification call in progress…
                   </h3>
-                  <p className="text-sm text-slate-600">
-                    Twilio is calling <strong>{verifyPhone}</strong> right now.
-                  </p>
+                  <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1 rounded-full font-medium">
+                    Attempt {vAttempt} / 3
+                  </span>
                 </div>
-
-                {/* Prominent code display */}
+                <p className="text-sm text-slate-600">
+                  Calling <strong>{vPhone}</strong>. Please answer — Twilio will
+                  read your code out loud. This page updates automatically.
+                </p>
                 <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-center">
                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">
-                    Your validation code
+                    Your validation code (for reference)
                   </p>
                   <p className="text-5xl font-black text-amber-700 tracking-[0.2em] font-mono">
-                    {verifyCode}
+                    {vCode}
                   </p>
                   <p className="text-xs text-amber-600 mt-2">
-                    Twilio will read this code out loud when you answer. You do
-                    not need to type it — just listen and confirm below once the
-                    call ends.
+                    Twilio reads this code to you on the call. You don't need to
+                    type it anywhere.
                   </p>
                 </div>
-
-                {verifyInstructions && (
-                  <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
-                    {verifyInstructions}
-                  </div>
+                <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3">
+                  <div className="w-4 h-4 border-2 border-sky-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <p className="text-xs text-slate-600">
+                    Waiting for call result — this page will update
+                    automatically once the call ends. No button to click.
+                  </p>
+                </div>
+                {vErr && (
+                  <ErrBox
+                    {...vErr}
+                    onPurchase={() => {
+                      resetV();
+                      setTab("search");
+                    }}
+                  />
                 )}
-
-                {/* Error notification */}
-                {verifyError && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                    <p className="text-sm font-black text-red-700 mb-1">
-                      {verifyError.title}
-                    </p>
-                    <p className="text-xs text-red-600 leading-relaxed">
-                      {verifyError.body}
-                    </p>
-                    {verifyError.showPurchaseLink && (
-                      <p className="text-xs text-red-500 mt-2">
-                        Need a number that works fully?{" "}
-                        <button
-                          onClick={() => {
-                            setVerifyError(null);
-                            setTab("search");
-                          }}
-                          className="underline font-bold hover:text-red-700"
-                        >
-                          Purchase a Twilio number here →
-                        </button>
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex gap-3">
                   <button
-                    onClick={handleVerifyComplete}
-                    disabled={busy === "verify-complete"}
-                    className="flex-1 rounded-2xl bg-emerald-600 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                    onClick={resetV}
+                    disabled={!!busy}
+                    className="flex-1 rounded-2xl border border-slate-200 text-slate-500 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 disabled:opacity-40 transition-all"
                   >
-                    {busy === "verify-complete" ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Confirming…
-                      </>
-                    ) : (
-                      <>✓ I answered the call — confirm verification</>
-                    )}
+                    ← Cancel
                   </button>
                   <button
                     onClick={() => {
-                      setVerifyStep("input");
-                      setVerifyError(null);
+                      setVMode("sms");
+                      resetV();
                     }}
+                    className="flex-1 rounded-2xl border border-sky-200 text-sky-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-sky-50 transition-all"
+                  >
+                    Try SMS instead →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SMS SENT */}
+            {vStep === "sms-sent" && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 mb-1">
+                    Enter the SMS code
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    A 6-digit code was sent to <strong>{vPhone}</strong>.
+                  </p>
+                </div>
+                {vErr && (
+                  <ErrBox
+                    {...vErr}
+                    onPurchase={() => {
+                      resetV();
+                      setTab("search");
+                    }}
+                  />
+                )}
+                <div>
+                  <Label>6-digit code</Label>
+                  <Inp
+                    placeholder="123456"
+                    value={vOtp}
+                    onChange={(e) =>
+                      setVOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleSmsConfirm();
+                    }}
+                    maxLength={6}
+                    className="text-center text-2xl tracking-widest font-black"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={resetV}
                     disabled={!!busy}
                     className="rounded-2xl border border-slate-200 text-slate-500 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 disabled:opacity-40 transition-all"
                   >
                     ← Start over
                   </button>
+                  <button
+                    onClick={handleSmsConfirm}
+                    disabled={
+                      busy === "verify-sms-confirm" || vOtp.length !== 6
+                    }
+                    className="flex-1 rounded-2xl bg-emerald-600 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    {busy === "verify-sms-confirm" ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Confirming…
+                      </>
+                    ) : (
+                      <>✓ Confirm Code</>
+                    )}
+                  </button>
                 </div>
+                <p className="text-xs text-slate-400 text-center">
+                  Didn't receive it?{" "}
+                  <button
+                    onClick={() => {
+                      setVStep("input");
+                      setVOtp("");
+                    }}
+                    className="underline hover:text-slate-600"
+                  >
+                    Resend
+                  </button>{" "}
+                  or{" "}
+                  <button
+                    onClick={() => {
+                      setVMode("voice");
+                      setVStep("input");
+                      setVOtp("");
+                    }}
+                    className="underline hover:text-slate-600"
+                  >
+                    switch to voice call
+                  </button>
+                </p>
               </div>
             )}
 
-            {/* ── STEP 3: Done ── */}
-            {verifyStep === "done" && (
+            {/* DONE */}
+            {vStep === "done" && (
               <div className="space-y-5 text-center py-4">
                 <div className="text-5xl">🎉</div>
                 <h3 className="text-lg font-black text-slate-900">
                   Number verified and added to Owned Numbers!
                 </h3>
                 <p className="text-sm text-slate-600 max-w-sm mx-auto">
-                  {verifyDoneMsg}
+                  {vDoneMsg}
                 </p>
-
-                {/* Caveat: CallerID vs IncomingPhoneNumber */}
-                {!verifyCanInbound && (
+                {!vInbound && (
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left max-w-md mx-auto">
                     <p className="text-sm font-black text-amber-700 mb-1">
-                      ⚠ Outbound only
+                      ⚠ Outbound calls only
                     </p>
                     <p className="text-xs text-amber-600 leading-relaxed">
-                      This verified number can be used as your caller ID when
-                      your agent makes outgoing calls. However, it{" "}
-                      <strong>cannot receive incoming calls</strong> from your
-                      customers — for that, you need a dedicated Twilio number.
+                      This number can be used as your agent's caller ID on
+                      outbound calls. It{" "}
+                      <strong>cannot receive incoming calls</strong> from
+                      customers. For full inbound + outbound capability, you
+                      need a dedicated Twilio number.
                     </p>
                     <p className="text-xs text-amber-500 mt-2">
-                      Want full inbound + outbound?{" "}
                       <button
                         onClick={() => setTab("search")}
                         className="underline font-bold hover:text-amber-700"
@@ -970,14 +1175,9 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                     </p>
                   </div>
                 )}
-
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
-                    onClick={() => {
-                      setVerifyStep("input");
-                      setVerifyPhone("");
-                      setVerifyError(null);
-                    }}
+                    onClick={resetV}
                     className="rounded-2xl border border-slate-200 text-slate-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest hover:border-amber-400 hover:text-amber-600 transition-all"
                   >
                     Verify another number
