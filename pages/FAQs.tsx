@@ -16,7 +16,7 @@ const FAQs: React.FC = () => {
     {
       question: "What happens if Agently can't answer a question?",
       answer: "Agently is programmed to be honest. If it doesn't know an answer, it will offer to take a message or transfer the caller to your escalation number, ensuring the customer is never left frustrated."
-    },
+    }
     {
       question: "Is my customer data secure?",
       answer: "Absolutely. We use industry-standard encryption for all data at rest and in transit. We are fully compliant with major data protection regulations and never sell your customer information."
