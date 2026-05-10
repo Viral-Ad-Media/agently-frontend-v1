@@ -7,6 +7,12 @@ import {
   LeadOutreachSchedule,
 } from "../types";
 import { api } from "../services/api";
+import {
+  voiceCallsApi,
+  ElevenLabsVoice,
+  VoiceProvider,
+  VoiceSettings,
+} from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
 
 // Twilio ConversationRelay voices with provider labels
@@ -35,6 +41,30 @@ const LANGUAGES = [
   "Portuguese",
   "Italian",
 ] as const;
+
+const DEFAULT_OPENAI_VOICE = "alloy";
+const DEFAULT_VOICE_PREVIEW_TEXT =
+  "Hello, this is a voice preview from Agently.";
+const DEFAULT_ELEVENLABS_SETTINGS: Required<VoiceSettings> = {
+  stability: 0.65,
+  similarity_boost: 0.8,
+  style: 0.15,
+  speed: 0.92,
+  use_speaker_boost: true,
+};
+
+const toSliderValue = (value: number | undefined, fallback: number) =>
+  Number.isFinite(value) ? Number(value) : fallback;
+
+const readKnowledgeEnabled = (context: unknown, fallback = true) => {
+  const data = context as Record<string, unknown> | null;
+  if (!data) return fallback;
+  if (typeof data.use_knowledge_base === "boolean")
+    return data.use_knowledge_base;
+  if (typeof data.enabled === "boolean") return data.enabled;
+  if (typeof data.useKnowledgeBase === "boolean") return data.useKnowledgeBase;
+  return fallback;
+};
 
 interface AgentSettingsProps {
   org: Organization;
@@ -191,9 +221,101 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [chunks, setChunks] = useState(0);
   const faqScrollRef = useRef<HTMLDivElement>(null);
 
+  /* stabilized voice-config integration */
+  const [voiceProvider, setVoiceProvider] = useState<VoiceProvider>("openai");
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>(
+    [],
+  );
+  const [selectedElevenLabsVoiceId, setSelectedElevenLabsVoiceId] =
+    useState("");
+  const [selectedElevenLabsVoiceName, setSelectedElevenLabsVoiceName] =
+    useState("");
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(
+    DEFAULT_ELEVENLABS_SETTINGS,
+  );
+  const [openAiVoiceId, setOpenAiVoiceId] = useState(DEFAULT_OPENAI_VOICE);
+  const [voiceConfigLoading, setVoiceConfigLoading] = useState(false);
+  const [voiceConfigSaving, setVoiceConfigSaving] = useState(false);
+  const [voicePreviewing, setVoicePreviewing] = useState(false);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(true);
+  const [knowledgeSaving, setKnowledgeSaving] = useState(false);
+
   useEffect(() => {
     setDraft(org.agent);
   }, [org.agent.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const agentId = org.agent.id;
+    if (!agentId) return;
+
+    const loadVoiceSettings = async () => {
+      setVoiceConfigLoading(true);
+      try {
+        const [voicesResponse, configResponse, knowledgeResponse] =
+          await Promise.allSettled([
+            voiceCallsApi.getElevenLabsVoices(),
+            voiceCallsApi.getAgentVoiceConfig(agentId),
+            voiceCallsApi.getAgentKnowledgeContext(agentId),
+          ]);
+
+        if (cancelled) return;
+
+        if (voicesResponse.status === "fulfilled") {
+          setElevenLabsVoices(voicesResponse.value.voices || []);
+        } else {
+          setElevenLabsVoices([]);
+          showToast("Could not load ElevenLabs voices yet.", false);
+        }
+
+        if (configResponse.status === "fulfilled") {
+          const config = configResponse.value;
+          const provider =
+            config.voice_provider === "elevenlabs" ? "elevenlabs" : "openai";
+          setVoiceProvider(provider);
+          setOpenAiVoiceId(config.voice_id || DEFAULT_OPENAI_VOICE);
+          setSelectedElevenLabsVoiceId(config.elevenlabs_voice_id || "");
+          setSelectedElevenLabsVoiceName(config.elevenlabs_voice_name || "");
+          setVoiceSettings({
+            ...DEFAULT_ELEVENLABS_SETTINGS,
+            ...(config.voice_settings || {}),
+          });
+        } else {
+          setVoiceProvider("openai");
+          setOpenAiVoiceId(DEFAULT_OPENAI_VOICE);
+          setSelectedElevenLabsVoiceId("");
+          setSelectedElevenLabsVoiceName("");
+          setVoiceSettings(DEFAULT_ELEVENLABS_SETTINGS);
+        }
+
+        if (knowledgeResponse.status === "fulfilled") {
+          setKnowledgeEnabled(
+            readKnowledgeEnabled(knowledgeResponse.value, true),
+          );
+        }
+      } finally {
+        if (!cancelled) setVoiceConfigLoading(false);
+      }
+    };
+
+    void loadVoiceSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [org.agent.id]);
+
+  useEffect(() => {
+    if (!selectedElevenLabsVoiceId || selectedElevenLabsVoiceName) return;
+    const found = elevenLabsVoices.find(
+      (voice) => voice.voice_id === selectedElevenLabsVoiceId,
+    );
+    if (found) setSelectedElevenLabsVoiceName(found.name);
+  }, [
+    elevenLabsVoices,
+    selectedElevenLabsVoiceId,
+    selectedElevenLabsVoiceName,
+  ]);
 
   /* ── utils ── */
   const showToast = (msg: string, ok = true) => {
@@ -217,6 +339,140 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       );
     } finally {
       setBusy(null);
+    }
+  };
+
+  const handleElevenLabsVoiceChange = async (voiceId: string) => {
+    const voice = elevenLabsVoices.find((item) => item.voice_id === voiceId);
+    setSelectedElevenLabsVoiceId(voiceId);
+    setSelectedElevenLabsVoiceName(voice?.name || "");
+
+    if (!voiceId) return;
+
+    try {
+      const settings = await voiceCallsApi.getElevenLabsVoiceSettings(voiceId);
+      setVoiceSettings({ ...DEFAULT_ELEVENLABS_SETTINGS, ...(settings || {}) });
+    } catch (e) {
+      showToast(
+        e instanceof Error ? e.message : "Could not load voice settings.",
+        false,
+      );
+    }
+  };
+
+  const updateVoiceSetting = <K extends keyof VoiceSettings>(
+    key: K,
+    value: VoiceSettings[K],
+  ) => {
+    setVoiceSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const buildVoiceConfigPayload = () => {
+    if (voiceProvider === "elevenlabs") {
+      return {
+        voice_provider: "elevenlabs" as const,
+        elevenlabs_voice_id: selectedElevenLabsVoiceId,
+        elevenlabs_voice_name:
+          selectedElevenLabsVoiceName ||
+          elevenLabsVoices.find(
+            (voice) => voice.voice_id === selectedElevenLabsVoiceId,
+          )?.name ||
+          "",
+        voice_settings: { ...DEFAULT_ELEVENLABS_SETTINGS, ...voiceSettings },
+      };
+    }
+
+    return {
+      voice_provider: "openai" as const,
+      voice_id: openAiVoiceId || DEFAULT_OPENAI_VOICE,
+      voice_settings: {},
+    };
+  };
+
+  const saveVoiceConfig = async () => {
+    if (voiceProvider === "elevenlabs" && !selectedElevenLabsVoiceId) {
+      showToast("Choose an ElevenLabs voice before saving.", false);
+      return;
+    }
+
+    setVoiceConfigSaving(true);
+    try {
+      await voiceCallsApi.updateAgentVoiceConfig(
+        org.agent.id,
+        buildVoiceConfigPayload(),
+      );
+      showToast("Voice settings saved.");
+    } catch (e) {
+      showToast(
+        e instanceof Error ? e.message : "Could not save voice settings.",
+        false,
+      );
+    } finally {
+      setVoiceConfigSaving(false);
+    }
+  };
+
+  const previewVoice = async () => {
+    if (voiceProvider === "elevenlabs" && !selectedElevenLabsVoiceId) {
+      showToast("Choose an ElevenLabs voice before previewing.", false);
+      return;
+    }
+
+    setVoicePreviewing(true);
+    try {
+      const result = await voiceCallsApi.testAgentVoice(org.agent.id, {
+        text: DEFAULT_VOICE_PREVIEW_TEXT,
+        ...buildVoiceConfigPayload(),
+      });
+
+      const audioUrl = result.blob
+        ? URL.createObjectURL(result.blob)
+        : result.audioUrl;
+      if (!audioUrl) {
+        showToast(
+          "Voice preview returned no playable audio URL or file.",
+          false,
+        );
+        return;
+      }
+
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        if (result.blob && audioUrl) URL.revokeObjectURL(audioUrl);
+      };
+      await audio.play();
+      showToast("Playing voice preview.");
+    } catch (e) {
+      showToast(
+        e instanceof Error ? e.message : "Voice preview failed.",
+        false,
+      );
+    } finally {
+      setVoicePreviewing(false);
+    }
+  };
+
+  const toggleKnowledgeBase = async () => {
+    const next = !knowledgeEnabled;
+    setKnowledgeSaving(true);
+    setKnowledgeEnabled(next);
+    try {
+      const response = await voiceCallsApi.updateAgentKnowledgeSettings(
+        org.agent.id,
+        {
+          use_knowledge_base: next,
+        },
+      );
+      setKnowledgeEnabled(readKnowledgeEnabled(response, next));
+      showToast(next ? "Knowledge base enabled." : "Knowledge base disabled.");
+    } catch (e) {
+      setKnowledgeEnabled(!next);
+      showToast(
+        e instanceof Error ? e.message : "Could not update knowledge setting.",
+        false,
+      );
+    } finally {
+      setKnowledgeSaving(false);
     }
   };
 
@@ -628,35 +884,79 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </Sel>
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <Label>Voice Profile</Label>
+                <Label>Voice Provider</Label>
                 <Sel
-                  value={draft.voice}
+                  value={voiceProvider}
                   onChange={(e) =>
-                    saveDraftField(
-                      "voice",
-                      e.target.value as AgentConfig["voice"],
-                    )
+                    setVoiceProvider(e.target.value as VoiceProvider)
                   }
+                  disabled={voiceConfigLoading}
                 >
-                  {["ElevenLabs", "Google", "Amazon"].map((provider) => (
-                    <optgroup key={provider} label={`${provider}`}>
-                      {VOICES.filter((v) => v.provider === provider).map(
-                        (v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.label} ({v.gender})
-                          </option>
-                        ),
-                      )}
-                    </optgroup>
-                  ))}
+                  <option value="openai">OpenAI</option>
+                  <option value="elevenlabs">ElevenLabs</option>
                 </Sel>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  {(() => {
-                    const v = VOICES.find((x) => x.id === draft.voice);
-                    return v ? `${v.provider} · ${v.gender} voice` : "";
-                  })()}
+                  Voice config is saved on this agent and reused by live calls.
                 </p>
               </div>
+
+              {voiceProvider === "openai" ? (
+                <div className="col-span-2 sm:col-span-1">
+                  <Label>OpenAI Voice</Label>
+                  <Sel
+                    value={openAiVoiceId}
+                    onChange={(e) => setOpenAiVoiceId(e.target.value)}
+                    disabled={voiceConfigLoading}
+                  >
+                    {[
+                      "alloy",
+                      "ash",
+                      "ballad",
+                      "coral",
+                      "echo",
+                      "sage",
+                      "shimmer",
+                      "verse",
+                    ].map((voice) => (
+                      <option key={voice} value={voice}>
+                        {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                      </option>
+                    ))}
+                  </Sel>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    OpenAI remains available as the fallback provider.
+                  </p>
+                </div>
+              ) : (
+                <div className="col-span-2 sm:col-span-1">
+                  <Label>ElevenLabs Voice</Label>
+                  <Sel
+                    value={selectedElevenLabsVoiceId}
+                    onChange={(e) =>
+                      void handleElevenLabsVoiceChange(e.target.value)
+                    }
+                    disabled={
+                      voiceConfigLoading || elevenLabsVoices.length === 0
+                    }
+                  >
+                    <option value="">
+                      {elevenLabsVoices.length
+                        ? "Select a voice"
+                        : "No voices loaded"}
+                    </option>
+                    {elevenLabsVoices.map((voice) => (
+                      <option key={voice.voice_id} value={voice.voice_id}>
+                        {voice.name}
+                        {voice.category ? ` · ${voice.category}` : ""}
+                      </option>
+                    ))}
+                  </Sel>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Voices are fetched from the backend — nothing is hardcoded.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <Label>Language</Label>
                 <Sel
@@ -707,6 +1007,159 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     ? "Number locked — use Unassign to free it for another agent."
                     : "Assign a number in the Phone Numbers section."}
                 </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    Voice Engine Settings
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Save the provider and preview audio before using this agent
+                    in calls.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void previewVoice()}
+                    disabled={
+                      voicePreviewing ||
+                      voiceConfigLoading ||
+                      (voiceProvider === "elevenlabs" &&
+                        !selectedElevenLabsVoiceId)
+                    }
+                    className="rounded-xl border border-slate-200 bg-white text-slate-700 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-all"
+                  >
+                    {voicePreviewing ? "Previewing…" : "Preview Voice"}
+                  </button>
+                  <button
+                    onClick={() => void saveVoiceConfig()}
+                    disabled={
+                      voiceConfigSaving ||
+                      voiceConfigLoading ||
+                      (voiceProvider === "elevenlabs" &&
+                        !selectedElevenLabsVoiceId)
+                    }
+                    className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 transition-all"
+                  >
+                    {voiceConfigSaving ? "Saving…" : "Save Voice"}
+                  </button>
+                </div>
+              </div>
+
+              {voiceProvider === "elevenlabs" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    {
+                      key: "stability",
+                      label: "Stability",
+                      min: 0,
+                      max: 1,
+                      step: 0.01,
+                      fallback: DEFAULT_ELEVENLABS_SETTINGS.stability,
+                    },
+                    {
+                      key: "similarity_boost",
+                      label: "Similarity Boost",
+                      min: 0,
+                      max: 1,
+                      step: 0.01,
+                      fallback: DEFAULT_ELEVENLABS_SETTINGS.similarity_boost,
+                    },
+                    {
+                      key: "style",
+                      label: "Style",
+                      min: 0,
+                      max: 1,
+                      step: 0.01,
+                      fallback: DEFAULT_ELEVENLABS_SETTINGS.style,
+                    },
+                    {
+                      key: "speed",
+                      label: "Speed",
+                      min: 0.7,
+                      max: 1.2,
+                      step: 0.01,
+                      fallback: DEFAULT_ELEVENLABS_SETTINGS.speed,
+                    },
+                  ].map((control) => {
+                    const key = control.key as keyof VoiceSettings;
+                    const value = toSliderValue(
+                      voiceSettings[key] as number | undefined,
+                      control.fallback,
+                    );
+                    return (
+                      <div key={control.key}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <Label>{control.label}</Label>
+                          <span className="text-[10px] font-black text-slate-500">
+                            {value.toFixed(2)}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={control.min}
+                          max={control.max}
+                          step={control.step}
+                          value={value}
+                          onChange={(e) =>
+                            updateVoiceSetting(
+                              key,
+                              Number(e.target.value) as never,
+                            )
+                          }
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                    );
+                  })}
+                  <div className="md:col-span-2 flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-900">
+                        Speaker Boost
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Improve similarity and clarity when supported.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        updateVoiceSetting(
+                          "use_speaker_boost",
+                          !voiceSettings.use_speaker_boost,
+                        )
+                      }
+                      className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${voiceSettings.use_speaker_boost ? "bg-amber-500" : "bg-slate-200"}`}
+                    >
+                      <div
+                        className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${voiceSettings.use_speaker_boost ? "translate-x-5" : "translate-x-0"}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    Use Knowledge Base
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Let this voice agent answer from connected FAQs and
+                    knowledge chunks.
+                  </p>
+                </div>
+                <button
+                  onClick={() => void toggleKnowledgeBase()}
+                  disabled={knowledgeSaving}
+                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 disabled:opacity-50 ${knowledgeEnabled ? "bg-amber-500" : "bg-slate-200"}`}
+                >
+                  <div
+                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${knowledgeEnabled ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </button>
               </div>
             </div>
 
