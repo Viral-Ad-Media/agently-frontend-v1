@@ -17,6 +17,15 @@ export type ElevenLabsVoice = {
   category?: string;
   labels?: Record<string, string>;
   preview_url?: string;
+  id?: string;
+  provider?: string;
+  displayName?: string;
+  voiceId?: string;
+  gender?: string | null;
+  language?: string | null;
+  accent?: string | null;
+  modelId?: string | null;
+  previewAvailable?: boolean;
 };
 
 export type VoiceSettings = {
@@ -37,12 +46,20 @@ export type AgentVoiceConfig = {
 
 export type TestVoicePayload = AgentVoiceConfig & {
   text: string;
+  returnJson?: boolean;
+  voiceId?: string;
+  voice_id?: string;
+  modelId?: string;
 };
 
 export type TestVoiceResult = {
   audioUrl?: string;
   blob?: Blob;
   raw?: unknown;
+  provider?: string;
+  voiceId?: string;
+  mimeType?: string;
+  audioBase64?: string;
 };
 
 export type KnowledgeContext = {
@@ -60,6 +77,77 @@ export type PreviewVoiceContextPayload = {
   directRecipient?: {
     name?: string;
     phone?: string;
+  };
+};
+
+
+const unwrapPayload = <T = unknown>(payload: unknown, keys: string[]): T => {
+  if (!payload || typeof payload !== 'object') return payload as T;
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    if (record[key] !== undefined) return record[key] as T;
+  }
+  return payload as T;
+};
+
+const normalizeElevenLabsVoice = (voice: unknown): ElevenLabsVoice | null => {
+  if (!voice || typeof voice !== 'object') return null;
+  const raw = voice as Record<string, unknown>;
+  const voiceId = String(raw.voice_id || raw.voiceId || raw.id || '').trim();
+  if (!voiceId) return null;
+  const name = String(raw.name || raw.displayName || raw.display_name || voiceId).trim();
+  const labels = raw.labels && typeof raw.labels === 'object' && !Array.isArray(raw.labels)
+    ? raw.labels as Record<string, string>
+    : undefined;
+
+  return {
+    ...(raw as Partial<ElevenLabsVoice>),
+    voice_id: voiceId,
+    name,
+    category: typeof raw.category === 'string' ? raw.category : typeof raw.provider === 'string' ? raw.provider : undefined,
+    labels,
+    preview_url: typeof raw.preview_url === 'string' ? raw.preview_url : typeof raw.previewUrl === 'string' ? raw.previewUrl : undefined,
+    id: typeof raw.id === 'string' ? raw.id : undefined,
+    provider: typeof raw.provider === 'string' ? raw.provider : 'elevenlabs',
+    displayName: name,
+    voiceId,
+    gender: typeof raw.gender === 'string' ? raw.gender : null,
+    language: typeof raw.language === 'string' ? raw.language : null,
+    accent: typeof raw.accent === 'string' ? raw.accent : null,
+    modelId: typeof raw.modelId === 'string' ? raw.modelId : typeof raw.model_id === 'string' ? raw.model_id : null,
+    previewAvailable: typeof raw.previewAvailable === 'boolean' ? raw.previewAvailable : true,
+  };
+};
+
+const normalizeElevenLabsVoicesResponse = (payload: unknown): { voices: ElevenLabsVoice[] } => {
+  const voicesPayload = unwrapPayload<unknown>(payload, ['voices', 'data', 'items', 'results']);
+  const nestedVoices = voicesPayload && typeof voicesPayload === 'object' && !Array.isArray(voicesPayload)
+    ? unwrapPayload<unknown>(voicesPayload, ['voices', 'items', 'results'])
+    : voicesPayload;
+  const list = Array.isArray(nestedVoices) ? nestedVoices : [];
+  const voices = list
+    .map(normalizeElevenLabsVoice)
+    .filter((voice): voice is ElevenLabsVoice => Boolean(voice));
+  return { voices };
+};
+
+const normalizeVoiceSettings = (payload: unknown): VoiceSettings => {
+  const settings = unwrapPayload<Record<string, unknown>>(payload, ['settings', 'voice_settings', 'voiceSettings']);
+  const raw = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+  return {
+    stability: typeof raw.stability === 'number' ? raw.stability : Number.isFinite(Number(raw.stability)) ? Number(raw.stability) : undefined,
+    similarity_boost: typeof raw.similarity_boost === 'number'
+      ? raw.similarity_boost
+      : Number.isFinite(Number(raw.similarityBoost))
+        ? Number(raw.similarityBoost)
+        : undefined,
+    style: typeof raw.style === 'number' ? raw.style : Number.isFinite(Number(raw.style)) ? Number(raw.style) : undefined,
+    speed: typeof raw.speed === 'number' ? raw.speed : Number.isFinite(Number(raw.speed)) ? Number(raw.speed) : undefined,
+    use_speaker_boost: typeof raw.use_speaker_boost === 'boolean'
+      ? raw.use_speaker_boost
+      : typeof raw.useSpeakerBoost === 'boolean'
+        ? raw.useSpeakerBoost
+        : undefined,
   };
 };
 
@@ -117,8 +205,10 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
 
 const normalizeAudioResult = async (response: Response): Promise<TestVoiceResult> => {
   const contentType = response.headers.get('content-type') || '';
+  const provider = response.headers.get('x-voice-provider') || undefined;
+  const voiceId = response.headers.get('x-voice-id') || undefined;
   if (contentType.includes('audio/') || contentType.includes('application/octet-stream')) {
-    return { blob: await response.blob() };
+    return { blob: await response.blob(), provider, voiceId };
   }
 
   if (contentType.includes('application/json')) {
@@ -129,11 +219,24 @@ const normalizeAudioResult = async (response: Response): Promise<TestVoiceResult
       (raw.url as string | undefined) ||
       (raw.previewUrl as string | undefined) ||
       (raw.preview_url as string | undefined);
-    return { audioUrl, raw };
+    const audioBase64 =
+      (raw.audioBase64 as string | undefined) ||
+      (raw.audio_base64 as string | undefined) ||
+      (raw.base64 as string | undefined);
+    const mimeType =
+      (raw.mimeType as string | undefined) ||
+      (raw.mime_type as string | undefined) ||
+      (audioBase64 ? 'audio/mpeg' : undefined);
+    const jsonProvider = (raw.provider as string | undefined) || provider;
+    const jsonVoiceId =
+      (raw.voice_id as string | undefined) ||
+      (raw.voiceId as string | undefined) ||
+      voiceId;
+    return { audioUrl, audioBase64, mimeType, raw, provider: jsonProvider, voiceId: jsonVoiceId };
   }
 
   const text = await response.text();
-  return { raw: text };
+  return { raw: text, provider, voiceId };
 };
 
 const postForAudio = async (path: string, body: unknown): Promise<TestVoiceResult> => {
@@ -159,11 +262,13 @@ const postForAudio = async (path: string, body: unknown): Promise<TestVoiceResul
 
 export const voiceCallsApi = {
   async getElevenLabsVoices() {
-    return request<{ voices: ElevenLabsVoice[] }>('/api/elevenlabs/voices');
+    const payload = await request<unknown>('/api/elevenlabs/voices');
+    return normalizeElevenLabsVoicesResponse(payload);
   },
 
   async getElevenLabsVoiceSettings(voiceId: string) {
-    return request<VoiceSettings>(`/api/elevenlabs/voices/${encodeURIComponent(voiceId)}/settings`);
+    const payload = await request<unknown>(`/api/elevenlabs/voices/${encodeURIComponent(voiceId)}/settings`);
+    return normalizeVoiceSettings(payload);
   },
 
   async getAgentVoiceConfig(agentId: string) {
@@ -175,6 +280,10 @@ export const voiceCallsApi = {
       method: 'PATCH',
       body: payload,
     });
+  },
+
+  async testElevenLabsVoice(payload: TestVoicePayload) {
+    return postForAudio('/api/elevenlabs/test-voice', payload);
   },
 
   async testAgentVoice(agentId: string, payload: TestVoicePayload) {
