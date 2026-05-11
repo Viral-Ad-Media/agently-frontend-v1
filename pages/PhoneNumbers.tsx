@@ -282,6 +282,18 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     const capabilities = number.capabilities || {};
     const canVoice = capabilities.voice !== false;
     const canSms = capabilities.sms === true;
+    const inbound =
+      number.inbound_voice_status ||
+      number.inboundVoiceStatus ||
+      number.overall_status ||
+      number.overallStatus ||
+      number.configuration_status;
+    const outbound =
+      number.outbound_voice_status ||
+      number.outboundVoiceStatus ||
+      number.overall_status ||
+      number.overallStatus ||
+      number.configuration_status;
     return (
       <div
         key={numberId}
@@ -303,22 +315,15 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
           <span
             className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${canVoice ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
           >
-            Voice {canVoice ? "ready" : "unavailable"}
+            Voice {canVoice ? "capable" : "unavailable"}
           </span>
-          {canSms && (
-            <span className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
-              SMS capable
-            </span>
-          )}
-          <StatusPill
-            label="Status"
-            value={
-              number.overall_status ||
-              number.overallStatus ||
-              number.configuration_status ||
-              "ready"
-            }
-          />
+          <span
+            className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${canSms ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}
+          >
+            SMS {canSms ? "capable" : "not supported"}
+          </span>
+          <StatusPill label="Inbound" value={inbound} />
+          <StatusPill label="Outbound" value={outbound} />
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4">
@@ -384,8 +389,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         <div>
           <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Buy and assign Twilio numbers. Currently supporting US voice-capable
-            numbers only.
+            Buy, view, and assign your organization’s Twilio numbers. Currently
+            supporting US voice-capable numbers only.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -422,8 +427,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
               A single number can support both inbound and outbound calls. A
               single active agent can also support both inbound and outbound
-              behavior. This page only manages purchase, readiness display, and
-              assignment.
+              behavior. This page only manages purchased tenant numbers,
+              readiness display, and assignment.
             </p>
           </div>
           <div>

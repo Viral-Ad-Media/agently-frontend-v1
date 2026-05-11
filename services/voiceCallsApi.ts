@@ -305,8 +305,7 @@ export type TwilioNumberRecord = {
   isoCountry?: string;
   number_type?: string;
   numberType?: string;
-  source?: string | null;
-  sourceLabel?: string | null;
+  source?: string;
   purchase_origin?: string;
   purchaseOrigin?: string;
   capabilities?: {
@@ -385,25 +384,21 @@ const normalizeTwilioNumber = (value: unknown): TwilioNumberRecord | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   const phoneNumber = String(raw.phone_number || raw.phoneNumber || raw.number || '').trim();
-  const id = String(raw.id || raw.numberId || raw.phone_number_id || raw.phone_sid || raw.phoneSid || raw.sid || phoneNumber || '').trim();
+  const id = String(raw.id || raw.numberId || raw.phone_number_id || phoneNumber || '').trim();
   if (!id && !phoneNumber) return null;
-  const phoneSid = String(raw.phone_sid || raw.phoneSid || raw.sid || '').trim() || undefined;
   const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || '').trim() || null;
   return {
     ...(raw as Partial<TwilioNumberRecord>),
     id: typeof raw.id === 'string' ? raw.id : id,
     numberId: id,
-    sid: typeof raw.sid === 'string' ? raw.sid : phoneSid,
     phone_number: phoneNumber,
     phoneNumber,
-    phone_sid: phoneSid,
-    phoneSid,
     friendly_name: String(raw.friendly_name || raw.friendlyName || phoneNumber || '').trim(),
     friendlyName: String(raw.friendlyName || raw.friendly_name || phoneNumber || '').trim(),
     iso_country: String(raw.iso_country || raw.isoCountry || 'US').trim(),
     isoCountry: String(raw.isoCountry || raw.iso_country || 'US').trim(),
-    number_type: String(raw.number_type || raw.numberType || raw.type || 'unknown').trim(),
-    numberType: String(raw.numberType || raw.number_type || raw.type || 'unknown').trim(),
+    number_type: String(raw.number_type || raw.numberType || raw.type || '').trim() || undefined,
+    numberType: String(raw.numberType || raw.number_type || raw.type || '').trim() || undefined,
     capabilities: normalizeCapabilities(raw.capabilities),
     assigned_voice_agent_id: assignedAgentId,
     assignedVoiceAgentId: assignedAgentId,
@@ -578,14 +573,16 @@ export const voiceCallsApi = {
 
   // Prepared for Phase 2. Do not wire into UI in Phase 1.
   phoneNumbers: {
-    // Tenant-facing owned-number sync was intentionally removed.
-    // Numbers are now loaded only from twilio_phone_numbers for the current organization.
+    async syncOwnedTwilioNumbers() {
+      throw new Error('Owned-number sync is disabled for tenant safety. Use GET /api/twilio/numbers.');
+    },
     async getTwilioNumbers() {
       const payload = await request<unknown>('/api/twilio/numbers');
       return normalizeTwilioNumbersResponse(payload);
     },
     async getOwnedTwilioNumbers() {
-      const payload = await request<unknown>('/api/twilio/owned-numbers');
+      // Tenant-safe compatibility: do not call master owned-number sync/list APIs.
+      const payload = await request<unknown>('/api/twilio/numbers');
       return normalizeTwilioNumbersResponse(payload);
     },
     async searchAvailableTwilioNumbers(params: Record<string, string | number | undefined>) {
