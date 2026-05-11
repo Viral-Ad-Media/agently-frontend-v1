@@ -114,7 +114,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<TwilioNumberRecord[]>([]);
-  const [ownedNumbers, setOwnedNumbers] = useState<TwilioNumberRecord[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [targetAgentId, setTargetAgentId] = useState(
     org.activeVoiceAgentId || org.agent?.id || "",
@@ -138,14 +137,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const loadNumbers = async () => {
     setBusy("load");
     try {
-      const [normalized, owned] = await Promise.all([
-        voiceCallsApi.phoneNumbers.getTwilioNumbers(),
-        voiceCallsApi.phoneNumbers
-          .getOwnedTwilioNumbers()
-          .catch(() => ({ numbers: [] as TwilioNumberRecord[] })),
-      ]);
+      const normalized = await voiceCallsApi.phoneNumbers.getTwilioNumbers();
       setNumbers(normalized.numbers || []);
-      setOwnedNumbers(owned.numbers || []);
       setHasLoaded(true);
     } catch (error: any) {
       showToast(error?.message || "Could not load phone numbers.", false);
@@ -163,18 +156,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       setTargetAgentId(org.activeVoiceAgentId || org.agent?.id || "");
     }
   }, [org.activeVoiceAgentId, org.agent?.id, targetAgentId]);
-
-  const handleSyncOwned = async () => {
-    setBusy("sync");
-    try {
-      await voiceCallsApi.phoneNumbers.syncOwnedTwilioNumbers();
-      showToast("Owned Twilio numbers synced.");
-      await loadNumbers();
-    } catch (error: any) {
-      showToast(error?.message || "Sync failed.", false);
-      setBusy(null);
-    }
-  };
 
   const handleSearch = async () => {
     setBusy("search");
@@ -226,13 +207,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         });
       }
       if (targetAgentId) {
-        onAgentUpdated({
-          twilioPhoneNumber: phoneNumber,
-          twilioPhoneSid:
-            purchasedNumber?.phone_sid ||
-            purchasedNumber?.phoneSid ||
-            purchasedNumber?.sid,
-        });
+        onAgentUpdated({ twilioPhoneNumber: phoneNumber });
       }
       showToast(
         `${phoneNumber} purchased${targetAgent ? ` for ${targetAgent.name}` : ""}.`,
@@ -250,12 +225,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     number: TwilioNumberRecord,
     agentId = targetAgentId,
   ) => {
-    const numberId =
-      number.id ||
-      number.numberId ||
-      number.phone_sid ||
-      number.phoneSid ||
-      number.sid;
+    const numberId = number.id || number.numberId;
     const phoneNumber = number.phone_number || number.phoneNumber;
     if (!numberId || !agentId) {
       showToast("Select an agent before assigning a number.", false);
@@ -269,11 +239,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       });
       const assignedAgent = agents.find((agent) => agent.id === agentId);
       if (assignedAgent) {
-        onAgentUpdated({
-          twilioPhoneNumber: phoneNumber || "",
-          twilioPhoneSid:
-            number.phone_sid || number.phoneSid || number.sid || "",
-        });
+        onAgentUpdated({ twilioPhoneNumber: phoneNumber || "" });
       }
       showToast(
         `${phoneNumber || "Number"} assigned to ${assignedAgent?.name || "agent"}.`,
@@ -287,12 +253,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   };
 
   const handleRelease = async (number: TwilioNumberRecord) => {
-    const numberId =
-      number.id ||
-      number.numberId ||
-      number.phone_sid ||
-      number.phoneSid ||
-      number.sid;
+    const numberId = number.id || number.numberId;
     const phoneNumber = number.phone_number || number.phoneNumber;
     if (!numberId) return;
     if (
@@ -316,29 +277,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const renderNumberCard = (number: TwilioNumberRecord) => {
     const phoneNumber =
       number.phone_number || number.phoneNumber || "Unknown number";
-    const numberId =
-      number.id ||
-      number.numberId ||
-      number.phone_sid ||
-      number.phoneSid ||
-      number.sid ||
-      phoneNumber;
+    const numberId = number.id || number.numberId || phoneNumber;
     const assigned = getAssignedAgent(number, agents);
     const capabilities = number.capabilities || {};
     const canVoice = capabilities.voice !== false;
     const canSms = capabilities.sms === true;
-    const inbound =
-      number.inbound_voice_status ||
-      number.inboundVoiceStatus ||
-      number.overall_status ||
-      number.overallStatus ||
-      number.configuration_status;
-    const outbound =
-      number.outbound_voice_status ||
-      number.outboundVoiceStatus ||
-      number.overall_status ||
-      number.overallStatus ||
-      number.configuration_status;
     return (
       <div
         key={numberId}
@@ -353,35 +296,29 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               </span>
               <p className="text-lg font-black text-slate-900">{phoneNumber}</p>
             </div>
-            <p className="text-xs text-slate-400 font-mono">
-              {number.phone_sid ||
-                number.phoneSid ||
-                number.sid ||
-                number.id ||
-                "No SID returned"}
-            </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
-            {number.number_type ||
-              number.numberType ||
-              number.source ||
-              "number"}
-          </span>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <span
             className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${canVoice ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
           >
-            Voice {canVoice ? "capable" : "unavailable"}
+            Voice {canVoice ? "ready" : "unavailable"}
           </span>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${canSms ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}
-          >
-            SMS {canSms ? "capable" : "not supported"}
-          </span>
-          <StatusPill label="Inbound" value={inbound} />
-          <StatusPill label="Outbound" value={outbound} />
+          {canSms && (
+            <span className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
+              SMS capable
+            </span>
+          )}
+          <StatusPill
+            label="Status"
+            value={
+              number.overall_status ||
+              number.overallStatus ||
+              number.configuration_status ||
+              "ready"
+            }
+          />
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4">
@@ -431,7 +368,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     );
   };
 
-  const numbersToShow = numbers.length ? numbers : ownedNumbers;
+  const numbersToShow = numbers;
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -447,8 +384,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         <div>
           <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Sync, buy, and assign Twilio numbers. Currently supporting US
-            voice-capable numbers only.
+            Buy and assign Twilio numbers. Currently supporting US voice-capable
+            numbers only.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -466,13 +403,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               Buy US Number
             </button>
           </div>
-          <button
-            onClick={() => void handleSyncOwned()}
-            disabled={busy === "sync"}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-600 disabled:opacity-50 transition-all"
-          >
-            {busy === "sync" ? "Syncing…" : "Sync Owned"}
-          </button>
           <button
             onClick={() => void loadNumbers()}
             disabled={busy === "load"}
@@ -492,8 +422,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
               A single number can support both inbound and outbound calls. A
               single active agent can also support both inbound and outbound
-              behavior. This page only manages number sync, purchase, readiness
-              display, and assignment.
+              behavior. This page only manages purchase, readiness display, and
+              assignment.
             </p>
           </div>
           <div>
@@ -527,15 +457,9 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 No phone numbers found
               </p>
               <p className="text-sm text-slate-500 mt-1">
-                Sync owned Twilio numbers or buy a new US voice-capable number.
+                Buy a new US voice-capable number to get started.
               </p>
               <div className="flex justify-center gap-3 mt-5">
-                <button
-                  onClick={() => void handleSyncOwned()}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300"
-                >
-                  Sync Owned
-                </button>
                 <button
                   onClick={() => setTab("search")}
                   className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600"

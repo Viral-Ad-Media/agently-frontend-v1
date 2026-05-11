@@ -305,7 +305,8 @@ export type TwilioNumberRecord = {
   isoCountry?: string;
   number_type?: string;
   numberType?: string;
-  source?: string;
+  source?: string | null;
+  sourceLabel?: string | null;
   purchase_origin?: string;
   purchaseOrigin?: string;
   capabilities?: {
@@ -577,9 +578,8 @@ export const voiceCallsApi = {
 
   // Prepared for Phase 2. Do not wire into UI in Phase 1.
   phoneNumbers: {
-    async syncOwnedTwilioNumbers() {
-      return request('/api/twilio/numbers/sync-owned', { method: 'POST', body: {} });
-    },
+    // Tenant-facing owned-number sync was intentionally removed.
+    // Numbers are now loaded only from twilio_phone_numbers for the current organization.
     async getTwilioNumbers() {
       const payload = await request<unknown>('/api/twilio/numbers');
       return normalizeTwilioNumbersResponse(payload);
