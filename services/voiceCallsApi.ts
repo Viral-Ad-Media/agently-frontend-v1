@@ -36,12 +36,28 @@ export type VoiceSettings = {
   use_speaker_boost?: boolean;
 };
 
+export type OpenAiVoice = {
+  id: string;
+  voice_id: string;
+  voiceId: string;
+  name: string;
+  displayName: string;
+  provider: 'openai';
+  modelId?: string | null;
+  previewAvailable?: boolean;
+};
+
 export type AgentVoiceConfig = {
   voice_provider?: VoiceProvider;
   voice_id?: string;
+  openai_voice_id?: string;
   elevenlabs_voice_id?: string;
   elevenlabs_voice_name?: string;
-  voice_settings?: VoiceSettings;
+  voice_settings?: VoiceSettings & {
+    model?: string;
+    response_format?: string;
+    instructions?: string;
+  };
 };
 
 export type TestVoicePayload = AgentVoiceConfig & {
@@ -128,6 +144,36 @@ const normalizeElevenLabsVoicesResponse = (payload: unknown): { voices: ElevenLa
   const voices = list
     .map(normalizeElevenLabsVoice)
     .filter((voice): voice is ElevenLabsVoice => Boolean(voice));
+  return { voices };
+};
+
+const normalizeOpenAiVoice = (voice: unknown): OpenAiVoice | null => {
+  if (!voice || typeof voice !== 'object') return null;
+  const raw = voice as Record<string, unknown>;
+  const voiceId = String(raw.voice_id || raw.voiceId || raw.id || '').trim();
+  if (!voiceId) return null;
+  const name = String(raw.name || raw.displayName || raw.display_name || voiceId).trim();
+  return {
+    id: voiceId,
+    voice_id: voiceId,
+    voiceId,
+    name,
+    displayName: name,
+    provider: 'openai',
+    modelId: typeof raw.modelId === 'string' ? raw.modelId : typeof raw.model_id === 'string' ? raw.model_id : null,
+    previewAvailable: typeof raw.previewAvailable === 'boolean' ? raw.previewAvailable : true,
+  };
+};
+
+const normalizeOpenAiVoicesResponse = (payload: unknown): { voices: OpenAiVoice[] } => {
+  const voicesPayload = unwrapPayload<unknown>(payload, ['voices', 'data', 'items', 'results']);
+  const nestedVoices = voicesPayload && typeof voicesPayload === 'object' && !Array.isArray(voicesPayload)
+    ? unwrapPayload<unknown>(voicesPayload, ['voices', 'items', 'results'])
+    : voicesPayload;
+  const list = Array.isArray(nestedVoices) ? nestedVoices : [];
+  const voices = list
+    .map(normalizeOpenAiVoice)
+    .filter((voice): voice is OpenAiVoice => Boolean(voice));
   return { voices };
 };
 
@@ -269,6 +315,15 @@ export const voiceCallsApi = {
   async getElevenLabsVoiceSettings(voiceId: string) {
     const payload = await request<unknown>(`/api/elevenlabs/voices/${encodeURIComponent(voiceId)}/settings`);
     return normalizeVoiceSettings(payload);
+  },
+
+  async getOpenAiVoices() {
+    const payload = await request<unknown>('/api/voices?provider=openai');
+    return normalizeOpenAiVoicesResponse(payload);
+  },
+
+  async previewVoice(payload: TestVoicePayload & { provider?: VoiceProvider; model?: string; speed?: number; instructions?: string }) {
+    return postForAudio('/api/voices/preview', payload);
   },
 
   async getAgentVoiceConfig(agentId: string) {

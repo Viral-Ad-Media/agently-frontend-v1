@@ -10,6 +10,8 @@ import { api } from "../services/api";
 import {
   voiceCallsApi,
   ElevenLabsVoice,
+  OpenAiVoice,
+  AgentVoiceConfig,
   VoiceProvider,
   VoiceSettings,
 } from "../services/voiceCallsApi";
@@ -247,6 +249,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>(
     [],
   );
+  const [openAiVoices, setOpenAiVoices] = useState<OpenAiVoice[]>([]);
+  const [agentVoiceConfigById, setAgentVoiceConfigById] = useState<
+    Record<string, AgentVoiceConfig>
+  >({});
+  const [selectedAgentVoiceLoading, setSelectedAgentVoiceLoading] =
+    useState(false);
   const [selectedElevenLabsVoiceId, setSelectedElevenLabsVoiceId] =
     useState("");
   const [selectedElevenLabsVoiceName, setSelectedElevenLabsVoiceName] =
@@ -273,12 +281,17 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     const loadVoiceSettings = async () => {
       setVoiceConfigLoading(true);
       try {
-        const [voicesResponse, configResponse, knowledgeResponse] =
-          await Promise.allSettled([
-            voiceCallsApi.getElevenLabsVoices(),
-            voiceCallsApi.getAgentVoiceConfig(agentId),
-            voiceCallsApi.getAgentKnowledgeContext(agentId),
-          ]);
+        const [
+          voicesResponse,
+          openAiVoicesResponse,
+          configResponse,
+          knowledgeResponse,
+        ] = await Promise.allSettled([
+          voiceCallsApi.getElevenLabsVoices(),
+          voiceCallsApi.getOpenAiVoices(),
+          voiceCallsApi.getAgentVoiceConfig(agentId),
+          voiceCallsApi.getAgentKnowledgeContext(agentId),
+        ]);
 
         if (cancelled) return;
 
@@ -289,12 +302,25 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           showToast("Could not load ElevenLabs voices yet.", false);
         }
 
+        if (openAiVoicesResponse.status === "fulfilled") {
+          setOpenAiVoices(openAiVoicesResponse.value.voices || []);
+        } else {
+          setOpenAiVoices([]);
+          showToast("Could not load OpenAI voices yet.", false);
+        }
+
         if (configResponse.status === "fulfilled") {
           const config = configResponse.value;
           const provider =
             config.voice_provider === "elevenlabs" ? "elevenlabs" : "openai";
+          setAgentVoiceConfigById((current) => ({
+            ...current,
+            [agentId]: config,
+          }));
           setVoiceProvider(provider);
-          setOpenAiVoiceId(config.voice_id || DEFAULT_OPENAI_VOICE);
+          setOpenAiVoiceId(
+            config.openai_voice_id || config.voice_id || DEFAULT_OPENAI_VOICE,
+          );
           setSelectedElevenLabsVoiceId(config.elevenlabs_voice_id || "");
           setSelectedElevenLabsVoiceName(config.elevenlabs_voice_name || "");
           setVoiceSettings({
@@ -415,6 +441,43 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     (voice) => voice.voice_id === selectedElevenLabsVoiceId,
   );
 
+  const selectedOpenAiVoice = openAiVoices.find(
+    (voice) => voice.voice_id === openAiVoiceId,
+  );
+
+  const formatVoiceConfigDisplay = (
+    config?: AgentVoiceConfig | null,
+    fallback?: string,
+  ) => {
+    if (!config) return fallback || "-";
+    if (config.voice_provider === "elevenlabs") {
+      return (
+        config.elevenlabs_voice_name ||
+        config.elevenlabs_voice_id ||
+        fallback ||
+        "ElevenLabs"
+      );
+    }
+    if (config.voice_provider === "openai") {
+      const id =
+        config.openai_voice_id ||
+        config.voice_id ||
+        fallback ||
+        DEFAULT_OPENAI_VOICE;
+      const match = openAiVoices.find((voice) => voice.voice_id === id);
+      return match?.name || id.charAt(0).toUpperCase() + id.slice(1);
+    }
+    return fallback || "-";
+  };
+
+  const getAgentVoiceDisplay = (agent: AgentConfig | null) => {
+    if (!agent) return "-";
+    return formatVoiceConfigDisplay(
+      agentVoiceConfigById[agent.id],
+      agent.voice,
+    );
+  };
+
   const buildVoiceConfigPayload = () => {
     if (voiceProvider === "elevenlabs") {
       return {
@@ -426,10 +489,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       };
     }
 
+    const selectedVoiceId = openAiVoiceId || DEFAULT_OPENAI_VOICE;
     return {
       voice_provider: "openai" as const,
-      voice_id: openAiVoiceId || DEFAULT_OPENAI_VOICE,
-      voice_settings: {},
+      voice_id: selectedVoiceId,
+      openai_voice_id: selectedVoiceId,
+      voice_settings: {
+        model: selectedOpenAiVoice?.modelId || "gpt-4o-mini-tts",
+        response_format: "mp3",
+        speed: 1,
+      },
     };
   };
 
@@ -441,11 +510,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
     setVoiceConfigSaving(true);
     try {
-      await voiceCallsApi.updateAgentVoiceConfig(
+      const payload = buildVoiceConfigPayload();
+      const savedConfig = await voiceCallsApi.updateAgentVoiceConfig(
         org.agent.id,
-        buildVoiceConfigPayload(),
+        payload,
       );
-      showToast("Voice settings saved.");
+      const configForDisplay = { ...payload, ...(savedConfig || {}) };
+      setAgentVoiceConfigById((current) => ({
+        ...current,
+        [org.agent.id]: configForDisplay,
+      }));
+      if (selectedAgent?.id === org.agent.id) {
+        setSelectedAgent((current) => (current ? { ...current } : current));
+      }
+      showToast("Voice settings saved and assigned to this agent.");
     } catch (e) {
       showToast(
         e instanceof Error ? e.message : "Could not save voice settings.",
@@ -497,12 +575,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 ...voiceSettings,
               },
             })
-          : await voiceCallsApi.testAgentVoice(org.agent.id, {
+          : await voiceCallsApi.previewVoice({
               text: DEFAULT_VOICE_PREVIEW_TEXT,
               returnJson: true,
+              provider: "openai",
               voice_provider: "openai",
               voice_id: currentOpenAiVoiceId,
-              voice_settings: {},
+              voiceId: currentOpenAiVoiceId,
+              model: selectedOpenAiVoice?.modelId || "gpt-4o-mini-tts",
+              speed: 1,
             });
 
       if (
@@ -592,15 +673,31 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     setSelectedAgent(agent);
     setAgentSchedules([]);
     setLoadingSchedules(true);
+    setSelectedAgentVoiceLoading(true);
     try {
-      const res = await api.listLeadSchedules();
-      const all = (res.schedules || []) as Schedule[];
-      // Filter schedules assigned to this agent
-      setAgentSchedules(all.filter((s) => s.voiceAgentId === agent.id));
+      const [scheduleResult, voiceConfigResult] = await Promise.allSettled([
+        api.listLeadSchedules(),
+        voiceCallsApi.getAgentVoiceConfig(agent.id),
+      ]);
+
+      if (scheduleResult.status === "fulfilled") {
+        const all = (scheduleResult.value.schedules || []) as Schedule[];
+        setAgentSchedules(all.filter((s) => s.voiceAgentId === agent.id));
+      } else {
+        setAgentSchedules([]);
+      }
+
+      if (voiceConfigResult.status === "fulfilled") {
+        setAgentVoiceConfigById((current) => ({
+          ...current,
+          [agent.id]: voiceConfigResult.value,
+        }));
+      }
     } catch {
       setAgentSchedules([]);
     } finally {
       setLoadingSchedules(false);
+      setSelectedAgentVoiceLoading(false);
     }
   };
 
@@ -854,7 +951,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           {agent.name}
                         </p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">
-                          {agent.voice}
+                          {getAgentVoiceDisplay(agent)}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
@@ -1011,18 +1108,25 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     onChange={(e) => setOpenAiVoiceId(e.target.value)}
                     disabled={voiceConfigLoading}
                   >
-                    {[
-                      "alloy",
-                      "ash",
-                      "ballad",
-                      "coral",
-                      "echo",
-                      "sage",
-                      "shimmer",
-                      "verse",
-                    ].map((voice) => (
-                      <option key={voice} value={voice}>
-                        {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                    {(openAiVoices.length
+                      ? openAiVoices
+                      : [
+                          { voice_id: "alloy", name: "Alloy" },
+                          { voice_id: "ash", name: "Ash" },
+                          { voice_id: "ballad", name: "Ballad" },
+                          { voice_id: "coral", name: "Coral" },
+                          { voice_id: "echo", name: "Echo" },
+                          { voice_id: "fable", name: "Fable" },
+                          { voice_id: "marin", name: "Marin" },
+                          { voice_id: "nova", name: "Nova" },
+                          { voice_id: "onyx", name: "Onyx" },
+                          { voice_id: "sage", name: "Sage" },
+                          { voice_id: "shimmer", name: "Shimmer" },
+                          { voice_id: "verse", name: "Verse" },
+                        ]
+                    ).map((voice) => (
+                      <option key={voice.voice_id} value={voice.voice_id}>
+                        {voice.name}
                       </option>
                     ))}
                   </Sel>
@@ -1728,7 +1832,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           open
           onClose={() => setSelectedAgent(null)}
           title={selectedAgent.name}
-          description={`${selectedAgent.direction} agent · ${selectedAgent.voice} voice · ${selectedAgent.twilioPhoneNumber || "No number assigned"}`}
+          description={`${selectedAgent.direction} agent · ${getAgentVoiceDisplay(selectedAgent)} voice · ${selectedAgent.twilioPhoneNumber || "No number assigned"}`}
           size="lg"
           footer={
             <div className="flex gap-3">
@@ -1792,7 +1896,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   Voice
                 </p>
                 <p className="text-sm font-black text-slate-900">
-                  {selectedAgent.voice}
+                  {selectedAgentVoiceLoading
+                    ? "Loading saved voice..."
+                    : getAgentVoiceDisplay(selectedAgent)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
