@@ -180,10 +180,9 @@ export const api = {
   },
 
   async completeOnboarding(profile: BusinessProfile, agent: AgentConfig) {
-    const activeAgent = { ...agent, isActive: true, is_active: true };
     return request<Organization>('/api/onboarding/complete', {
       method: 'POST',
-      body: { profile, agent: activeAgent },
+      body: { profile, agent },
     });
   },
 
@@ -201,10 +200,9 @@ export const api = {
   },
 
   async createVoiceAgent(payload: Partial<AgentConfig> = {}) {
-    const activePayload = { ...payload, isActive: true, is_active: true };
     return request<AgentConfig>('/api/voice-agents', {
       method: 'POST',
-      body: activePayload,
+      body: payload,
     });
   },
 
@@ -532,14 +530,27 @@ export const twilioApi = {
     return (await res.json()) as { numbers: import('../types').AvailablePhoneNumber[] };
   },
 
-  /** List numbers already owned on the master account */
+  /** List tenant phone numbers only. Never call master-account owned-number routes. */
   async listOwned() {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers/owned`, {
+    const res = await fetch(`${base}/api/twilio/numbers`, {
       headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
     });
     if (!res.ok) throw new Error((await res.json())?.error?.message || 'Failed');
-    return (await res.json()) as { numbers: import('../types').OwnedPhoneNumber[] };
+    const data = await res.json();
+    const numbers = (data.numbers || []).map((n: any) => ({
+      ...n,
+      // Use safe DB id for UI actions. Do not use or display Twilio PN/AC SIDs.
+      sid: n.id || n.numberId,
+      phoneNumber: n.phoneNumber || n.phone_number,
+      friendlyName: n.friendlyName || n.phoneNumber || n.phone_number,
+      voiceUrl: n.voiceUrl || '',
+      dateCreated: n.createdAt || n.created_at || '',
+      capabilities: n.capabilities || { voice: true, sms: false },
+      agentId: n.agentId || n.assignedVoiceAgentId || n.assigned_voice_agent_id || null,
+      agentName: n.agentName || n.assignedAgent?.name || null,
+    }));
+    return { ...data, numbers } as { numbers: import('../types').OwnedPhoneNumber[] };
   },
 
   /** Purchase a new number and assign to a voice agent */
@@ -557,25 +568,25 @@ export const twilioApi = {
     return res.json() as Promise<{ success: boolean; phoneNumber: string; phoneSid: string; agentId: string }>;
   },
 
-  /** Assign an already-owned number to a voice agent */
-  async assignNumber(phoneSid: string, phoneNumber: string, voiceAgentId?: string) {
+  /** Assign a tenant DB number to a voice agent. numberId must be twilio_phone_numbers.id. */
+  async assignNumber(numberId: string, _phoneNumber: string, voiceAgentId?: string) {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers/assign`, {
+    const res = await fetch(`${base}/api/twilio/numbers/${encodeURIComponent(numberId)}/assign-agent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
       },
-      body: JSON.stringify({ phoneSid, phoneNumber, voiceAgentId }),
+      body: JSON.stringify({ agentId: voiceAgentId, voiceAgentId }),
     });
     if (!res.ok) throw new Error((await res.json())?.error?.message || 'Assign failed');
     return res.json();
   },
 
-  /** Release a number */
-  async releaseNumber(sid: string) {
+  /** Release/remove a tenant DB number by safe number id. */
+  async releaseNumber(numberId: string) {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers/${sid}`, {
+    const res = await fetch(`${base}/api/twilio/numbers/${encodeURIComponent(numberId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
     });
