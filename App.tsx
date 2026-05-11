@@ -27,6 +27,8 @@ import { subscribeToOrgRealtime } from "./services/realtime";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const CallLogs = lazy(() => import("./pages/CallLogs"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
@@ -102,16 +104,25 @@ const App: React.FC = () => {
   }, []);
 
   // FIX: debounce realtime so rapid DB writes don't cascade into reload loop
-  const realtimeDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeDebounceRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   useEffect(() => {
     if (!org?.id) return;
     const unsubscribe = subscribeToOrgRealtime(org.id, {
       onAny: () => {
-        if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
-        realtimeDebounceRef.current = setTimeout(() => { void refreshWorkspace(); }, 1200);
+        if (realtimeDebounceRef.current)
+          clearTimeout(realtimeDebounceRef.current);
+        realtimeDebounceRef.current = setTimeout(() => {
+          void refreshWorkspace();
+        }, 1200);
       },
     });
-    return () => { unsubscribe(); if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current); };
+    return () => {
+      unsubscribe();
+      if (realtimeDebounceRef.current)
+        clearTimeout(realtimeDebounceRef.current);
+    };
   }, [org?.id]);
 
   const handleLogin = async (email: string, password: string) => {
@@ -583,12 +594,40 @@ const App: React.FC = () => {
           <Route
             path="/calls"
             element={
-              <ProtectedRoute>
-                <CallLogs
-                  calls={calls}
-                  onDownloadReport={handleDownloadCallReport}
-                />
-              </ProtectedRoute>
+              org ? (
+                <ProtectedRoute>
+                  <CallLogs
+                    org={org}
+                    onDownloadReport={handleDownloadCallReport}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/outreach"
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <OutreachScheduler org={org} />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
             }
           />
           <Route
@@ -648,7 +687,10 @@ const App: React.FC = () => {
                   <PhoneNumbers
                     org={org}
                     onAgentUpdated={async (updates) => {
-                      await api.updateVoiceAgent(org.activeVoiceAgentId, updates);
+                      await api.updateVoiceAgent(
+                        org.activeVoiceAgentId,
+                        updates,
+                      );
                       await refreshWorkspace();
                     }}
                   />

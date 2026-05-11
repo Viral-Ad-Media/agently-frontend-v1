@@ -40,6 +40,18 @@ const NAV_ITEMS: Array<{
     description: "Transcripts, outcomes, and reports",
   },
   {
+    to: "/outreach",
+    icon: "fa-solid fa-calendar-arrow-up",
+    label: "Outreach",
+    description: "Schedule outbound call campaigns",
+  },
+  {
+    to: "/notifications",
+    icon: "fa-solid fa-bell",
+    label: "Notifications",
+    description: "Activity alerts and event feed",
+  },
+  {
     to: "/leads",
     icon: "fa-solid fa-users",
     label: "Lead CRM",
@@ -120,6 +132,18 @@ const getPageMeta = (pathname: string, org: Organization) => {
       title: "Call Intelligence",
       description:
         "Review transcripts, outcomes, and downloadable reports across every conversation.",
+    },
+    "/outreach": {
+      eyebrow: "Outbound Campaigns",
+      title: "Outreach Scheduler",
+      description:
+        "Create and manage scheduled outbound call campaigns with direct recipients or leads.",
+    },
+    "/notifications": {
+      eyebrow: "Activity Feed",
+      title: "Notifications",
+      description:
+        "Tenant-scoped activity alerts from calls, schedules, leads, and agents.",
     },
     "/leads": {
       eyebrow: "Pipeline Health",

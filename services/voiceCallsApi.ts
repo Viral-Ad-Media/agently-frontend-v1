@@ -633,6 +633,11 @@ export const voiceCallsApi = {
     updateOutreachSchedule: (scheduleId: string, payload: unknown) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}`, { method: 'PATCH', body: payload }),
     cancelOutreachSchedule: (scheduleId: string, payload: unknown = {}) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}/cancel`, { method: 'POST', body: payload }),
     deleteOutreachSchedule: (scheduleId: string) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}`, { method: 'DELETE' }),
+    runNow: (scheduleId: string) => {
+      // Backend may mount this as /api/outreach/schedules/:id/run-now or /api/call-schedules/:id/run-now
+      return request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}/run-now`, { method: 'POST', body: {} })
+        .catch(() => request(`/api/call-schedules/${encodeURIComponent(scheduleId)}/run-now`, { method: 'POST', body: {} }));
+    },
   },
 
   // Prepared for Phase 4. Do not wire into UI in Phase 1.
