@@ -49,13 +49,19 @@ export type OpenAiVoice = {
 
 export type AgentVoiceConfig = {
   voice_provider?: VoiceProvider;
-  voice_id?: string;
-  openai_voice_id?: string;
-  elevenlabs_voice_id?: string;
-  elevenlabs_voice_name?: string;
+  voice?: string | null;
+  voice_id?: string | null;
+  voiceId?: string | null;
+  openai_voice_id?: string | null;
+  openaiVoiceId?: string | null;
+  elevenlabs_voice_id?: string | null;
+  elevenLabsVoiceId?: string | null;
+  elevenlabs_voice_name?: string | null;
+  elevenLabsVoiceName?: string | null;
   voice_settings?: VoiceSettings & {
     model?: string;
     response_format?: string;
+    responseFormat?: string;
     instructions?: string;
   };
 };
@@ -197,6 +203,39 @@ const normalizeVoiceSettings = (payload: unknown): VoiceSettings => {
   };
 };
 
+
+const normalizeAgentVoiceConfig = (payload: unknown): AgentVoiceConfig => {
+  const candidate = unwrapPayload<Record<string, unknown>>(payload, ['voiceConfig', 'voice_config', 'config', 'data', 'agent']);
+  const raw = candidate && typeof candidate === 'object' && !Array.isArray(candidate) ? candidate : {};
+  const provider = String(raw.voice_provider || raw.voiceProvider || raw.provider || '').toLowerCase();
+  const voiceProvider: VoiceProvider = provider === 'elevenlabs' ? 'elevenlabs' : 'openai';
+  const voiceId = String(raw.voice_id || raw.voiceId || '').trim() || null;
+  const openAiVoiceId = String(raw.openai_voice_id || raw.openaiVoiceId || (voiceProvider === 'openai' ? voiceId || raw.voice || '' : '')).trim() || null;
+  const elevenLabsVoiceId = String(raw.elevenlabs_voice_id || raw.elevenLabsVoiceId || (voiceProvider === 'elevenlabs' ? voiceId || '' : '')).trim() || null;
+  const elevenLabsVoiceName = String(raw.elevenlabs_voice_name || raw.elevenLabsVoiceName || '').trim() || null;
+  const settingsRaw = raw.voice_settings || raw.voiceSettings;
+  let voiceSettings: AgentVoiceConfig['voice_settings'] = {};
+  if (typeof settingsRaw === 'string') {
+    try {
+      voiceSettings = JSON.parse(settingsRaw);
+    } catch {
+      voiceSettings = {};
+    }
+  } else if (settingsRaw && typeof settingsRaw === 'object' && !Array.isArray(settingsRaw)) {
+    voiceSettings = settingsRaw as AgentVoiceConfig['voice_settings'];
+  }
+
+  return {
+    voice_provider: voiceProvider,
+    voice: typeof raw.voice === 'string' ? raw.voice : null,
+    voice_id: voiceId,
+    openai_voice_id: openAiVoiceId,
+    elevenlabs_voice_id: elevenLabsVoiceId,
+    elevenlabs_voice_name: elevenLabsVoiceName,
+    voice_settings: voiceSettings,
+  };
+};
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
@@ -327,14 +366,16 @@ export const voiceCallsApi = {
   },
 
   async getAgentVoiceConfig(agentId: string) {
-    return request<AgentVoiceConfig>(`/api/agents/${encodeURIComponent(agentId)}/voice-config`);
+    const payload = await request<unknown>(`/api/agents/${encodeURIComponent(agentId)}/voice-config`);
+    return normalizeAgentVoiceConfig(payload);
   },
 
   async updateAgentVoiceConfig(agentId: string, payload: AgentVoiceConfig) {
-    return request<AgentVoiceConfig>(`/api/agents/${encodeURIComponent(agentId)}/voice-config`, {
+    const response = await request<unknown>(`/api/agents/${encodeURIComponent(agentId)}/voice-config`, {
       method: 'PATCH',
       body: payload,
     });
+    return normalizeAgentVoiceConfig(response);
   },
 
   async testElevenLabsVoice(payload: TestVoicePayload) {

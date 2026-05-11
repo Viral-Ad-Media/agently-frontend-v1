@@ -441,6 +441,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       voiceProvider?: VoiceProvider;
       voice_id?: string | null;
       voiceId?: string | null;
+      voice?: string | null;
       openai_voice_id?: string | null;
       openaiVoiceId?: string | null;
       elevenlabs_voice_id?: string | null;
@@ -481,10 +482,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     const openAiVoiceId =
       raw.openai_voice_id ||
       raw.openaiVoiceId ||
-      (provider === "openai" ? raw.voice_id || raw.voiceId || "" : "");
+      (provider === "openai"
+        ? raw.voice_id || raw.voiceId || raw.voice || ""
+        : "");
 
     return {
       voice_provider: provider || (elevenLabsVoiceId ? "elevenlabs" : "openai"),
+      voice: raw.voice || undefined,
       voice_id:
         raw.voice_id ||
         raw.voiceId ||
@@ -539,11 +543,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
   const buildVoiceConfigPayload = () => {
     if (voiceProvider === "elevenlabs") {
+      const selectedName =
+        selectedElevenLabsVoiceName ||
+        selectedElevenLabsVoice?.name ||
+        selectedElevenLabsVoiceId;
       return {
         voice_provider: "elevenlabs" as const,
+        voice: selectedName,
+        voice_id: selectedElevenLabsVoiceId,
         elevenlabs_voice_id: selectedElevenLabsVoiceId,
-        elevenlabs_voice_name:
-          selectedElevenLabsVoiceName || selectedElevenLabsVoice?.name || "",
+        elevenlabs_voice_name: selectedName,
         voice_settings: { ...DEFAULT_ELEVENLABS_SETTINGS, ...voiceSettings },
       };
     }
@@ -551,6 +560,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     const selectedVoiceId = openAiVoiceId || DEFAULT_OPENAI_VOICE;
     return {
       voice_provider: "openai" as const,
+      voice: selectedVoiceId,
       voice_id: selectedVoiceId,
       openai_voice_id: selectedVoiceId,
       voice_settings: {
@@ -574,15 +584,46 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         org.agent.id,
         payload,
       );
-      const configForDisplay = { ...payload, ...(savedConfig || {}) };
+      const confirmedConfig = await voiceCallsApi
+        .getAgentVoiceConfig(org.agent.id)
+        .catch(() => savedConfig);
       setAgentVoiceConfigById((current) => ({
         ...current,
-        [org.agent.id]: configForDisplay,
+        [org.agent.id]: confirmedConfig,
       }));
-      if (selectedAgent?.id === org.agent.id) {
-        setSelectedAgent((current) => (current ? { ...current } : current));
+      if (confirmedConfig.voice_provider === "elevenlabs") {
+        setSelectedElevenLabsVoiceId(
+          confirmedConfig.elevenlabs_voice_id ||
+            confirmedConfig.voice_id ||
+            selectedElevenLabsVoiceId,
+        );
+        setSelectedElevenLabsVoiceName(
+          confirmedConfig.elevenlabs_voice_name || selectedElevenLabsVoiceName,
+        );
+      } else {
+        setOpenAiVoiceId(
+          confirmedConfig.openai_voice_id ||
+            confirmedConfig.voice_id ||
+            openAiVoiceId ||
+            DEFAULT_OPENAI_VOICE,
+        );
       }
-      showToast("Voice settings saved and assigned to this agent.");
+      if (selectedAgent?.id === org.agent.id) {
+        setSelectedAgent((current) =>
+          current
+            ? {
+                ...current,
+                voice: (confirmedConfig.voice ||
+                  confirmedConfig.elevenlabs_voice_name ||
+                  confirmedConfig.voice_id ||
+                  current.voice) as AgentConfig["voice"],
+              }
+            : current,
+        );
+      }
+      showToast(
+        "Voice settings saved, confirmed from backend, and assigned to this agent.",
+      );
     } catch (e) {
       showToast(
         e instanceof Error ? e.message : "Could not save voice settings.",
