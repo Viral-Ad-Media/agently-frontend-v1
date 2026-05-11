@@ -299,6 +299,9 @@ export type TwilioNumberRecord = {
   phoneSid?: string;
   account_sid?: string;
   accountSid?: string;
+  organization_id?: string;
+  organizationId?: string;
+  orgId?: string;
   friendly_name?: string;
   friendlyName?: string;
   iso_country?: string;
@@ -321,6 +324,8 @@ export type TwilioNumberRecord = {
   assigned_voice_agent_id?: string | null;
   assignedVoiceAgentId?: string | null;
   voiceAgentId?: string | null;
+  assignedAgent?: { id?: string; name?: string } | null;
+  agentId?: string | null;
   assigned_agent_status?: string | null;
   assignedAgentStatus?: string | null;
   configuration_status?: string | null;
@@ -384,25 +389,36 @@ const normalizeTwilioNumber = (value: unknown): TwilioNumberRecord | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   const phoneNumber = String(raw.phone_number || raw.phoneNumber || raw.number || '').trim();
-  const id = String(raw.id || raw.numberId || raw.phone_number_id || phoneNumber || '').trim();
+  const id = String(raw.id || raw.numberId || raw.phone_number_id || raw.phone_sid || raw.phoneSid || raw.sid || phoneNumber || '').trim();
   if (!id && !phoneNumber) return null;
-  const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || '').trim() || null;
+  const phoneSid = String(raw.phone_sid || raw.phoneSid || raw.sid || '').trim() || undefined;
+  const organizationId = String(raw.organization_id || raw.organizationId || raw.orgId || '').trim() || undefined;
+  const assigned = raw.assignedAgent && typeof raw.assignedAgent === 'object' ? raw.assignedAgent as { id?: string; name?: string } : null;
+  const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || assigned?.id || '').trim() || null;
   return {
     ...(raw as Partial<TwilioNumberRecord>),
     id: typeof raw.id === 'string' ? raw.id : id,
     numberId: id,
+    sid: typeof raw.sid === 'string' ? raw.sid : phoneSid,
     phone_number: phoneNumber,
     phoneNumber,
+    organization_id: organizationId,
+    organizationId,
+    orgId: organizationId,
+    phone_sid: phoneSid,
+    phoneSid,
     friendly_name: String(raw.friendly_name || raw.friendlyName || phoneNumber || '').trim(),
     friendlyName: String(raw.friendlyName || raw.friendly_name || phoneNumber || '').trim(),
     iso_country: String(raw.iso_country || raw.isoCountry || 'US').trim(),
     isoCountry: String(raw.isoCountry || raw.iso_country || 'US').trim(),
-    number_type: String(raw.number_type || raw.numberType || raw.type || '').trim() || undefined,
-    numberType: String(raw.numberType || raw.number_type || raw.type || '').trim() || undefined,
+    number_type: String(raw.number_type || raw.numberType || raw.type || 'unknown').trim(),
+    numberType: String(raw.numberType || raw.number_type || raw.type || 'unknown').trim(),
     capabilities: normalizeCapabilities(raw.capabilities),
     assigned_voice_agent_id: assignedAgentId,
     assignedVoiceAgentId: assignedAgentId,
     voiceAgentId: assignedAgentId,
+    agentId: assignedAgentId,
+    assignedAgent: assigned,
     configuration_status: String(raw.configuration_status || raw.configurationStatus || '').trim() || null,
     configurationStatus: String(raw.configurationStatus || raw.configuration_status || '').trim() || null,
     overall_status: String(raw.overall_status || raw.overallStatus || raw.status || '').trim() || null,
@@ -574,15 +590,16 @@ export const voiceCallsApi = {
   // Prepared for Phase 2. Do not wire into UI in Phase 1.
   phoneNumbers: {
     async syncOwnedTwilioNumbers() {
-      throw new Error('Owned-number sync is disabled for tenant safety. Use GET /api/twilio/numbers.');
+      return request('/api/twilio/numbers/sync-owned', { method: 'POST', body: {} });
     },
-    async getTwilioNumbers() {
-      const payload = await request<unknown>('/api/twilio/numbers');
+    async getTwilioNumbers(params?: { organizationId?: string }) {
+      const qs = new URLSearchParams();
+      if (params?.organizationId) qs.set('organizationId', params.organizationId);
+      const payload = await request<unknown>(`/api/twilio/numbers${qs.toString() ? `?${qs.toString()}` : ''}`);
       return normalizeTwilioNumbersResponse(payload);
     },
     async getOwnedTwilioNumbers() {
-      // Tenant-safe compatibility: do not call master owned-number sync/list APIs.
-      const payload = await request<unknown>('/api/twilio/numbers');
+      const payload = await request<unknown>('/api/twilio/owned-numbers');
       return normalizeTwilioNumbersResponse(payload);
     },
     async searchAvailableTwilioNumbers(params: Record<string, string | number | undefined>) {
