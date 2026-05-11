@@ -180,9 +180,10 @@ export const api = {
   },
 
   async completeOnboarding(profile: BusinessProfile, agent: AgentConfig) {
+    const activeAgent = { ...agent, isActive: true, is_active: true };
     return request<Organization>('/api/onboarding/complete', {
       method: 'POST',
-      body: { profile, agent },
+      body: { profile, agent: activeAgent },
     });
   },
 
@@ -200,9 +201,10 @@ export const api = {
   },
 
   async createVoiceAgent(payload: Partial<AgentConfig> = {}) {
+    const activePayload = { ...payload, isActive: true, is_active: true };
     return request<AgentConfig>('/api/voice-agents', {
       method: 'POST',
-      body: payload,
+      body: activePayload,
     });
   },
 

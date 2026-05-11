@@ -930,7 +930,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {org.voiceAgents.map((agent) => {
-                const isActive = agent.id === org.activeVoiceAgentId;
+                const isSelected = agent.id === org.activeVoiceAgentId;
                 const isOutbound = agent.direction === "outbound";
                 // We don't know schedule count without fetching, so show direction badge
                 return (
@@ -939,7 +939,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     onClick={() => void openAgentModal(agent)}
                     className={`rounded-2xl p-4 border-2 transition-all cursor-pointer group
                       ${
-                        isActive
+                        isSelected
                           ? "border-amber-400 bg-amber-50/40 hover:border-amber-500"
                           : "border-slate-100 bg-slate-50 hover:border-amber-200 hover:bg-amber-50/20"
                       }`}
@@ -955,9 +955,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
-                        {isActive && (
+                        {isSelected && (
                           <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest">
-                            Live
+                            Selected
                           </span>
                         )}
                         {/* Direction badge — outbound shows as "Outbound / Assigned" indicator */}
@@ -998,19 +998,19 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         className="flex gap-1.5"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {!isActive && (
+                        {!isSelected && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               void run(
                                 `act-${agent.id}`,
                                 () => onActivateVoiceAgent(agent.id),
-                                "Agent activated",
+                                "Agent selected",
                               );
                             }}
                             className="rounded-lg bg-slate-900 text-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
                           >
-                            Activate
+                            Select
                           </button>
                         )}
                         <button
@@ -1428,12 +1428,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
               <div className="relative z-10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-3">
-                  Live Status
+                  Agent Status
                 </p>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                   <span className="text-xs font-bold text-emerald-300">
-                    Online
+                    Active
                   </span>
                 </div>
                 <p className="text-sm font-bold text-white/70 mb-5">
@@ -1851,12 +1851,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         await onActivateVoiceAgent(selectedAgent.id);
                         setSelectedAgent(null);
                       },
-                      "Agent activated",
+                      "Agent selected",
                     )
                   }
                   className="flex-1 rounded-xl bg-amber-500 py-3 text-sm font-black text-white hover:bg-amber-600"
                 >
-                  Activate This Agent
+                  Switch to This Agent
                 </button>
               )}
             </div>
@@ -1878,7 +1878,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   </span>
                   {selectedAgent.id === org.activeVoiceAgentId && (
                     <span className="rounded-full bg-amber-100 text-amber-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">
-                      Live
+                      Selected
                     </span>
                   )}
                 </div>
