@@ -11,8 +11,6 @@ import {
   ChatMessage,
   ChatbotConfig,
   Lead,
-  Organization,
-  User,
   WorkspaceBootstrap,
 } from "./types";
 import { api } from "./services/api";
@@ -23,13 +21,10 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
-import CallSimulator from "./components/CallSimulator";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const CallLogs = lazy(() => import("./pages/CallLogs"));
-const Notifications = lazy(() => import("./pages/Notifications"));
-const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
@@ -46,7 +41,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Settings = lazy(() => import("./pages/Settings"));
-// const CallSimulator = lazy(() => import("./components/CallSimulator"));
+const CallSimulator = lazy(() => import("./components/CallSimulator"));
 
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
@@ -104,7 +99,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // FIX: debounce realtime so rapid DB writes don't cascade into reload loop
   const realtimeDebounceRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -250,20 +244,13 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  // ==================== PATCHED FUNCTION ====================
   const handleImportChatbotFaqs = async (
     chatbotId: string,
     website: string,
-  ) => {
-    // Calls the new /api/chatbots/:id/import-website endpoint
-    // which runs the full scrape → chunk → Supabase save → FAQ generation pipeline
-    const response = await api.importChatbotWebsite(chatbotId, website);
-    // The server returns { faqs, chunksStored, strategy, message }
-    // Refresh workspace so the new FAQs appear in the UI
+  ): Promise<void> => {
+    await api.importChatbotWebsite(chatbotId, website);
     await refreshWorkspace();
-    return response;
   };
-  // ==========================================================
 
   const handleRestartAgent = async () => {
     const response = await api.restartAgent();
@@ -327,7 +314,6 @@ const App: React.FC = () => {
     await refreshWorkspace();
   };
 
-  // FIX: no refreshWorkspace — Leads.tsx handles optimistically; realtime debounce syncs later
   const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
     await api.updateLead(leadId, updates);
   };
@@ -519,7 +505,6 @@ const App: React.FC = () => {
               )
             }
           />
-
           <Route
             path="/features"
             element={
@@ -595,40 +580,12 @@ const App: React.FC = () => {
           <Route
             path="/calls"
             element={
-              org ? (
-                <ProtectedRoute>
-                  <CallLogs
-                    org={org}
-                    onDownloadReport={handleDownloadCallReport}
-                  />
-                </ProtectedRoute>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/notifications"
-            element={
-              org ? (
-                <ProtectedRoute>
-                  <Notifications />
-                </ProtectedRoute>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/outreach"
-            element={
-              org ? (
-                <ProtectedRoute>
-                  <OutreachScheduler org={org} />
-                </ProtectedRoute>
-              ) : (
-                <Navigate to="/login" />
-              )
+              <ProtectedRoute>
+                <CallLogs
+                  calls={calls}
+                  onDownloadReport={handleDownloadCallReport}
+                />
+              </ProtectedRoute>
             }
           />
           <Route
@@ -715,6 +672,7 @@ const App: React.FC = () => {
         <Suspense fallback={null}>
           <CallSimulator
             agent={org.agent}
+            org={org}
             onClose={() => setShowSimulator(false)}
             onCallFinished={handleSimulatorFinished}
           />

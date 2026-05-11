@@ -141,7 +141,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [citySuggestions, setCitySuggestions] = useState<NominatimResult[]>([]);
   const [cityLoading, setCityLoading] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
-  const cityDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-update greeting when agent name or business name changes
   useEffect(() => {
@@ -174,7 +174,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
       setCityOpen(false);
       return;
     }
-    clearTimeout(cityDebounce.current);
+    if (cityDebounce.current) {
+      clearTimeout(cityDebounce.current);
+    }
     cityDebounce.current = setTimeout(async () => {
       setCityLoading(true);
       try {

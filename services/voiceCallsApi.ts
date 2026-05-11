@@ -292,6 +292,7 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
 export type TwilioNumberRecord = {
   id?: string;
   numberId?: string;
+  twilioNumberId?: string;
   sid?: string;
   phone_number?: string;
   phoneNumber?: string;
@@ -604,7 +605,11 @@ export const voiceCallsApi = {
     },
     async searchAvailableTwilioNumbers(params: Record<string, string | number | boolean | undefined>) {
       // Backend primary search is POST /api/twilio/numbers/search
-      const payload = await request<unknown>('/api/twilio/numbers/search', { method: 'POST', body: params });
+      const qs = new URLSearchParams();
+      Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));
+      });
+      const payload = await request<unknown>(`/api/twilio/numbers/search${qs.toString() ? `?${qs.toString()}` : ''}`);
       return normalizeAvailableTwilioNumbersResponse(payload);
     },
     async purchaseTwilioNumber(payload: unknown) {
