@@ -1,11 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Organization,
-  AgentConfig,
-  FAQ,
-  AgentVoice,
-  LeadOutreachSchedule,
-} from "../types";
+import { Organization, AgentConfig, FAQ, LeadOutreachSchedule } from "../types";
 import { api } from "../services/api";
 import {
   voiceCallsApi,
@@ -17,23 +11,7 @@ import {
 } from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
 
-// Twilio ConversationRelay voices with provider labels
-const VOICES: {
-  id: AgentVoice;
-  label: string;
-  provider: string;
-  gender: string;
-}[] = [
-  { id: "Rachel", label: "Rachel", provider: "ElevenLabs", gender: "Female" },
-  { id: "Domi", label: "Domi", provider: "ElevenLabs", gender: "Female" },
-  { id: "Bella", label: "Bella", provider: "ElevenLabs", gender: "Female" },
-  { id: "Josh", label: "Josh", provider: "ElevenLabs", gender: "Male" },
-  { id: "Arnold", label: "Arnold", provider: "ElevenLabs", gender: "Male" },
-  { id: "Wavenet-F", label: "Wavenet F", provider: "Google", gender: "Female" },
-  { id: "Wavenet-D", label: "Wavenet D", provider: "Google", gender: "Male" },
-  { id: "Polly-Joanna", label: "Joanna", provider: "Amazon", gender: "Female" },
-  { id: "Polly-Matthew", label: "Matthew", provider: "Amazon", gender: "Male" },
-];
+// Voice display must come from saved provider config, not legacy seeded voice names.
 const TONES = ["Professional", "Friendly", "Empathetic"] as const;
 const LANGUAGES = [
   "English",
@@ -445,36 +423,117 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     (voice) => voice.voice_id === openAiVoiceId,
   );
 
-  const formatVoiceConfigDisplay = (
-    config?: AgentVoiceConfig | null,
-    fallback?: string,
-  ) => {
-    if (!config) return fallback || "-";
+  const humanizeVoiceId = (id?: string | null) => {
+    if (!id) return "-";
+    return id
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const getRawAgentVoiceConfig = (
+    agent?: AgentConfig | null,
+  ): AgentVoiceConfig | null => {
+    if (!agent) return null;
+    const raw = agent as AgentConfig & {
+      voice_provider?: VoiceProvider;
+      voiceProvider?: VoiceProvider;
+      voice_id?: string | null;
+      voiceId?: string | null;
+      openai_voice_id?: string | null;
+      openaiVoiceId?: string | null;
+      elevenlabs_voice_id?: string | null;
+      elevenlabsVoiceId?: string | null;
+      elevenlabs_voice_name?: string | null;
+      elevenlabsVoiceName?: string | null;
+      voice_settings?: VoiceSettings | string | null;
+      voiceSettings?: VoiceSettings | string | null;
+    };
+
+    const provider = raw.voice_provider || raw.voiceProvider;
+    if (
+      !provider &&
+      !raw.elevenlabs_voice_id &&
+      !raw.elevenlabsVoiceId &&
+      !raw.openai_voice_id &&
+      !raw.openaiVoiceId &&
+      !raw.voice_id &&
+      !raw.voiceId
+    ) {
+      return null;
+    }
+
+    let parsedSettings: VoiceSettings = {};
+    const settings = raw.voice_settings ?? raw.voiceSettings;
+    if (typeof settings === "string") {
+      try {
+        parsedSettings = JSON.parse(settings) as VoiceSettings;
+      } catch {
+        parsedSettings = {};
+      }
+    } else if (settings && typeof settings === "object") {
+      parsedSettings = settings as VoiceSettings;
+    }
+
+    const elevenLabsVoiceId =
+      raw.elevenlabs_voice_id || raw.elevenlabsVoiceId || "";
+    const openAiVoiceId =
+      raw.openai_voice_id ||
+      raw.openaiVoiceId ||
+      (provider === "openai" ? raw.voice_id || raw.voiceId || "" : "");
+
+    return {
+      voice_provider: provider || (elevenLabsVoiceId ? "elevenlabs" : "openai"),
+      voice_id:
+        raw.voice_id ||
+        raw.voiceId ||
+        openAiVoiceId ||
+        elevenLabsVoiceId ||
+        undefined,
+      openai_voice_id: openAiVoiceId || undefined,
+      elevenlabs_voice_id: elevenLabsVoiceId || undefined,
+      elevenlabs_voice_name:
+        raw.elevenlabs_voice_name || raw.elevenlabsVoiceName || undefined,
+      voice_settings: parsedSettings,
+    };
+  };
+
+  const formatVoiceConfigDisplay = (config?: AgentVoiceConfig | null) => {
+    if (!config) return "Voice not configured";
+
     if (config.voice_provider === "elevenlabs") {
+      const id = config.elevenlabs_voice_id || config.voice_id || "";
+      const match = elevenLabsVoices.find(
+        (voice) =>
+          voice.voice_id === id || voice.voiceId === id || voice.id === id,
+      );
       return (
         config.elevenlabs_voice_name ||
-        config.elevenlabs_voice_id ||
-        fallback ||
-        "ElevenLabs"
+        match?.name ||
+        match?.displayName ||
+        id ||
+        "ElevenLabs voice"
       );
     }
+
     if (config.voice_provider === "openai") {
       const id =
-        config.openai_voice_id ||
-        config.voice_id ||
-        fallback ||
-        DEFAULT_OPENAI_VOICE;
-      const match = openAiVoices.find((voice) => voice.voice_id === id);
-      return match?.name || id.charAt(0).toUpperCase() + id.slice(1);
+        config.openai_voice_id || config.voice_id || DEFAULT_OPENAI_VOICE;
+      const match = openAiVoices.find(
+        (voice) =>
+          voice.voice_id === id || voice.voiceId === id || voice.id === id,
+      );
+      return match?.name || match?.displayName || humanizeVoiceId(id);
     }
-    return fallback || "-";
+
+    return "Voice not configured";
   };
 
   const getAgentVoiceDisplay = (agent: AgentConfig | null) => {
-    if (!agent) return "-";
+    if (!agent) return "Voice not configured";
     return formatVoiceConfigDisplay(
-      agentVoiceConfigById[agent.id],
-      agent.voice,
+      agentVoiceConfigById[agent.id] || getRawAgentVoiceConfig(agent),
     );
   };
 
