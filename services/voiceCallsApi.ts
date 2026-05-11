@@ -288,6 +288,177 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
   return await response.json() as T;
 };
 
+
+export type TwilioNumberRecord = {
+  id?: string;
+  numberId?: string;
+  sid?: string;
+  phone_number?: string;
+  phoneNumber?: string;
+  phone_sid?: string;
+  phoneSid?: string;
+  account_sid?: string;
+  accountSid?: string;
+  friendly_name?: string;
+  friendlyName?: string;
+  iso_country?: string;
+  isoCountry?: string;
+  number_type?: string;
+  numberType?: string;
+  source?: string;
+  purchase_origin?: string;
+  purchaseOrigin?: string;
+  capabilities?: {
+    voice?: boolean;
+    sms?: boolean;
+    mms?: boolean;
+    [key: string]: unknown;
+  };
+  address_requirements?: string;
+  addressRequirements?: string;
+  regulatory_status?: string;
+  regulatoryStatus?: string;
+  assigned_voice_agent_id?: string | null;
+  assignedVoiceAgentId?: string | null;
+  voiceAgentId?: string | null;
+  assigned_agent_status?: string | null;
+  assignedAgentStatus?: string | null;
+  configuration_status?: string | null;
+  configurationStatus?: string | null;
+  overall_status?: string | null;
+  overallStatus?: string | null;
+  inbound_voice_status?: string | null;
+  inboundVoiceStatus?: string | null;
+  outbound_voice_status?: string | null;
+  outboundVoiceStatus?: string | null;
+  inbound_sms_status?: string | null;
+  outbound_sms_status?: string | null;
+  last_error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+};
+
+export type AvailableTwilioNumber = {
+  phoneNumber?: string;
+  phone_number?: string;
+  friendlyName?: string;
+  friendly_name?: string;
+  locality?: string;
+  region?: string;
+  isoCountry?: string;
+  iso_country?: string;
+  capabilities?: {
+    voice?: boolean;
+    sms?: boolean;
+    mms?: boolean;
+    [key: string]: unknown;
+  };
+  addressRequired?: string;
+  address_required?: string;
+  [key: string]: unknown;
+};
+
+export type TwilioNumbersResponse = {
+  numbers: TwilioNumberRecord[];
+  raw?: unknown;
+};
+
+export type AvailableTwilioNumbersResponse = {
+  numbers: AvailableTwilioNumber[];
+  raw?: unknown;
+};
+
+const normalizeCapabilities = (raw: unknown): TwilioNumberRecord['capabilities'] => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const record = raw as Record<string, unknown>;
+  return {
+    ...record,
+    voice: typeof record.voice === 'boolean' ? record.voice : Boolean(record.voice),
+    sms: typeof record.sms === 'boolean' ? record.sms : Boolean(record.sms),
+    mms: typeof record.mms === 'boolean' ? record.mms : Boolean(record.mms),
+  };
+};
+
+const normalizeTwilioNumber = (value: unknown): TwilioNumberRecord | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const phoneNumber = String(raw.phone_number || raw.phoneNumber || raw.number || '').trim();
+  const id = String(raw.id || raw.numberId || raw.phone_number_id || raw.phone_sid || raw.phoneSid || raw.sid || phoneNumber || '').trim();
+  if (!id && !phoneNumber) return null;
+  const phoneSid = String(raw.phone_sid || raw.phoneSid || raw.sid || '').trim() || undefined;
+  const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || '').trim() || null;
+  return {
+    ...(raw as Partial<TwilioNumberRecord>),
+    id: typeof raw.id === 'string' ? raw.id : id,
+    numberId: id,
+    sid: typeof raw.sid === 'string' ? raw.sid : phoneSid,
+    phone_number: phoneNumber,
+    phoneNumber,
+    phone_sid: phoneSid,
+    phoneSid,
+    friendly_name: String(raw.friendly_name || raw.friendlyName || phoneNumber || '').trim(),
+    friendlyName: String(raw.friendlyName || raw.friendly_name || phoneNumber || '').trim(),
+    iso_country: String(raw.iso_country || raw.isoCountry || 'US').trim(),
+    isoCountry: String(raw.isoCountry || raw.iso_country || 'US').trim(),
+    number_type: String(raw.number_type || raw.numberType || raw.type || 'unknown').trim(),
+    numberType: String(raw.numberType || raw.number_type || raw.type || 'unknown').trim(),
+    capabilities: normalizeCapabilities(raw.capabilities),
+    assigned_voice_agent_id: assignedAgentId,
+    assignedVoiceAgentId: assignedAgentId,
+    voiceAgentId: assignedAgentId,
+    configuration_status: String(raw.configuration_status || raw.configurationStatus || '').trim() || null,
+    configurationStatus: String(raw.configurationStatus || raw.configuration_status || '').trim() || null,
+    overall_status: String(raw.overall_status || raw.overallStatus || raw.status || '').trim() || null,
+    overallStatus: String(raw.overallStatus || raw.overall_status || raw.status || '').trim() || null,
+    inbound_voice_status: String(raw.inbound_voice_status || raw.inboundVoiceStatus || '').trim() || null,
+    inboundVoiceStatus: String(raw.inboundVoiceStatus || raw.inbound_voice_status || '').trim() || null,
+    outbound_voice_status: String(raw.outbound_voice_status || raw.outboundVoiceStatus || '').trim() || null,
+    outboundVoiceStatus: String(raw.outboundVoiceStatus || raw.outbound_voice_status || '').trim() || null,
+  };
+};
+
+const normalizeAvailableTwilioNumber = (value: unknown): AvailableTwilioNumber | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const phoneNumber = String(raw.phoneNumber || raw.phone_number || raw.number || '').trim();
+  if (!phoneNumber) return null;
+  return {
+    ...(raw as Partial<AvailableTwilioNumber>),
+    phoneNumber,
+    phone_number: phoneNumber,
+    friendlyName: String(raw.friendlyName || raw.friendly_name || phoneNumber).trim(),
+    friendly_name: String(raw.friendly_name || raw.friendlyName || phoneNumber).trim(),
+    isoCountry: String(raw.isoCountry || raw.iso_country || 'US').trim(),
+    iso_country: String(raw.iso_country || raw.isoCountry || 'US').trim(),
+    capabilities: normalizeCapabilities(raw.capabilities),
+  };
+};
+
+const normalizeTwilioNumbersResponse = (payload: unknown): TwilioNumbersResponse => {
+  const numbersPayload = unwrapPayload<unknown>(payload, ['numbers', 'phoneNumbers', 'ownedNumbers', 'data', 'items', 'results']);
+  const nested = numbersPayload && typeof numbersPayload === 'object' && !Array.isArray(numbersPayload)
+    ? unwrapPayload<unknown>(numbersPayload, ['numbers', 'phoneNumbers', 'ownedNumbers', 'items', 'results'])
+    : numbersPayload;
+  const list = Array.isArray(nested) ? nested : [];
+  return {
+    numbers: list.map(normalizeTwilioNumber).filter((number): number is TwilioNumberRecord => Boolean(number)),
+    raw: payload,
+  };
+};
+
+const normalizeAvailableTwilioNumbersResponse = (payload: unknown): AvailableTwilioNumbersResponse => {
+  const numbersPayload = unwrapPayload<unknown>(payload, ['numbers', 'availableNumbers', 'data', 'items', 'results']);
+  const nested = numbersPayload && typeof numbersPayload === 'object' && !Array.isArray(numbersPayload)
+    ? unwrapPayload<unknown>(numbersPayload, ['numbers', 'availableNumbers', 'items', 'results'])
+    : numbersPayload;
+  const list = Array.isArray(nested) ? nested : [];
+  return {
+    numbers: list.map(normalizeAvailableTwilioNumber).filter((number): number is AvailableTwilioNumber => Boolean(number)),
+    raw: payload,
+  };
+};
+
 const normalizeAudioResult = async (response: Response): Promise<TestVoiceResult> => {
   const contentType = response.headers.get('content-type') || '';
   const provider = response.headers.get('x-voice-provider') || undefined;
@@ -406,20 +577,37 @@ export const voiceCallsApi = {
 
   // Prepared for Phase 2. Do not wire into UI in Phase 1.
   phoneNumbers: {
-    syncOwnedTwilioNumbers: () => request('/api/twilio/numbers/sync-owned', { method: 'POST', body: {} }),
-    getTwilioNumbers: () => request('/api/twilio/numbers'),
-    getOwnedTwilioNumbers: () => request('/api/twilio/owned-numbers'),
-    searchAvailableTwilioNumbers: (params: Record<string, string | number | undefined>) => {
+    async syncOwnedTwilioNumbers() {
+      return request('/api/twilio/numbers/sync-owned', { method: 'POST', body: {} });
+    },
+    async getTwilioNumbers() {
+      const payload = await request<unknown>('/api/twilio/numbers');
+      return normalizeTwilioNumbersResponse(payload);
+    },
+    async getOwnedTwilioNumbers() {
+      const payload = await request<unknown>('/api/twilio/owned-numbers');
+      return normalizeTwilioNumbersResponse(payload);
+    },
+    async searchAvailableTwilioNumbers(params: Record<string, string | number | undefined>) {
       const qs = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
         if (value != null && value !== '') qs.set(key, String(value));
       });
-      return request(`/api/twilio/available-numbers?${qs.toString()}`);
+      const payload = await request<unknown>(`/api/twilio/available-numbers${qs.toString() ? `?${qs.toString()}` : ''}`);
+      return normalizeAvailableTwilioNumbersResponse(payload);
     },
-    purchaseTwilioNumber: (payload: unknown) => request('/api/twilio/purchase-number', { method: 'POST', body: payload }),
-    assignTwilioNumberToAgent: (numberId: string, payload: unknown) => request(`/api/twilio/numbers/${encodeURIComponent(numberId)}/assign-agent`, { method: 'POST', body: payload }),
-    updateTwilioNumber: (numberId: string, payload: unknown) => request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'PATCH', body: payload }),
-    deleteTwilioNumber: (numberId: string) => request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'DELETE' }),
+    async purchaseTwilioNumber(payload: unknown) {
+      return request<Record<string, any>>('/api/twilio/purchase-number', { method: 'POST', body: payload });
+    },
+    async assignTwilioNumberToAgent(numberId: string, payload: unknown) {
+      return request<Record<string, any>>(`/api/twilio/numbers/${encodeURIComponent(numberId)}/assign-agent`, { method: 'POST', body: payload });
+    },
+    async updateTwilioNumber(numberId: string, payload: unknown) {
+      return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'PATCH', body: payload });
+    },
+    async deleteTwilioNumber(numberId: string) {
+      return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'DELETE' });
+    },
   },
 
   // Prepared for Phase 3. Do not wire into UI in Phase 1.
