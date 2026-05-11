@@ -46,6 +46,11 @@ const readKnowledgeEnabled = (context: unknown, fallback = true) => {
   return fallback;
 };
 
+const getAgentIdForVoiceEditing = (
+  selectedAgent: AgentConfig | null,
+  fallbackAgent: AgentConfig,
+) => selectedAgent?.id || fallbackAgent.id;
+
 const buildAudioSource = (result: {
   blob?: Blob;
   audioUrl?: string;
@@ -579,17 +584,18 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
     setVoiceConfigSaving(true);
     try {
+      const agentId = getAgentIdForVoiceEditing(selectedAgent, org.agent);
       const payload = buildVoiceConfigPayload();
       const savedConfig = await voiceCallsApi.updateAgentVoiceConfig(
-        org.agent.id,
+        agentId,
         payload,
       );
       const confirmedConfig = await voiceCallsApi
-        .getAgentVoiceConfig(org.agent.id)
+        .getAgentVoiceConfig(agentId)
         .catch(() => savedConfig);
       setAgentVoiceConfigById((current) => ({
         ...current,
-        [org.agent.id]: confirmedConfig,
+        [agentId]: confirmedConfig,
       }));
       if (confirmedConfig.voice_provider === "elevenlabs") {
         setSelectedElevenLabsVoiceId(
@@ -608,7 +614,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             DEFAULT_OPENAI_VOICE,
         );
       }
-      if (selectedAgent?.id === org.agent.id) {
+      if (selectedAgent?.id === agentId) {
         setSelectedAgent((current) =>
           current
             ? {
@@ -622,7 +628,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         );
       }
       showToast(
-        "Voice settings saved, confirmed from backend, and assigned to this agent.",
+        "Voice settings saved, confirmed from backend, and assigned to the selected agent.",
       );
     } catch (e) {
       showToast(
@@ -661,15 +667,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     try {
       const result =
         currentProvider === "elevenlabs"
-          ? await voiceCallsApi.testElevenLabsVoice({
+          ? await voiceCallsApi.previewVoice({
               text: DEFAULT_VOICE_PREVIEW_TEXT,
               returnJson: true,
+              provider: "elevenlabs",
               voice_provider: "elevenlabs",
               voice_id: currentElevenLabsVoiceId,
               voiceId: currentElevenLabsVoiceId,
               elevenlabs_voice_id: currentElevenLabsVoiceId,
               elevenlabs_voice_name: currentElevenLabsVoiceName,
-              modelId: currentElevenLabsVoice?.modelId || undefined,
+              model: currentElevenLabsVoice?.modelId || undefined,
               voice_settings: {
                 ...DEFAULT_ELEVENLABS_SETTINGS,
                 ...voiceSettings,
@@ -741,8 +748,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     setKnowledgeSaving(true);
     setKnowledgeEnabled(next);
     try {
+      const agentId = getAgentIdForVoiceEditing(selectedAgent, org.agent);
       const response = await voiceCallsApi.updateAgentKnowledgeSettings(
-        org.agent.id,
+        agentId,
         {
           use_knowledge_base: next,
         },
@@ -1206,25 +1214,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <Sel
                     value={openAiVoiceId}
                     onChange={(e) => setOpenAiVoiceId(e.target.value)}
-                    disabled={voiceConfigLoading}
+                    disabled={voiceConfigLoading || openAiVoices.length === 0}
                   >
-                    {(openAiVoices.length
-                      ? openAiVoices
-                      : [
-                          { voice_id: "alloy", name: "Alloy" },
-                          { voice_id: "ash", name: "Ash" },
-                          { voice_id: "ballad", name: "Ballad" },
-                          { voice_id: "coral", name: "Coral" },
-                          { voice_id: "echo", name: "Echo" },
-                          { voice_id: "fable", name: "Fable" },
-                          { voice_id: "marin", name: "Marin" },
-                          { voice_id: "nova", name: "Nova" },
-                          { voice_id: "onyx", name: "Onyx" },
-                          { voice_id: "sage", name: "Sage" },
-                          { voice_id: "shimmer", name: "Shimmer" },
-                          { voice_id: "verse", name: "Verse" },
-                        ]
-                    ).map((voice) => (
+                    {openAiVoices.length === 0 && (
+                      <option value="">No OpenAI voices loaded</option>
+                    )}
+                    {openAiVoices.map((voice) => (
                       <option key={voice.voice_id} value={voice.voice_id}>
                         {voice.name}
                       </option>
