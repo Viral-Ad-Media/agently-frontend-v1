@@ -23,6 +23,7 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
+import CallSimulator from "./components/CallSimulator";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -45,7 +46,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Settings = lazy(() => import("./pages/Settings"));
-const CallSimulator = lazy(() => import("./components/CallSimulator"));
+// const CallSimulator = lazy(() => import("./components/CallSimulator"));
 
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
@@ -686,13 +687,7 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <PhoneNumbers
                     org={org}
-                    onAgentUpdated={async (updates) => {
-                      await api.updateVoiceAgent(
-                        org.activeVoiceAgentId,
-                        updates,
-                      );
-                      await refreshWorkspace();
-                    }}
+                    onAgentUpdated={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>
               ) : (

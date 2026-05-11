@@ -602,16 +602,13 @@ export const voiceCallsApi = {
       const payload = await request<unknown>('/api/twilio/owned-numbers');
       return normalizeTwilioNumbersResponse(payload);
     },
-    async searchAvailableTwilioNumbers(params: Record<string, string | number | undefined>) {
-      const qs = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value != null && value !== '') qs.set(key, String(value));
-      });
-      const payload = await request<unknown>(`/api/twilio/available-numbers${qs.toString() ? `?${qs.toString()}` : ''}`);
+    async searchAvailableTwilioNumbers(params: Record<string, string | number | boolean | undefined>) {
+      // Backend primary search is POST /api/twilio/numbers/search
+      const payload = await request<unknown>('/api/twilio/numbers/search', { method: 'POST', body: params });
       return normalizeAvailableTwilioNumbersResponse(payload);
     },
     async purchaseTwilioNumber(payload: unknown) {
-      return request<Record<string, any>>('/api/twilio/purchase-number', { method: 'POST', body: payload });
+      return request<Record<string, any>>('/api/twilio/numbers/purchase', { method: 'POST', body: payload });
     },
     async assignTwilioNumberToAgent(numberId: string, payload: unknown) {
       return request<Record<string, any>>(`/api/twilio/numbers/${encodeURIComponent(numberId)}/assign-agent`, { method: 'POST', body: payload });
@@ -619,8 +616,9 @@ export const voiceCallsApi = {
     async updateTwilioNumber(numberId: string, payload: unknown) {
       return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'PATCH', body: payload });
     },
-    async deleteTwilioNumber(numberId: string) {
-      return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'DELETE' });
+    // Backend DELETE /numbers/:sid uses phone_sid — caller must pass the SID
+    async deleteTwilioNumber(sid: string) {
+      return request(`/api/twilio/numbers/${encodeURIComponent(sid)}`, { method: 'DELETE' });
     },
   },
 
