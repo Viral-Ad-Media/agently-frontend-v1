@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
+import { voiceCallsApi } from "../services/voiceCallsApi";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -44,6 +45,12 @@ const NAV_ITEMS: Array<{
     icon: "fa-solid fa-calendar-check",
     label: "Outreach",
     description: "Schedule outbound calls",
+  },
+  {
+    to: "/notifications",
+    icon: "fa-solid fa-bell",
+    label: "Notifications",
+    description: "Alerts, follow-ups, and system activity",
   },
   {
     to: "/leads",
@@ -256,6 +263,302 @@ const SidebarLink: React.FC<{
   );
 };
 
+type TenantNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body?: string;
+  entity_type?: string;
+  entity_id?: string;
+  voice_agent_id?: string;
+  call_record_id?: string;
+  is_read?: boolean;
+  created_at?: string;
+  metadata?: Record<string, unknown>;
+};
+
+const getNotificationArray = (payload: unknown): TenantNotification[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  const candidate =
+    record.notifications || record.data || record.items || record.results;
+  if (!Array.isArray(candidate)) return [];
+  return candidate
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === "object" && !Array.isArray(item),
+    )
+    .map((item) => ({
+      id: String(item.id || ""),
+      type: String(item.type || "notification"),
+      title: String(item.title || "Notification"),
+      body: typeof item.body === "string" ? item.body : "",
+      entity_type:
+        typeof item.entity_type === "string"
+          ? item.entity_type
+          : typeof item.entityType === "string"
+            ? item.entityType
+            : "",
+      entity_id:
+        typeof item.entity_id === "string"
+          ? item.entity_id
+          : typeof item.entityId === "string"
+            ? item.entityId
+            : "",
+      voice_agent_id:
+        typeof item.voice_agent_id === "string"
+          ? item.voice_agent_id
+          : typeof item.voiceAgentId === "string"
+            ? item.voiceAgentId
+            : "",
+      call_record_id:
+        typeof item.call_record_id === "string"
+          ? item.call_record_id
+          : typeof item.callRecordId === "string"
+            ? item.callRecordId
+            : "",
+      is_read: Boolean(item.is_read ?? item.isRead),
+      created_at:
+        typeof item.created_at === "string"
+          ? item.created_at
+          : typeof item.createdAt === "string"
+            ? item.createdAt
+            : "",
+      metadata:
+        item.metadata &&
+        typeof item.metadata === "object" &&
+        !Array.isArray(item.metadata)
+          ? (item.metadata as Record<string, unknown>)
+          : {},
+    }))
+    .filter((item) => item.id);
+};
+
+const getUnreadCountValue = (payload: unknown): number => {
+  if (!payload || typeof payload !== "object") return 0;
+  const record = payload as Record<string, unknown>;
+  const value =
+    record.unreadCount ?? record.unread_count ?? record.count ?? record.total;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+};
+
+const formatNotificationTime = (value?: string) => {
+  if (!value) return "Just now";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Just now";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const getNotificationTarget = (notification: TenantNotification): string => {
+  const entityType = String(notification.entity_type || "").toLowerCase();
+  const type = String(notification.type || "").toLowerCase();
+  if (
+    notification.call_record_id ||
+    entityType.includes("call") ||
+    type.includes("call") ||
+    type.includes("recording") ||
+    type.includes("transcript")
+  ) {
+    return "/calls";
+  }
+  if (entityType.includes("lead") || type.includes("lead")) return "/leads";
+  if (entityType.includes("schedule") || type.includes("schedule"))
+    return "/outreach";
+  return "/notifications";
+};
+
+const NotificationBell: React.FC = () => {
+  const navigate = useNavigate();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<TenantNotification[]>([]);
+
+  const refreshUnread = async () => {
+    try {
+      const payload =
+        await voiceCallsApi.notifications.getUnreadNotificationCount();
+      setUnreadCount(getUnreadCountValue(payload));
+    } catch {
+      setUnreadCount(0);
+    }
+  };
+
+  const loadNotifications = async () => {
+    setLoading(true);
+    try {
+      const payload = await voiceCallsApi.notifications.getNotifications({
+        limit: 8,
+      });
+      const next = getNotificationArray(payload).slice(0, 8);
+      setNotifications(next);
+      setUnreadCount(
+        next.filter((item) => !item.is_read).length || unreadCount,
+      );
+    } catch {
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshUnread();
+    const interval = window.setInterval(() => void refreshUnread(), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (open) void loadNotifications();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        panelRef.current &&
+        !panelRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  const handleOpenNotification = async (notification: TenantNotification) => {
+    if (!notification.is_read) {
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id ? { ...item, is_read: true } : item,
+        ),
+      );
+      setUnreadCount((current) => Math.max(0, current - 1));
+      void voiceCallsApi.notifications
+        .markNotificationRead(notification.id)
+        .catch(() => undefined);
+    }
+    setOpen(false);
+    navigate(getNotificationTarget(notification));
+  };
+
+  const markAllRead = async () => {
+    setNotifications((current) =>
+      current.map((item) => ({ ...item, is_read: true })),
+    );
+    setUnreadCount(0);
+    await voiceCallsApi.notifications
+      .markAllNotificationsRead()
+      .catch(() => undefined);
+  };
+
+  return (
+    <div className="relative" ref={panelRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-amber-200 hover:text-indigo-600"
+        aria-label="Open notifications"
+      >
+        <i className="fa-solid fa-bell text-sm" />
+        {unreadCount > 0 ? (
+          <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        ) : null}
+      </button>
+
+      {open ? (
+        <div className="absolute right-0 top-12 z-[120] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-sm font-black text-slate-900">Notifications</p>
+              <p className="text-[11px] font-semibold text-slate-400">
+                Latest workspace alerts
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void markAllRead()}
+              disabled={!unreadCount}
+              className="rounded-full border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+            >
+              Read all
+            </button>
+          </div>
+
+          <div className="max-h-[22rem] overflow-y-auto p-2">
+            {loading ? (
+              <div className="p-6 text-center text-xs font-bold text-slate-400">
+                Loading alerts...
+              </div>
+            ) : notifications.length ? (
+              notifications.map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => void handleOpenNotification(notification)}
+                  className={`w-full rounded-2xl px-3 py-3 text-left transition hover:bg-slate-50 ${notification.is_read ? "opacity-75" : "bg-amber-50/60"}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-1 h-2.5 w-2.5 rounded-full ${notification.is_read ? "bg-slate-200" : "bg-amber-400"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-slate-900">
+                        {notification.title}
+                      </p>
+                      {notification.body ? (
+                        <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                          {notification.body}
+                        </p>
+                      ) : null}
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {formatNotificationTime(notification.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-6 text-center">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                  <i className="fa-regular fa-bell" />
+                </div>
+                <p className="text-sm font-black text-slate-800">
+                  No notifications yet
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  New call, lead, recording, and schedule alerts will appear
+                  here.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate("/notifications");
+            }}
+            className="w-full border-t border-slate-100 px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-indigo-600 transition hover:bg-slate-50"
+          >
+            View all notifications
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 interface MainLayoutProps {
   children: React.ReactNode;
   org: Organization;
@@ -426,6 +729,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2.5">
+                    <NotificationBell />
                     <div className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
                       <span className="font-black text-slate-900">
                         {activeVoiceAgent.name}

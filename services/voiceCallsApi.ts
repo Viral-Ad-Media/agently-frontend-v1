@@ -672,7 +672,14 @@ export const voiceCallsApi = {
 
   // Prepared for Phase 5. Do not wire into UI in Phase 1.
   notifications: {
-    getNotifications: () => request('/api/notifications'),
+    getNotifications: (params?: { limit?: number; page?: number; unreadOnly?: boolean }) => {
+      const qs = new URLSearchParams();
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.unreadOnly) qs.set('unreadOnly', 'true');
+      const query = qs.toString();
+      return request(`/api/notifications${query ? `?${query}` : ''}`);
+    },
     getUnreadNotificationCount: () => request('/api/notifications/unread-count'),
     markNotificationRead: (notificationId: string, payload: unknown = { is_read: true }) => request(`/api/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH', body: payload }),
     markAllNotificationsRead: () => request('/api/notifications/read-all', { method: 'PATCH', body: {} }),

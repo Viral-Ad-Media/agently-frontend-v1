@@ -1,261 +1,517 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { TenantNotification, NotificationType } from '../types';
-import { voiceCallsApi } from '../services/voiceCallsApi';
+import React, { useEffect, useMemo, useState, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
+import AppModal from "../components/AppModal";
+import { voiceCallsApi } from "../services/voiceCallsApi";
 
-const TYPE_ICON: Record<string, string> = {
-  call_completed: 'fa-phone-check',
-  call_failed: 'fa-phone-xmark',
-  message_captured: 'fa-message-lines',
-  lead_requested_follow_up: 'fa-user-clock',
-  unanswered_question_captured: 'fa-circle-question',
-  transfer_requested: 'fa-phone-arrow-right',
-  opt_out_requested: 'fa-ban',
-  recording_ready: 'fa-circle-play',
-  transcript_ready: 'fa-file-lines',
-  schedule_completed: 'fa-calendar-check',
-  schedule_failed: 'fa-calendar-xmark',
+type NotificationRecord = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  entityType: string;
+  entityId: string;
+  voiceAgentId?: string;
+  callRecordId?: string;
+  isRead: boolean;
+  createdAt: string;
+  metadata: Record<string, unknown>;
 };
 
-const TYPE_COLOR: Record<string, string> = {
-  call_completed: 'bg-emerald-50 text-emerald-600',
-  call_failed: 'bg-red-50 text-red-600',
-  message_captured: 'bg-blue-50 text-blue-600',
-  lead_requested_follow_up: 'bg-amber-50 text-amber-600',
-  unanswered_question_captured: 'bg-orange-50 text-orange-600',
-  transfer_requested: 'bg-purple-50 text-purple-600',
-  opt_out_requested: 'bg-slate-100 text-slate-500',
-  recording_ready: 'bg-indigo-50 text-indigo-600',
-  transcript_ready: 'bg-cyan-50 text-cyan-600',
-  schedule_completed: 'bg-emerald-50 text-emerald-600',
-  schedule_failed: 'bg-red-50 text-red-600',
+type ToastState = { message: string; tone: "success" | "error" } | null;
+
+const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  call_completed: "Call completed",
+  call_failed: "Call failed",
+  message_captured: "Message captured",
+  lead_requested_follow_up: "Follow-up requested",
+  unanswered_question_captured: "Unanswered question",
+  transfer_requested: "Transfer requested",
+  opt_out_requested: "Opt-out requested",
+  recording_ready: "Recording ready",
+  transcript_ready: "Transcript ready",
+  schedule_completed: "Schedule completed",
+  schedule_failed: "Schedule failed",
 };
 
-const fmtTime = (ts: string) => {
-  const d = new Date(ts);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
-  return d.toLocaleDateString();
+const getString = (value: unknown, fallback = "") =>
+  typeof value === "string" ? value : value == null ? fallback : String(value);
+
+const normalizeNotification = (value: unknown): NotificationRecord | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const id = getString(raw.id).trim();
+  if (!id) return null;
+
+  const metadata =
+    raw.metadata &&
+    typeof raw.metadata === "object" &&
+    !Array.isArray(raw.metadata)
+      ? (raw.metadata as Record<string, unknown>)
+      : {};
+
+  return {
+    id,
+    type: getString(raw.type, "notification"),
+    title: getString(raw.title, "Notification"),
+    body: getString(raw.body),
+    entityType: getString(raw.entity_type || raw.entityType),
+    entityId: getString(raw.entity_id || raw.entityId),
+    voiceAgentId:
+      getString(raw.voice_agent_id || raw.voiceAgentId) || undefined,
+    callRecordId:
+      getString(raw.call_record_id || raw.callRecordId) || undefined,
+    isRead: Boolean(raw.is_read ?? raw.isRead),
+    createdAt: getString(raw.created_at || raw.createdAt),
+    metadata,
+  };
+};
+
+const getNotificationArray = (payload: unknown): NotificationRecord[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  const candidate =
+    record.notifications || record.data || record.items || record.results;
+  const list = Array.isArray(candidate) ? candidate : [];
+  return list
+    .map(normalizeNotification)
+    .filter((item): item is NotificationRecord => Boolean(item));
+};
+
+const getUnreadCount = (payload: unknown): number => {
+  if (!payload || typeof payload !== "object") return 0;
+  const record = payload as Record<string, unknown>;
+  const value = Number(
+    record.unreadCount ?? record.unread_count ?? record.count ?? 0,
+  );
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+};
+
+const getNotificationTarget = (notification: NotificationRecord) => {
+  const entityType = notification.entityType.toLowerCase();
+  const type = notification.type.toLowerCase();
+  if (
+    notification.callRecordId ||
+    entityType.includes("call") ||
+    type.includes("call") ||
+    type.includes("recording") ||
+    type.includes("transcript")
+  ) {
+    return "/calls";
+  }
+  if (entityType.includes("lead") || type.includes("lead")) return "/leads";
+  if (entityType.includes("schedule") || type.includes("schedule"))
+    return "/outreach";
+  return "";
+};
+
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Just now";
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 };
 
 const getTypeLabel = (type: string) =>
-  type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  NOTIFICATION_TYPE_LABELS[type] || type.replace(/_/g, " ");
 
-interface NotificationsProps {
-  onUnreadChange?: (count: number) => void;
-}
+const toneForType = (type: string) => {
+  const lower = type.toLowerCase();
+  if (lower.includes("failed") || lower.includes("opt_out"))
+    return "bg-red-50 text-red-600 border-red-100";
+  if (lower.includes("completed") || lower.includes("ready"))
+    return "bg-emerald-50 text-emerald-600 border-emerald-100";
+  if (lower.includes("question") || lower.includes("follow"))
+    return "bg-amber-50 text-amber-700 border-amber-100";
+  return "bg-indigo-50 text-indigo-600 border-indigo-100";
+};
 
-const Notifications: React.FC<NotificationsProps> = ({ onUnreadChange }) => {
-  const [notifications, setNotifications] = useState<TenantNotification[]>([]);
+const PAGE_SIZE = 12;
+
+const Notifications: React.FC = () => {
+  const navigate = useNavigate();
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'unread'>('all');
-  const [busy, setBusy] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [page, setPage] = useState(1);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<NotificationRecord | null>(
+    null,
+  );
+  const [, startTransition] = useTransition();
 
-  const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
+  const showToast = (
+    message: string,
+    tone: "success" | "error" = "success",
+  ) => {
+    setToast({ message, tone });
     window.setTimeout(() => setToast(null), 3500);
   };
 
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = async () => {
     setLoading(true);
-    setError('');
     try {
-      const res = await voiceCallsApi.notifications.getNotifications() as any;
-      const list: TenantNotification[] = res?.notifications || [];
-      setNotifications(list);
-      const unread = list.filter(n => !n.is_read).length;
-      onUnreadChange?.(unread);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load notifications.');
+      const [listPayload, countPayload] = await Promise.all([
+        voiceCallsApi.notifications.getNotifications({ limit: 100 }),
+        voiceCallsApi.notifications.getUnreadNotificationCount(),
+      ]);
+      const next = getNotificationArray(listPayload);
+      startTransition(() => {
+        setNotifications(next);
+        setUnreadCount(
+          getUnreadCount(countPayload) ||
+            next.filter((item) => !item.isRead).length,
+        );
+      });
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Could not load notifications.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
-  }, [onUnreadChange]);
+  };
 
-  useEffect(() => { void loadNotifications(); }, [loadNotifications]);
+  useEffect(() => {
+    void loadNotifications();
+  }, []);
 
-  const markRead = async (id: string) => {
-    setBusy(id);
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+
+  const visibleNotifications = useMemo(() => {
+    return filter === "unread"
+      ? notifications.filter((item) => !item.isRead)
+      : notifications;
+  }, [filter, notifications]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(visibleNotifications.length / PAGE_SIZE),
+  );
+  const pagedNotifications = visibleNotifications.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  const markRead = async (notification: NotificationRecord) => {
+    if (notification.isRead) return;
+    setBusyId(notification.id);
+    setNotifications((current) =>
+      current.map((item) =>
+        item.id === notification.id ? { ...item, isRead: true } : item,
+      ),
+    );
+    setUnreadCount((current) => Math.max(0, current - 1));
     try {
-      await voiceCallsApi.notifications.markNotificationRead(id);
-      setNotifications(prev =>
-        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+      await voiceCallsApi.notifications.markNotificationRead(notification.id);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Could not mark notification read.",
+        "error",
       );
-      const updated = notifications.map(n => n.id === id ? { ...n, is_read: true } : n);
-      onUnreadChange?.(updated.filter(n => !n.is_read).length);
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to mark read.', false);
+      await loadNotifications();
     } finally {
-      setBusy(null);
+      setBusyId(null);
     }
+  };
+
+  const openRelated = async (notification: NotificationRecord) => {
+    await markRead(notification);
+    const target = getNotificationTarget(notification);
+    if (target) navigate(target);
   };
 
   const markAllRead = async () => {
-    setBusy('all');
+    setNotifications((current) =>
+      current.map((item) => ({ ...item, isRead: true })),
+    );
+    setUnreadCount(0);
     try {
       await voiceCallsApi.notifications.markAllNotificationsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      onUnreadChange?.(0);
-      showToast('All notifications marked as read.');
-    } catch (err: any) {
-      showToast(err?.message || 'Failed.', false);
-    } finally {
-      setBusy(null);
+      showToast("All notifications marked as read.");
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Could not mark all notifications read.",
+        "error",
+      );
+      await loadNotifications();
     }
   };
 
-  const deleteNotification = async (id: string) => {
-    setBusy(`del-${id}`);
+  const deleteNotification = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setBusyId(target.id);
+    setDeleteTarget(null);
+    setNotifications((current) =>
+      current.filter((item) => item.id !== target.id),
+    );
+    if (!target.isRead) setUnreadCount((current) => Math.max(0, current - 1));
     try {
-      await voiceCallsApi.notifications.deleteNotification(id);
-      const updated = notifications.filter(n => n.id !== id);
-      setNotifications(updated);
-      onUnreadChange?.(updated.filter(n => !n.is_read).length);
-    } catch (err: any) {
-      showToast(err?.message || 'Failed to delete.', false);
+      await voiceCallsApi.notifications.deleteNotification(target.id);
+      showToast("Notification deleted.");
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Could not delete notification.",
+        "error",
+      );
+      await loadNotifications();
     } finally {
-      setBusy(null);
+      setBusyId(null);
     }
   };
-
-  const displayed = filterType === 'unread'
-    ? notifications.filter(n => !n.is_read)
-    : notifications;
-
-  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className="animate-fade-up space-y-5">
-      {toast && (
-        <div className={`fixed top-5 right-5 z-[200] px-5 py-3 rounded-2xl shadow-xl text-sm font-bold ${toast.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-          {toast.msg}
+    <div className="animate-fade-up space-y-6">
+      {toast ? (
+        <div
+          className={`fixed right-5 top-5 z-[500] rounded-2xl px-5 py-3 text-sm font-black text-white shadow-xl ${toast.tone === "success" ? "bg-emerald-600" : "bg-red-600"}`}
+        >
+          {toast.message}
         </div>
-      )}
+      ) : null}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            Notifications
-            {unreadCount > 0 && (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-black">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Tenant-scoped activity alerts</p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+            Total alerts
+          </p>
+          <p className="mt-2 text-3xl font-black text-slate-900">
+            {notifications.length}
+          </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <div className="flex gap-1 rounded-xl border border-slate-200 p-1 bg-white">
-            {(['all', 'unread'] as const).map(t => (
-              <button key={t} onClick={() => setFilterType(t)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${filterType === t ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {t === 'unread' ? `Unread (${unreadCount})` : 'All'}
-              </button>
-            ))}
-          </div>
-          {unreadCount > 0 && (
-            <button onClick={markAllRead} disabled={busy === 'all'}
-              className="px-4 py-2 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-50 transition-all">
-              {busy === 'all' ? '…' : 'Mark All Read'}
-            </button>
-          )}
-          <button onClick={() => void loadNotifications()} disabled={loading}
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all">
-            {loading ? <i className="fa-sharp fa-solid fa-spinner fa-spin" /> : 'Refresh'}
-          </button>
+        <div className="rounded-[1.75rem] border border-amber-100 bg-amber-50 p-5 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">
+            Unread
+          </p>
+          <p className="mt-2 text-3xl font-black text-amber-700">
+            {unreadCount}
+          </p>
+        </div>
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+            Latest
+          </p>
+          <p className="mt-2 text-sm font-bold text-slate-700">
+            {notifications[0]
+              ? formatDate(notifications[0].createdAt)
+              : "No alerts yet"}
+          </p>
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+      <div className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Notifications</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Call events, follow-up requests, recordings, transcripts, and
+              schedule updates.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${filter === "all" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("unread")}
+              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${filter === "unread" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+            >
+              Unread
+            </button>
+            <button
+              type="button"
+              onClick={() => void markAllRead()}
+              disabled={!unreadCount}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+            >
+              Mark all read
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadNotifications()}
+              disabled={loading}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-      )}
 
-      {loading && notifications.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-16 text-center">
-          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-slate-400">Loading notifications…</p>
-        </div>
-      ) : displayed.length === 0 ? (
-        <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 py-20 text-center">
-          <i className="fa-sharp fa-solid fa-bell-slash text-4xl text-slate-200 mb-4 block" />
-          <p className="text-slate-400 font-bold">
-            {filterType === 'unread' ? 'No unread notifications' : 'No notifications yet'}
-          </p>
-          <p className="text-xs text-slate-300 mt-1">Activity from calls, schedules, and leads will appear here.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {displayed.map(n => {
-            const iconKey = n.type in TYPE_ICON ? n.type : 'call_completed';
-            const colorKey = n.type in TYPE_COLOR ? n.type : 'call_completed';
-            return (
-              <div key={n.id}
-                className={`bg-white rounded-2xl border px-5 py-4 flex items-start gap-4 transition-all ${n.is_read ? 'border-slate-100 opacity-70' : 'border-slate-200 shadow-sm'}`}>
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${TYPE_COLOR[colorKey] || 'bg-slate-100 text-slate-500'}`}>
-                  <i className={`fa-sharp fa-solid ${TYPE_ICON[iconKey] || 'fa-bell'} text-sm`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                        {getTypeLabel(n.type)}
-                      </p>
-                      {(n.title || n.message || n.body) && (
-                        <p className="text-sm font-medium text-slate-800 mt-0.5">
-                          {n.title || n.message || n.body}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] text-slate-400 whitespace-nowrap">{fmtTime(n.created_at)}</span>
-                      {!n.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                      )}
+        {loading ? (
+          <div className="p-12 text-center text-sm font-bold text-slate-400">
+            Loading notifications...
+          </div>
+        ) : pagedNotifications.length ? (
+          <div className="divide-y divide-slate-100">
+            {pagedNotifications.map((notification) => {
+              const target = getNotificationTarget(notification);
+              return (
+                <div
+                  key={notification.id}
+                  className={`p-5 transition ${notification.isRead ? "bg-white" : "bg-amber-50/40"}`}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => void openRelated(notification)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`mt-2 h-2.5 w-2.5 rounded-full ${notification.isRead ? "bg-slate-200" : "bg-amber-400"}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${toneForType(notification.type)}`}
+                            >
+                              {getTypeLabel(notification.type)}
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              {formatDate(notification.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-base font-black text-slate-900">
+                            {notification.title}
+                          </p>
+                          {notification.body ? (
+                            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                              {notification.body}
+                            </p>
+                          ) : null}
+                          {target ? (
+                            <p className="mt-2 text-xs font-bold text-indigo-600">
+                              Open related {target.replace("/", "")}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="flex shrink-0 gap-2">
+                      {!notification.isRead ? (
+                        <button
+                          type="button"
+                          onClick={() => void markRead(notification)}
+                          disabled={busyId === notification.id}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+                        >
+                          Mark read
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(notification)}
+                        disabled={busyId === notification.id}
+                        className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 transition hover:bg-red-50 disabled:opacity-40"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
-                  {(n.related_call_id || n.related_lead_id || n.related_schedule_id) && (
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      {n.related_call_id && (
-                        <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg">
-                          call: {n.related_call_id.slice(0, 8)}…
-                        </span>
-                      )}
-                      {n.related_schedule_id && (
-                        <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg">
-                          sched: {n.related_schedule_id.slice(0, 8)}…
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  {!n.is_read && (
-                    <button onClick={() => void markRead(n.id)} disabled={busy === n.id}
-                      title="Mark as read"
-                      className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-600 transition-all text-xs disabled:opacity-50">
-                      <i className="fa-sharp fa-solid fa-check" />
-                    </button>
-                  )}
-                  <button onClick={() => void deleteNotification(n.id)} disabled={busy === `del-${n.id}`}
-                    title="Delete"
-                    className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-red-100 hover:text-red-500 transition-all text-xs disabled:opacity-50">
-                    <i className="fa-sharp fa-solid fa-trash" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-14 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+              <i className="fa-regular fa-bell text-xl" />
+            </div>
+            <p className="text-lg font-black text-slate-900">
+              No notifications found
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Workspace alerts will appear here when calls, leads, recordings,
+              transcripts, or schedules need attention.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between border-t border-slate-100 p-5">
+          <p className="text-xs font-bold text-slate-400">
+            Showing{" "}
+            {visibleNotifications.length ? (page - 1) * PAGE_SIZE + 1 : 0}–
+            {Math.min(page * PAGE_SIZE, visibleNotifications.length)} of{" "}
+            {visibleNotifications.length}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page <= 1}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={page >= totalPages}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      )}
+      </div>
+
+      <AppModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete notification?"
+        description="This alert will be removed from your notification center."
+        size="sm"
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteNotification()}
+              disabled={Boolean(deleteTarget && busyId === deleteTarget.id)}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          {deleteTarget?.title || "This notification"} will be deleted. This
+          will not delete the related call, lead, or schedule.
+        </p>
+      </AppModal>
     </div>
   );
 };
