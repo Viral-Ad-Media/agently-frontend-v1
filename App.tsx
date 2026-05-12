@@ -28,6 +28,7 @@ const CallLogs = lazy(() => import("./pages/CallLogs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
+const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Team = lazy(() => import("./pages/Team"));
 const Login = lazy(() => import("./pages/Login"));
@@ -99,15 +100,12 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const realtimeDebounceRef = React.useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const realtimeDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!org?.id) return;
     const unsubscribe = subscribeToOrgRealtime(org.id, {
       onAny: () => {
-        if (realtimeDebounceRef.current)
-          clearTimeout(realtimeDebounceRef.current);
+        if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
         realtimeDebounceRef.current = setTimeout(() => {
           void refreshWorkspace();
         }, 1200);
@@ -115,8 +113,7 @@ const App: React.FC = () => {
     });
     return () => {
       unsubscribe();
-      if (realtimeDebounceRef.current)
-        clearTimeout(realtimeDebounceRef.current);
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
     };
   }, [org?.id]);
 
@@ -434,62 +431,13 @@ const App: React.FC = () => {
     <Router>
       <Suspense fallback={<AppLoading />}>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <PublicLayout>
-                <Home />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/about"
-            element={
-              <PublicLayout>
-                <About />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/contact"
-            element={
-              <PublicLayout>
-                <Contact />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/faqs"
-            element={
-              <PublicLayout>
-                <FAQs />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/pricing"
-            element={
-              <PublicLayout>
-                <Pricing />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/terms"
-            element={
-              <PublicLayout>
-                <Terms />
-              </PublicLayout>
-            }
-          />
-          <Route
-            path="/privacy"
-            element={
-              <PublicLayout>
-                <Privacy />
-              </PublicLayout>
-            }
-          />
+          <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
+          <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
+          <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
+          <Route path="/faqs" element={<PublicLayout><FAQs /></PublicLayout>} />
+          <Route path="/pricing" element={<PublicLayout><Pricing /></PublicLayout>} />
+          <Route path="/terms" element={<PublicLayout><Terms /></PublicLayout>} />
+          <Route path="/privacy" element={<PublicLayout><Privacy /></PublicLayout>} />
           <Route
             path="/login"
             element={
@@ -509,13 +457,9 @@ const App: React.FC = () => {
             path="/features"
             element={
               user && org ? (
-                <ProtectedRoute>
-                  <Features />
-                </ProtectedRoute>
+                <ProtectedRoute><Features /></ProtectedRoute>
               ) : (
-                <PublicLayout>
-                  <Features />
-                </PublicLayout>
+                <PublicLayout><Features /></PublicLayout>
               )
             }
           />
@@ -523,9 +467,7 @@ const App: React.FC = () => {
             path="/dashboard"
             element={
               org && dashboard ? (
-                <ProtectedRoute>
-                  <Dashboard org={org} dashboard={dashboard} />
-                </ProtectedRoute>
+                <ProtectedRoute><Dashboard org={org} dashboard={dashboard} /></ProtectedRoute>
               ) : (
                 <Navigate to="/login" />
               )
@@ -581,11 +523,24 @@ const App: React.FC = () => {
             path="/calls"
             element={
               <ProtectedRoute>
-                <CallLogs
-                  calls={calls}
-                  onDownloadReport={handleDownloadCallReport}
-                />
+                <CallLogs calls={calls} onDownloadReport={handleDownloadCallReport} />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/outreach"
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <OutreachScheduler
+                    org={org}
+                    leads={leads}
+                    onChanged={() => void refreshWorkspace()}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
             }
           />
           <Route
@@ -607,13 +562,7 @@ const App: React.FC = () => {
             path="/team"
             element={
               org ? (
-                <ProtectedRoute>
-                  <Team
-                    org={org}
-                    onInvite={handleInviteMember}
-                    onRemoveMember={handleRemoveMember}
-                  />
-                </ProtectedRoute>
+                <ProtectedRoute><Team org={org} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember} /></ProtectedRoute>
               ) : (
                 <Navigate to="/login" />
               )
@@ -642,10 +591,7 @@ const App: React.FC = () => {
             element={
               org ? (
                 <ProtectedRoute>
-                  <PhoneNumbers
-                    org={org}
-                    onAgentUpdated={() => void refreshWorkspace()}
-                  />
+                  <PhoneNumbers org={org} onAgentUpdated={() => void refreshWorkspace()} />
                 </ProtectedRoute>
               ) : (
                 <Navigate to="/login" />
@@ -656,9 +602,7 @@ const App: React.FC = () => {
             path="/settings"
             element={
               org ? (
-                <ProtectedRoute>
-                  <Settings org={org} onSave={handleSaveSettings} />
-                </ProtectedRoute>
+                <ProtectedRoute><Settings org={org} onSave={handleSaveSettings} /></ProtectedRoute>
               ) : (
                 <Navigate to="/login" />
               )

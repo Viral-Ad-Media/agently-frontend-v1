@@ -41,15 +41,9 @@ const NAV_ITEMS: Array<{
   },
   {
     to: "/outreach",
-    icon: "fa-solid fa-calendar-arrow-up",
+    icon: "fa-solid fa-calendar-check",
     label: "Outreach",
-    description: "Schedule outbound call campaigns",
-  },
-  {
-    to: "/notifications",
-    icon: "fa-solid fa-bell",
-    label: "Notifications",
-    description: "Activity alerts and event feed",
+    description: "Schedule outbound calls",
   },
   {
     to: "/leads",
@@ -134,16 +128,10 @@ const getPageMeta = (pathname: string, org: Organization) => {
         "Review transcripts, outcomes, and downloadable reports across every conversation.",
     },
     "/outreach": {
-      eyebrow: "Outbound Campaigns",
+      eyebrow: "Outbound Scheduling",
       title: "Outreach Scheduler",
       description:
-        "Create and manage scheduled outbound call campaigns with direct recipients or leads.",
-    },
-    "/notifications": {
-      eyebrow: "Activity Feed",
-      title: "Notifications",
-      description:
-        "Tenant-scoped activity alerts from calls, schedules, leads, and agents.",
+        "Create direct-recipient and lead-backed outbound call schedules for your agents.",
     },
     "/leads": {
       eyebrow: "Pipeline Health",
@@ -481,6 +469,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               [
                 "/agent",
                 "/phone-numbers",
+                "/outreach",
                 "/settings",
                 "/team",
                 "/billing",

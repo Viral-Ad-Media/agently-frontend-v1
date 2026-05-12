@@ -645,6 +645,8 @@ export const voiceCallsApi = {
 
   // Prepared for Phase 4. Do not wire into UI in Phase 1.
   calls: {
+    createOutboundCall: (payload: unknown) => request('/api/calls/outbound', { method: 'POST', body: payload }),
+    createBulkOutboundCall: (payload: unknown) => request('/api/calls/outbound/bulk', { method: 'POST', body: payload }),
     getCalls: (params?: Record<string, string | number | undefined>) => {
       const qs = new URLSearchParams();
       Object.entries(params || {}).forEach(([key, value]) => {
