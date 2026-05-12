@@ -38,6 +38,7 @@ type CallDetail = CallListItem & {
     signedUrl?: string;
     recordingStatus?: string | null;
     mimeType?: string;
+    audioBase64?: string;
   } | null;
 };
 
@@ -572,6 +573,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   recording.mime_type || recording.mimeType || "audio/mpeg",
                   "audio/mpeg",
                 ),
+                audioBase64: safeString(
+                  recording.audioBase64 || recording.audio_base64 || "",
+                  "",
+                ),
               },
             }
           : current,
@@ -850,7 +855,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             : undefined
         }
         size="2xl"
-        bodyClassName="max-h-[72vh] overflow-y-auto"
+        bodyClassName=""
         footer={
           selected ? (
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -915,18 +920,17 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </p>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
+            <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Conversation transcript
                   </p>
                   <p className="text-[10px] font-bold text-slate-400">
-                    Caller messages appear on the left. Agent messages appear on
-                    the right.
+                    Caller left · Agent right
                   </p>
                 </div>
-                <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 pr-3">
+                <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   {(selected.transcript && selected.transcript.length
                     ? selected.transcript
                     : []
@@ -940,7 +944,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                           className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
                         >
                           <div
-                            className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
+                            className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 text-[13px] shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
                           >
                             <p
                               className={`mb-1 text-[10px] font-black uppercase tracking-widest ${isAgent ? "text-white/60" : "text-slate-400"}`}
@@ -963,11 +967,17 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Recording
                   </p>
-                  {selected.recording?.signedUrl ? (
+                  {selected.recording?.audioBase64 ? (
+                    <audio
+                      controls
+                      src={`data:${selected.recording.mimeType || "audio/mpeg"};base64,${selected.recording.audioBase64}`}
+                      className="mt-3 w-full"
+                    />
+                  ) : selected.recording?.signedUrl ? (
                     <audio
                       controls
                       src={selected.recording.signedUrl}
@@ -994,7 +1004,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   )}
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Unanswered questions
                   </p>
@@ -1027,7 +1037,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 </div>
 
                 {selected.lead ? (
-                  <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Related lead
                     </p>
