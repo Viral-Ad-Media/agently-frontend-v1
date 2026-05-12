@@ -1,17 +1,31 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Organization, AgentConfig, FAQ, LeadOutreachSchedule } from "../types";
-import { api } from "../services/api";
 import {
-  voiceCallsApi,
-  ElevenLabsVoice,
-  OpenAiVoice,
-  AgentVoiceConfig,
-  VoiceProvider,
-  VoiceSettings,
-} from "../services/voiceCallsApi";
+  Organization,
+  AgentConfig,
+  FAQ,
+  AgentVoice,
+  LeadOutreachSchedule,
+} from "../types";
+import { api } from "../services/api";
 import AppModal from "../components/AppModal";
 
-// Voice display must come from saved provider config, not legacy seeded voice names.
+// Twilio ConversationRelay voices with provider labels
+const VOICES: {
+  id: AgentVoice;
+  label: string;
+  provider: string;
+  gender: string;
+}[] = [
+  { id: "Rachel", label: "Rachel", provider: "ElevenLabs", gender: "Female" },
+  { id: "Domi", label: "Domi", provider: "ElevenLabs", gender: "Female" },
+  { id: "Bella", label: "Bella", provider: "ElevenLabs", gender: "Female" },
+  { id: "Josh", label: "Josh", provider: "ElevenLabs", gender: "Male" },
+  { id: "Arnold", label: "Arnold", provider: "ElevenLabs", gender: "Male" },
+  { id: "Wavenet-F", label: "Wavenet F", provider: "Google", gender: "Female" },
+  { id: "Wavenet-D", label: "Wavenet D", provider: "Google", gender: "Male" },
+  { id: "Polly-Joanna", label: "Joanna", provider: "Amazon", gender: "Female" },
+  { id: "Polly-Matthew", label: "Matthew", provider: "Amazon", gender: "Male" },
+];
 const TONES = ["Professional", "Friendly", "Empathetic"] as const;
 const LANGUAGES = [
   "English",
@@ -21,54 +35,6 @@ const LANGUAGES = [
   "Portuguese",
   "Italian",
 ] as const;
-
-const DEFAULT_OPENAI_VOICE = "alloy";
-const DEFAULT_VOICE_PREVIEW_TEXT =
-  "Hello, this is a voice preview from Agently.";
-const DEFAULT_ELEVENLABS_SETTINGS: Required<VoiceSettings> = {
-  stability: 0.65,
-  similarity_boost: 0.8,
-  style: 0.15,
-  speed: 0.92,
-  use_speaker_boost: true,
-};
-
-const toSliderValue = (value: number | undefined, fallback: number) =>
-  Number.isFinite(value) ? Number(value) : fallback;
-
-const readKnowledgeEnabled = (context: unknown, fallback = true) => {
-  const data = context as Record<string, unknown> | null;
-  if (!data) return fallback;
-  if (typeof data.use_knowledge_base === "boolean")
-    return data.use_knowledge_base;
-  if (typeof data.enabled === "boolean") return data.enabled;
-  if (typeof data.useKnowledgeBase === "boolean") return data.useKnowledgeBase;
-  return fallback;
-};
-
-const getAgentIdForVoiceEditing = (
-  selectedAgent: AgentConfig | null,
-  fallbackAgent: AgentConfig,
-) => selectedAgent?.id || fallbackAgent.id;
-
-const buildAudioSource = (result: {
-  blob?: Blob;
-  audioUrl?: string;
-  audioBase64?: string;
-  mimeType?: string;
-}) => {
-  if (result.blob)
-    return { url: URL.createObjectURL(result.blob), isObjectUrl: true };
-  if (result.audioBase64) {
-    const mimeType = result.mimeType || "audio/mpeg";
-    return {
-      url: `data:${mimeType};base64,${result.audioBase64}`,
-      isObjectUrl: false,
-    };
-  }
-  if (result.audioUrl) return { url: result.audioUrl, isObjectUrl: false };
-  return null;
-};
 
 interface AgentSettingsProps {
   org: Organization;
@@ -224,141 +190,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [scrapeResult, setScrapeResult] = useState("");
   const [chunks, setChunks] = useState(0);
   const faqScrollRef = useRef<HTMLDivElement>(null);
-  const activeVoiceAudioRef = useRef<HTMLAudioElement | null>(null);
-  const activeVoiceObjectUrlRef = useRef<string | null>(null);
-
-  /* stabilized voice-config integration */
-  const [voiceProvider, setVoiceProvider] = useState<VoiceProvider>("openai");
-  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>(
-    [],
-  );
-  const [openAiVoices, setOpenAiVoices] = useState<OpenAiVoice[]>([]);
-  const [agentVoiceConfigById, setAgentVoiceConfigById] = useState<
-    Record<string, AgentVoiceConfig>
-  >({});
-  const [selectedAgentVoiceLoading, setSelectedAgentVoiceLoading] =
-    useState(false);
-  const [selectedElevenLabsVoiceId, setSelectedElevenLabsVoiceId] =
-    useState("");
-  const [selectedElevenLabsVoiceName, setSelectedElevenLabsVoiceName] =
-    useState("");
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(
-    DEFAULT_ELEVENLABS_SETTINGS,
-  );
-  const [openAiVoiceId, setOpenAiVoiceId] = useState(DEFAULT_OPENAI_VOICE);
-  const [voiceConfigLoading, setVoiceConfigLoading] = useState(false);
-  const [voiceConfigSaving, setVoiceConfigSaving] = useState(false);
-  const [voicePreviewing, setVoicePreviewing] = useState(false);
-  const [knowledgeEnabled, setKnowledgeEnabled] = useState(true);
-  const [knowledgeSaving, setKnowledgeSaving] = useState(false);
 
   useEffect(() => {
     setDraft(org.agent);
   }, [org.agent.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const agentId = org.agent.id;
-    if (!agentId) return;
-
-    const loadVoiceSettings = async () => {
-      setVoiceConfigLoading(true);
-      try {
-        const [
-          voicesResponse,
-          openAiVoicesResponse,
-          configResponse,
-          knowledgeResponse,
-        ] = await Promise.allSettled([
-          voiceCallsApi.getElevenLabsVoices(),
-          voiceCallsApi.getOpenAiVoices(),
-          voiceCallsApi.getAgentVoiceConfig(agentId),
-          voiceCallsApi.getAgentKnowledgeContext(agentId),
-        ]);
-
-        if (cancelled) return;
-
-        if (voicesResponse.status === "fulfilled") {
-          setElevenLabsVoices(voicesResponse.value.voices || []);
-        } else {
-          setElevenLabsVoices([]);
-          showToast("Could not load ElevenLabs voices yet.", false);
-        }
-
-        if (openAiVoicesResponse.status === "fulfilled") {
-          setOpenAiVoices(openAiVoicesResponse.value.voices || []);
-        } else {
-          setOpenAiVoices([]);
-          showToast("Could not load OpenAI voices yet.", false);
-        }
-
-        if (configResponse.status === "fulfilled") {
-          const config = configResponse.value;
-          const provider =
-            config.voice_provider === "elevenlabs" ? "elevenlabs" : "openai";
-          setAgentVoiceConfigById((current) => ({
-            ...current,
-            [agentId]: config,
-          }));
-          setVoiceProvider(provider);
-          setOpenAiVoiceId(
-            config.openai_voice_id || config.voice_id || DEFAULT_OPENAI_VOICE,
-          );
-          setSelectedElevenLabsVoiceId(config.elevenlabs_voice_id || "");
-          setSelectedElevenLabsVoiceName(config.elevenlabs_voice_name || "");
-          setVoiceSettings({
-            ...DEFAULT_ELEVENLABS_SETTINGS,
-            ...(config.voice_settings || {}),
-          });
-        } else {
-          setVoiceProvider("openai");
-          setOpenAiVoiceId(DEFAULT_OPENAI_VOICE);
-          setSelectedElevenLabsVoiceId("");
-          setSelectedElevenLabsVoiceName("");
-          setVoiceSettings(DEFAULT_ELEVENLABS_SETTINGS);
-        }
-
-        if (knowledgeResponse.status === "fulfilled") {
-          setKnowledgeEnabled(
-            readKnowledgeEnabled(knowledgeResponse.value, true),
-          );
-        }
-      } finally {
-        if (!cancelled) setVoiceConfigLoading(false);
-      }
-    };
-
-    void loadVoiceSettings();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org.agent.id]);
-
-  useEffect(() => {
-    if (!selectedElevenLabsVoiceId || selectedElevenLabsVoiceName) return;
-    const found = elevenLabsVoices.find(
-      (voice) => voice.voice_id === selectedElevenLabsVoiceId,
-    );
-    if (found) setSelectedElevenLabsVoiceName(found.name);
-  }, [
-    elevenLabsVoices,
-    selectedElevenLabsVoiceId,
-    selectedElevenLabsVoiceName,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (activeVoiceAudioRef.current) {
-        activeVoiceAudioRef.current.pause();
-        activeVoiceAudioRef.current.src = "";
-      }
-      if (activeVoiceObjectUrlRef.current) {
-        URL.revokeObjectURL(activeVoiceObjectUrlRef.current);
-        activeVoiceObjectUrlRef.current = null;
-      }
-    };
-  }, []);
 
   /* ── utils ── */
   const showToast = (msg: string, ok = true) => {
@@ -385,389 +220,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     }
   };
 
-  const handleElevenLabsVoiceChange = async (voiceId: string) => {
-    const voice = elevenLabsVoices.find((item) => item.voice_id === voiceId);
-    setSelectedElevenLabsVoiceId(voiceId);
-    setSelectedElevenLabsVoiceName(voice?.name || "");
-
-    if (activeVoiceAudioRef.current) {
-      activeVoiceAudioRef.current.pause();
-      activeVoiceAudioRef.current.src = "";
-      activeVoiceAudioRef.current = null;
-    }
-
-    if (!voiceId) {
-      setVoiceSettings(DEFAULT_ELEVENLABS_SETTINGS);
-      return;
-    }
-
-    setVoiceSettings(DEFAULT_ELEVENLABS_SETTINGS);
-    try {
-      const settings = await voiceCallsApi.getElevenLabsVoiceSettings(voiceId);
-      setVoiceSettings({ ...DEFAULT_ELEVENLABS_SETTINGS, ...(settings || {}) });
-    } catch (e) {
-      showToast(
-        e instanceof Error ? e.message : "Could not load voice settings.",
-        false,
-      );
-    }
-  };
-
-  const updateVoiceSetting = <K extends keyof VoiceSettings>(
-    key: K,
-    value: VoiceSettings[K],
-  ) => {
-    setVoiceSettings((current) => ({ ...current, [key]: value }));
-  };
-
-  const selectedElevenLabsVoice = elevenLabsVoices.find(
-    (voice) => voice.voice_id === selectedElevenLabsVoiceId,
-  );
-
-  const selectedOpenAiVoice = openAiVoices.find(
-    (voice) => voice.voice_id === openAiVoiceId,
-  );
-
-  const humanizeVoiceId = (id?: string | null) => {
-    if (!id) return "-";
-    return id
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-  };
-
-  const getRawAgentVoiceConfig = (
-    agent?: AgentConfig | null,
-  ): AgentVoiceConfig | null => {
-    if (!agent) return null;
-    const raw = agent as AgentConfig & {
-      voice_provider?: VoiceProvider;
-      voiceProvider?: VoiceProvider;
-      voice_id?: string | null;
-      voiceId?: string | null;
-      voice?: string | null;
-      openai_voice_id?: string | null;
-      openaiVoiceId?: string | null;
-      elevenlabs_voice_id?: string | null;
-      elevenlabsVoiceId?: string | null;
-      elevenlabs_voice_name?: string | null;
-      elevenlabsVoiceName?: string | null;
-      voice_settings?: VoiceSettings | string | null;
-      voiceSettings?: VoiceSettings | string | null;
-    };
-
-    const provider = raw.voice_provider || raw.voiceProvider;
-    if (
-      !provider &&
-      !raw.elevenlabs_voice_id &&
-      !raw.elevenlabsVoiceId &&
-      !raw.openai_voice_id &&
-      !raw.openaiVoiceId &&
-      !raw.voice_id &&
-      !raw.voiceId
-    ) {
-      return null;
-    }
-
-    let parsedSettings: VoiceSettings = {};
-    const settings = raw.voice_settings ?? raw.voiceSettings;
-    if (typeof settings === "string") {
-      try {
-        parsedSettings = JSON.parse(settings) as VoiceSettings;
-      } catch {
-        parsedSettings = {};
-      }
-    } else if (settings && typeof settings === "object") {
-      parsedSettings = settings as VoiceSettings;
-    }
-
-    const elevenLabsVoiceId =
-      raw.elevenlabs_voice_id || raw.elevenlabsVoiceId || "";
-    const openAiVoiceId =
-      raw.openai_voice_id ||
-      raw.openaiVoiceId ||
-      (provider === "openai"
-        ? raw.voice_id || raw.voiceId || raw.voice || ""
-        : "");
-
-    return {
-      voice_provider: provider || (elevenLabsVoiceId ? "elevenlabs" : "openai"),
-      voice: raw.voice || undefined,
-      voice_id:
-        raw.voice_id ||
-        raw.voiceId ||
-        openAiVoiceId ||
-        elevenLabsVoiceId ||
-        undefined,
-      openai_voice_id: openAiVoiceId || undefined,
-      elevenlabs_voice_id: elevenLabsVoiceId || undefined,
-      elevenlabs_voice_name:
-        raw.elevenlabs_voice_name || raw.elevenlabsVoiceName || undefined,
-      voice_settings: parsedSettings,
-    };
-  };
-
-  const formatVoiceConfigDisplay = (config?: AgentVoiceConfig | null) => {
-    if (!config) return "Voice not configured";
-
-    if (config.voice_provider === "elevenlabs") {
-      const id = config.elevenlabs_voice_id || config.voice_id || "";
-      const match = elevenLabsVoices.find(
-        (voice) =>
-          voice.voice_id === id || voice.voiceId === id || voice.id === id,
-      );
-      return (
-        config.elevenlabs_voice_name ||
-        match?.name ||
-        match?.displayName ||
-        id ||
-        "ElevenLabs voice"
-      );
-    }
-
-    if (config.voice_provider === "openai") {
-      const id =
-        config.openai_voice_id || config.voice_id || DEFAULT_OPENAI_VOICE;
-      const match = openAiVoices.find(
-        (voice) =>
-          voice.voice_id === id || voice.voiceId === id || voice.id === id,
-      );
-      return match?.name || match?.displayName || humanizeVoiceId(id);
-    }
-
-    return "Voice not configured";
-  };
-
-  const getAgentVoiceDisplay = (agent: AgentConfig | null) => {
-    if (!agent) return "Voice not configured";
-    return formatVoiceConfigDisplay(
-      agentVoiceConfigById[agent.id] || getRawAgentVoiceConfig(agent),
-    );
-  };
-
-  const buildVoiceConfigPayload = () => {
-    if (voiceProvider === "elevenlabs") {
-      const selectedName =
-        selectedElevenLabsVoiceName ||
-        selectedElevenLabsVoice?.name ||
-        selectedElevenLabsVoiceId;
-      return {
-        voice_provider: "elevenlabs" as const,
-        voice: selectedName,
-        voice_id: selectedElevenLabsVoiceId,
-        elevenlabs_voice_id: selectedElevenLabsVoiceId,
-        elevenlabs_voice_name: selectedName,
-        voice_settings: { ...DEFAULT_ELEVENLABS_SETTINGS, ...voiceSettings },
-      };
-    }
-
-    const selectedVoiceId = openAiVoiceId || DEFAULT_OPENAI_VOICE;
-    return {
-      voice_provider: "openai" as const,
-      voice: selectedVoiceId,
-      voice_id: selectedVoiceId,
-      openai_voice_id: selectedVoiceId,
-      voice_settings: {
-        model: selectedOpenAiVoice?.modelId || "gpt-4o-mini-tts",
-        response_format: "mp3",
-        speed: 1,
-      },
-    };
-  };
-
-  const saveVoiceConfig = async () => {
-    if (voiceProvider === "elevenlabs" && !selectedElevenLabsVoiceId) {
-      showToast("Choose an ElevenLabs voice before saving.", false);
-      return;
-    }
-
-    setVoiceConfigSaving(true);
-    try {
-      const agentId = getAgentIdForVoiceEditing(selectedAgent, org.agent);
-      const payload = buildVoiceConfigPayload();
-      const savedConfig = await voiceCallsApi.updateAgentVoiceConfig(
-        agentId,
-        payload,
-      );
-      const confirmedConfig = await voiceCallsApi
-        .getAgentVoiceConfig(agentId)
-        .catch(() => savedConfig);
-      setAgentVoiceConfigById((current) => ({
-        ...current,
-        [agentId]: confirmedConfig,
-      }));
-      if (confirmedConfig.voice_provider === "elevenlabs") {
-        setSelectedElevenLabsVoiceId(
-          confirmedConfig.elevenlabs_voice_id ||
-            confirmedConfig.voice_id ||
-            selectedElevenLabsVoiceId,
-        );
-        setSelectedElevenLabsVoiceName(
-          confirmedConfig.elevenlabs_voice_name || selectedElevenLabsVoiceName,
-        );
-      } else {
-        setOpenAiVoiceId(
-          confirmedConfig.openai_voice_id ||
-            confirmedConfig.voice_id ||
-            openAiVoiceId ||
-            DEFAULT_OPENAI_VOICE,
-        );
-      }
-      if (selectedAgent?.id === agentId) {
-        setSelectedAgent((current) =>
-          current
-            ? {
-                ...current,
-                voice: (confirmedConfig.voice ||
-                  confirmedConfig.elevenlabs_voice_name ||
-                  confirmedConfig.voice_id ||
-                  current.voice) as AgentConfig["voice"],
-              }
-            : current,
-        );
-      }
-      showToast(
-        "Voice settings saved, confirmed from backend, and assigned to the selected agent.",
-      );
-    } catch (e) {
-      showToast(
-        e instanceof Error ? e.message : "Could not save voice settings.",
-        false,
-      );
-    } finally {
-      setVoiceConfigSaving(false);
-    }
-  };
-
-  const previewVoice = async () => {
-    const currentProvider = voiceProvider;
-    const currentElevenLabsVoice = selectedElevenLabsVoice;
-    const currentElevenLabsVoiceId = selectedElevenLabsVoiceId;
-    const currentElevenLabsVoiceName =
-      selectedElevenLabsVoiceName || currentElevenLabsVoice?.name || "";
-    const currentOpenAiVoiceId = openAiVoiceId || DEFAULT_OPENAI_VOICE;
-
-    if (currentProvider === "elevenlabs" && !currentElevenLabsVoiceId) {
-      showToast("Choose an ElevenLabs voice before listening.", false);
-      return;
-    }
-
-    if (activeVoiceAudioRef.current) {
-      activeVoiceAudioRef.current.pause();
-      activeVoiceAudioRef.current.src = "";
-      activeVoiceAudioRef.current = null;
-    }
-    if (activeVoiceObjectUrlRef.current) {
-      URL.revokeObjectURL(activeVoiceObjectUrlRef.current);
-      activeVoiceObjectUrlRef.current = null;
-    }
-
-    setVoicePreviewing(true);
-    try {
-      const result =
-        currentProvider === "elevenlabs"
-          ? await voiceCallsApi.previewVoice({
-              text: DEFAULT_VOICE_PREVIEW_TEXT,
-              returnJson: true,
-              provider: "elevenlabs",
-              voice_provider: "elevenlabs",
-              voice_id: currentElevenLabsVoiceId,
-              voiceId: currentElevenLabsVoiceId,
-              elevenlabs_voice_id: currentElevenLabsVoiceId,
-              elevenlabs_voice_name: currentElevenLabsVoiceName,
-              model: currentElevenLabsVoice?.modelId || undefined,
-              voice_settings: {
-                ...DEFAULT_ELEVENLABS_SETTINGS,
-                ...voiceSettings,
-              },
-            })
-          : await voiceCallsApi.previewVoice({
-              text: DEFAULT_VOICE_PREVIEW_TEXT,
-              returnJson: true,
-              provider: "openai",
-              voice_provider: "openai",
-              voice_id: currentOpenAiVoiceId,
-              voiceId: currentOpenAiVoiceId,
-              model: selectedOpenAiVoice?.modelId || "gpt-4o-mini-tts",
-              speed: 1,
-            });
-
-      if (
-        currentProvider === "elevenlabs" &&
-        result.voiceId &&
-        result.voiceId !== currentElevenLabsVoiceId
-      ) {
-        showToast(
-          "The backend returned audio for a different ElevenLabs voice. Please try again.",
-          false,
-        );
-        return;
-      }
-
-      const audioSource = buildAudioSource(result);
-      if (!audioSource) {
-        showToast(
-          "Listen to voice returned no playable audio. Expected audioBase64, audio URL, or audio file.",
-          false,
-        );
-        return;
-      }
-
-      if (audioSource.isObjectUrl)
-        activeVoiceObjectUrlRef.current = audioSource.url;
-      const audio = new Audio(audioSource.url);
-      activeVoiceAudioRef.current = audio;
-      audio.onended = () => {
-        if (activeVoiceObjectUrlRef.current) {
-          URL.revokeObjectURL(activeVoiceObjectUrlRef.current);
-          activeVoiceObjectUrlRef.current = null;
-        }
-        activeVoiceAudioRef.current = null;
-      };
-      audio.onerror = () => {
-        showToast(
-          "The selected voice audio could not be played by the browser.",
-          false,
-        );
-      };
-      await audio.play();
-      showToast("Playing selected voice.");
-    } catch (e) {
-      showToast(
-        e instanceof Error ? e.message : "Listen to voice failed.",
-        false,
-      );
-    } finally {
-      setVoicePreviewing(false);
-    }
-  };
-
-  const toggleKnowledgeBase = async () => {
-    const next = !knowledgeEnabled;
-    setKnowledgeSaving(true);
-    setKnowledgeEnabled(next);
-    try {
-      const agentId = getAgentIdForVoiceEditing(selectedAgent, org.agent);
-      const response = await voiceCallsApi.updateAgentKnowledgeSettings(
-        agentId,
-        {
-          use_knowledge_base: next,
-        },
-      );
-      setKnowledgeEnabled(readKnowledgeEnabled(response, next));
-      showToast(next ? "Knowledge base enabled." : "Knowledge base disabled.");
-    } catch (e) {
-      setKnowledgeEnabled(!next);
-      showToast(
-        e instanceof Error ? e.message : "Could not update knowledge setting.",
-        false,
-      );
-    } finally {
-      setKnowledgeSaving(false);
-    }
-  };
-
   const saveDraftField = <K extends keyof AgentConfig>(
     key: K,
     val: AgentConfig[K],
@@ -781,31 +233,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     setSelectedAgent(agent);
     setAgentSchedules([]);
     setLoadingSchedules(true);
-    setSelectedAgentVoiceLoading(true);
     try {
-      const [scheduleResult, voiceConfigResult] = await Promise.allSettled([
-        api.listLeadSchedules(),
-        voiceCallsApi.getAgentVoiceConfig(agent.id),
-      ]);
-
-      if (scheduleResult.status === "fulfilled") {
-        const all = (scheduleResult.value.schedules || []) as Schedule[];
-        setAgentSchedules(all.filter((s) => s.voiceAgentId === agent.id));
-      } else {
-        setAgentSchedules([]);
-      }
-
-      if (voiceConfigResult.status === "fulfilled") {
-        setAgentVoiceConfigById((current) => ({
-          ...current,
-          [agent.id]: voiceConfigResult.value,
-        }));
-      }
+      const res = await api.listLeadSchedules();
+      const all = (res.schedules || []) as Schedule[];
+      // Filter schedules assigned to this agent
+      setAgentSchedules(all.filter((s) => s.voiceAgentId === agent.id));
     } catch {
       setAgentSchedules([]);
     } finally {
       setLoadingSchedules(false);
-      setSelectedAgentVoiceLoading(false);
     }
   };
 
@@ -1038,7 +474,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {org.voiceAgents.map((agent) => {
-                const isSelected = agent.id === org.activeVoiceAgentId;
+                const isActive = agent.id === org.activeVoiceAgentId;
                 const isOutbound = agent.direction === "outbound";
                 // We don't know schedule count without fetching, so show direction badge
                 return (
@@ -1047,7 +483,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     onClick={() => void openAgentModal(agent)}
                     className={`rounded-2xl p-4 border-2 transition-all cursor-pointer group
                       ${
-                        isSelected
+                        isActive
                           ? "border-amber-400 bg-amber-50/40 hover:border-amber-500"
                           : "border-slate-100 bg-slate-50 hover:border-amber-200 hover:bg-amber-50/20"
                       }`}
@@ -1059,13 +495,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           {agent.name}
                         </p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">
-                          {getAgentVoiceDisplay(agent)}
+                          {agent.voice}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
-                        {isSelected && (
+                        {isActive && (
                           <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest">
-                            Selected
+                            Live
                           </span>
                         )}
                         {/* Direction badge — outbound shows as "Outbound / Assigned" indicator */}
@@ -1106,7 +542,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         className="flex gap-1.5"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {!isSelected && (
+                        {!isActive && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1192,73 +628,35 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </Sel>
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <Label>Voice Provider</Label>
+                <Label>Voice Profile</Label>
                 <Sel
-                  value={voiceProvider}
+                  value={draft.voice}
                   onChange={(e) =>
-                    setVoiceProvider(e.target.value as VoiceProvider)
+                    saveDraftField(
+                      "voice",
+                      e.target.value as AgentConfig["voice"],
+                    )
                   }
-                  disabled={voiceConfigLoading}
                 >
-                  <option value="openai">OpenAI</option>
-                  <option value="elevenlabs">ElevenLabs</option>
+                  {["ElevenLabs", "Google", "Amazon"].map((provider) => (
+                    <optgroup key={provider} label={`${provider}`}>
+                      {VOICES.filter((v) => v.provider === provider).map(
+                        (v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.label} ({v.gender})
+                          </option>
+                        ),
+                      )}
+                    </optgroup>
+                  ))}
                 </Sel>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Voice config is saved on this agent and reused by live calls.
+                  {(() => {
+                    const v = VOICES.find((x) => x.id === draft.voice);
+                    return v ? `${v.provider} · ${v.gender} voice` : "";
+                  })()}
                 </p>
               </div>
-
-              {voiceProvider === "openai" ? (
-                <div className="col-span-2 sm:col-span-1">
-                  <Label>OpenAI Voice</Label>
-                  <Sel
-                    value={openAiVoiceId}
-                    onChange={(e) => setOpenAiVoiceId(e.target.value)}
-                    disabled={voiceConfigLoading || openAiVoices.length === 0}
-                  >
-                    {openAiVoices.length === 0 && (
-                      <option value="">No OpenAI voices loaded</option>
-                    )}
-                    {openAiVoices.map((voice) => (
-                      <option key={voice.voice_id} value={voice.voice_id}>
-                        {voice.name}
-                      </option>
-                    ))}
-                  </Sel>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    OpenAI remains available as the fallback provider.
-                  </p>
-                </div>
-              ) : (
-                <div className="col-span-2 sm:col-span-1">
-                  <Label>ElevenLabs Voice</Label>
-                  <Sel
-                    value={selectedElevenLabsVoiceId}
-                    onChange={(e) =>
-                      void handleElevenLabsVoiceChange(e.target.value)
-                    }
-                    disabled={
-                      voiceConfigLoading || elevenLabsVoices.length === 0
-                    }
-                  >
-                    <option value="">
-                      {elevenLabsVoices.length
-                        ? "Select a voice"
-                        : "No voices loaded"}
-                    </option>
-                    {elevenLabsVoices.map((voice) => (
-                      <option key={voice.voice_id} value={voice.voice_id}>
-                        {voice.name}
-                        {voice.category ? ` · ${voice.category}` : ""}
-                      </option>
-                    ))}
-                  </Sel>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Voices are fetched from the backend — nothing is hardcoded.
-                  </p>
-                </div>
-              )}
-
               <div>
                 <Label>Language</Label>
                 <Sel
@@ -1309,159 +707,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     ? "Number locked — use Unassign to free it for another agent."
                     : "Assign a number in the Phone Numbers section."}
                 </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Voice Engine Settings
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Save the provider and listen to the selected voice before
-                    using this agent in calls.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => void previewVoice()}
-                    disabled={
-                      voicePreviewing ||
-                      voiceConfigLoading ||
-                      (voiceProvider === "elevenlabs" &&
-                        !selectedElevenLabsVoiceId)
-                    }
-                    className="rounded-xl border border-slate-200 bg-white text-slate-700 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-all"
-                  >
-                    {voicePreviewing ? "Listening…" : "Listen to Voice"}
-                  </button>
-                  <button
-                    onClick={() => void saveVoiceConfig()}
-                    disabled={
-                      voiceConfigSaving ||
-                      voiceConfigLoading ||
-                      (voiceProvider === "elevenlabs" &&
-                        !selectedElevenLabsVoiceId)
-                    }
-                    className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 transition-all"
-                  >
-                    {voiceConfigSaving ? "Saving…" : "Save Voice"}
-                  </button>
-                </div>
-              </div>
-
-              {voiceProvider === "elevenlabs" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    {
-                      key: "stability",
-                      label: "Stability",
-                      min: 0,
-                      max: 1,
-                      step: 0.01,
-                      fallback: DEFAULT_ELEVENLABS_SETTINGS.stability,
-                    },
-                    {
-                      key: "similarity_boost",
-                      label: "Similarity Boost",
-                      min: 0,
-                      max: 1,
-                      step: 0.01,
-                      fallback: DEFAULT_ELEVENLABS_SETTINGS.similarity_boost,
-                    },
-                    {
-                      key: "style",
-                      label: "Style",
-                      min: 0,
-                      max: 1,
-                      step: 0.01,
-                      fallback: DEFAULT_ELEVENLABS_SETTINGS.style,
-                    },
-                    {
-                      key: "speed",
-                      label: "Speed",
-                      min: 0.7,
-                      max: 1.2,
-                      step: 0.01,
-                      fallback: DEFAULT_ELEVENLABS_SETTINGS.speed,
-                    },
-                  ].map((control) => {
-                    const key = control.key as keyof VoiceSettings;
-                    const value = toSliderValue(
-                      voiceSettings[key] as number | undefined,
-                      control.fallback,
-                    );
-                    return (
-                      <div key={control.key}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <Label>{control.label}</Label>
-                          <span className="text-[10px] font-black text-slate-500">
-                            {value.toFixed(2)}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={control.min}
-                          max={control.max}
-                          step={control.step}
-                          value={value}
-                          onChange={(e) =>
-                            updateVoiceSetting(
-                              key,
-                              Number(e.target.value) as never,
-                            )
-                          }
-                          className="w-full accent-amber-500"
-                        />
-                      </div>
-                    );
-                  })}
-                  <div className="md:col-span-2 flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        Speaker Boost
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        Improve similarity and clarity when supported.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        updateVoiceSetting(
-                          "use_speaker_boost",
-                          !voiceSettings.use_speaker_boost,
-                        )
-                      }
-                      className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${voiceSettings.use_speaker_boost ? "bg-amber-500" : "bg-slate-200"}`}
-                    >
-                      <div
-                        className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${voiceSettings.use_speaker_boost ? "translate-x-5" : "translate-x-0"}`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Use Knowledge Base
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    Let this voice agent answer from connected FAQs and
-                    knowledge chunks.
-                  </p>
-                </div>
-                <button
-                  onClick={() => void toggleKnowledgeBase()}
-                  disabled={knowledgeSaving}
-                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 disabled:opacity-50 ${knowledgeEnabled ? "bg-amber-500" : "bg-slate-200"}`}
-                >
-                  <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${knowledgeEnabled ? "translate-x-5" : "translate-x-0"}`}
-                  />
-                </button>
               </div>
             </div>
 
@@ -1523,12 +768,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
               <div className="relative z-10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-3">
-                  Agent Status
+                  Live Status
                 </p>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                   <span className="text-xs font-bold text-emerald-300">
-                    Active
+                    Online
                   </span>
                 </div>
                 <p className="text-sm font-bold text-white/70 mb-5">
@@ -1927,7 +1172,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           open
           onClose={() => setSelectedAgent(null)}
           title={selectedAgent.name}
-          description={`${selectedAgent.direction} agent · ${getAgentVoiceDisplay(selectedAgent)} voice · ${selectedAgent.twilioPhoneNumber || "No number assigned"}`}
+          description={`${selectedAgent.direction} agent · ${selectedAgent.twilioPhoneNumber || "No number assigned"}`}
           size="lg"
           footer={
             <div className="flex gap-3">
@@ -1973,7 +1218,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   </span>
                   {selectedAgent.id === org.activeVoiceAgentId && (
                     <span className="rounded-full bg-amber-100 text-amber-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">
-                      Selected
+                      Live
                     </span>
                   )}
                 </div>
@@ -1991,9 +1236,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   Voice
                 </p>
                 <p className="text-sm font-black text-slate-900">
-                  {selectedAgentVoiceLoading
-                    ? "Loading saved voice..."
-                    : getAgentVoiceDisplay(selectedAgent)}
+                  {selectedAgent.voice}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">

@@ -202,7 +202,11 @@ export const api = {
   async createVoiceAgent(payload: Partial<AgentConfig> = {}) {
     return request<AgentConfig>('/api/voice-agents', {
       method: 'POST',
-      body: payload,
+      body: {
+        ...payload,
+        isActive: true,
+        is_active: true,
+      },
     });
   },
 
@@ -530,27 +534,14 @@ export const twilioApi = {
     return (await res.json()) as { numbers: import('../types').AvailablePhoneNumber[] };
   },
 
-  /** List tenant phone numbers only. Never call master-account owned-number routes. */
+  /** List numbers already owned on the master account */
   async listOwned() {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers`, {
+    const res = await fetch(`${base}/api/twilio/numbers/owned`, {
       headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
     });
     if (!res.ok) throw new Error((await res.json())?.error?.message || 'Failed');
-    const data = await res.json();
-    const numbers = (data.numbers || []).map((n: any) => ({
-      ...n,
-      // Use safe DB id for UI actions. Do not use or display Twilio PN/AC SIDs.
-      sid: n.id || n.numberId,
-      phoneNumber: n.phoneNumber || n.phone_number,
-      friendlyName: n.friendlyName || n.phoneNumber || n.phone_number,
-      voiceUrl: n.voiceUrl || '',
-      dateCreated: n.createdAt || n.created_at || '',
-      capabilities: n.capabilities || { voice: true, sms: false },
-      agentId: n.agentId || n.assignedVoiceAgentId || n.assigned_voice_agent_id || null,
-      agentName: n.agentName || n.assignedAgent?.name || null,
-    }));
-    return { ...data, numbers } as { numbers: import('../types').OwnedPhoneNumber[] };
+    return (await res.json()) as { numbers: import('../types').OwnedPhoneNumber[] };
   },
 
   /** Purchase a new number and assign to a voice agent */
@@ -568,25 +559,25 @@ export const twilioApi = {
     return res.json() as Promise<{ success: boolean; phoneNumber: string; phoneSid: string; agentId: string }>;
   },
 
-  /** Assign a tenant DB number to a voice agent. numberId must be twilio_phone_numbers.id. */
-  async assignNumber(numberId: string, _phoneNumber: string, voiceAgentId?: string) {
+  /** Assign an already-owned number to a voice agent */
+  async assignNumber(phoneSid: string, phoneNumber: string, voiceAgentId?: string) {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers/${encodeURIComponent(numberId)}/assign-agent`, {
+    const res = await fetch(`${base}/api/twilio/numbers/assign`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}`
       },
-      body: JSON.stringify({ agentId: voiceAgentId, voiceAgentId }),
+      body: JSON.stringify({ phoneSid, phoneNumber, voiceAgentId }),
     });
     if (!res.ok) throw new Error((await res.json())?.error?.message || 'Assign failed');
     return res.json();
   },
 
-  /** Release/remove a tenant DB number by safe number id. */
-  async releaseNumber(numberId: string) {
+  /** Release a number */
+  async releaseNumber(sid: string) {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${base}/api/twilio/numbers/${encodeURIComponent(numberId)}`, {
+    const res = await fetch(`${base}/api/twilio/numbers/${sid}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${(await import('./session')).getSessionToken() || ''}` }
     });
