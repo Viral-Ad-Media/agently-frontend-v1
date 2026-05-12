@@ -38,7 +38,6 @@ type CallDetail = CallListItem & {
     signedUrl?: string;
     recordingStatus?: string | null;
     mimeType?: string;
-    audioBase64?: string;
   } | null;
 };
 
@@ -83,25 +82,6 @@ const formatDuration = (seconds?: number | null) => {
   const mins = Math.floor(total / 60);
   const secs = total % 60;
   return mins ? `${mins}m ${secs}s` : `${secs}s`;
-};
-
-const isDirectTwilioUrl = (value?: string | null) => {
-  if (!value) return false;
-  try {
-    const url = new URL(value);
-    return (
-      /(^|\.)api\.twilio\.com$/i.test(url.hostname) ||
-      /(^|\.)twilio\.com$/i.test(url.hostname)
-    );
-  } catch {
-    return /api\.twilio\.com|twilio\.com/i.test(String(value));
-  }
-};
-
-const safePlayableUrl = (value?: string | null) => {
-  const url = safeString(value || "", "").trim();
-  if (!url || isDirectTwilioUrl(url)) return "";
-  return url;
 };
 
 const normalizeCallStatus = (row: Record<string, unknown>) => {
@@ -298,10 +278,9 @@ const normalizeCall = (value: unknown): CallListItem | null => {
       row.recordingUrl ||
       row.recording_url,
     ),
-    recordingUrl: safePlayableUrl(
-      (row.recordingUrl as string | undefined) ||
-        (row.recording_url as string | undefined) ||
-        (row.recording_public_url as string | undefined),
+    recordingUrl: safeString(
+      row.recordingUrl || row.recording_url || row.recording_public_url || "",
+      "",
     ),
     transcript: normalizeTranscript(row.transcript),
     raw: row,
@@ -573,34 +552,18 @@ const CallLogs: React.FC<CallLogsProps> = ({
       const recording = (payload.recording ||
         payload.data ||
         payload) as Record<string, unknown>;
-      const signedUrl = safePlayableUrl(
-        (recording.signed_url as string | undefined) ||
-          (recording.signedUrl as string | undefined) ||
-          (recording.url as string | undefined),
-      );
-      const audioBase64 = safeString(
-        recording.audioBase64 || recording.audio_base64 || "",
-        "",
-      );
-      if (
-        !signedUrl &&
-        !audioBase64 &&
-        isDirectTwilioUrl(
-          String(
-            recording.signed_url || recording.signedUrl || recording.url || "",
-          ),
-        )
-      ) {
-        throw new Error(
-          "Recording must be proxied by the backend before playback. Direct Twilio recording URLs cannot be played in the browser.",
-        );
-      }
       setSelected((current) =>
         current
           ? {
               ...current,
               recording: {
-                signedUrl,
+                signedUrl: safeString(
+                  recording.signed_url ||
+                    recording.signedUrl ||
+                    recording.url ||
+                    "",
+                  "",
+                ),
                 recordingStatus: safeString(
                   recording.recording_status || recording.status || "",
                   "",
@@ -609,7 +572,6 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   recording.mime_type || recording.mimeType || "audio/mpeg",
                   "audio/mpeg",
                 ),
-                audioBase64,
               },
             }
           : current,
@@ -888,7 +850,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             : undefined
         }
         size="2xl"
-        bodyClassName="pb-4"
+        bodyClassName="max-h-[72vh] overflow-y-auto"
         footer={
           selected ? (
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -919,7 +881,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         }
       >
         {selected ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {detailLoading ? (
               <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-400">
                 Loading latest call details...
@@ -953,17 +915,18 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </p>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
+            <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Conversation transcript
                   </p>
                   <p className="text-[10px] font-bold text-slate-400">
-                    Caller left · Agent right
+                    Caller messages appear on the left. Agent messages appear on
+                    the right.
                   </p>
                 </div>
-                <div className="max-h-[360px] space-y-3 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 pr-3 custom-scrollbar">
+                <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 pr-3">
                   {(selected.transcript && selected.transcript.length
                     ? selected.transcript
                     : []
@@ -977,7 +940,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                           className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
                         >
                           <div
-                            className={`max-w-[84%] rounded-2xl px-3 py-2 text-[12px] shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
+                            className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
                           >
                             <p
                               className={`mb-1 text-[10px] font-black uppercase tracking-widest ${isAgent ? "text-white/60" : "text-slate-400"}`}
@@ -1000,24 +963,17 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Recording
                   </p>
-                  {selected.recording?.audioBase64 ? (
-                    <audio
-                      controls
-                      src={`data:${selected.recording.mimeType || "audio/mpeg"};base64,${selected.recording.audioBase64}`}
-                      className="mt-3 w-full"
-                    />
-                  ) : selected.recording?.signedUrl ? (
+                  {selected.recording?.signedUrl ? (
                     <audio
                       controls
                       src={selected.recording.signedUrl}
                       className="mt-3 w-full"
                     />
-                  ) : selected.recordingUrl &&
-                    !isDirectTwilioUrl(selected.recordingUrl) ? (
+                  ) : selected.recordingUrl ? (
                     <audio
                       controls
                       src={selected.recordingUrl}
@@ -1038,7 +994,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Unanswered questions
                   </p>
@@ -1071,13 +1027,13 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 </div>
 
                 {selected.lead ? (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Related lead
                     </p>
-                    <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-500">
-                      Lead attached to this call
-                    </p>
+                    <pre className="mt-3 max-h-36 overflow-auto rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
+                      {JSON.stringify(selected.lead, null, 2)}
+                    </pre>
                   </div>
                 ) : null}
               </aside>
