@@ -293,7 +293,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
   const [schedules, setSchedules] = useState<OutreachSchedule[]>([]);
   const [preview, setPreview] = useState<SchedulePreview | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<OutreachSchedule | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<OutreachSchedule | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string; bulk?: boolean } | null>(null);
   const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>([]);
   const [schedulePage, setSchedulePage] = useState(1);
 
@@ -561,7 +561,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
 
   const confirmDeleteSchedule = async () => {
     if (!deleteTarget) return;
-    const scheduleId = getScheduleId(deleteTarget, 0);
+    const scheduleId = deleteTarget.id;
     setBusy(`delete-${scheduleId}`);
     try {
       await voiceCallsApi.outreach.deleteOutreachSchedule(scheduleId);
@@ -627,7 +627,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
                 {pageScheduleIds.length > 0 && pageScheduleIds.every((id) => selectedScheduleIds.includes(id)) ? "Clear Page" : "Select Page"}
               </button>
               {selectedScheduleIds.length > 0 && (
-                <button onClick={() => setDeleteTarget({ id: "bulk", name: `${selectedScheduleIds.length} selected schedules` })} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">Delete Selected</button>
+                <button onClick={() => setDeleteTarget({ id: "bulk", name: `${selectedScheduleIds.length} selected schedules`, bulk: true })} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">Delete Selected</button>
               )}
               <button onClick={() => void loadSchedules()} disabled={busy === "load-schedules"} className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 disabled:opacity-50">
                 {busy === "load-schedules" ? "Loading..." : "Refresh"}
@@ -671,7 +671,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
                         {!completed && (
                           <button onClick={() => void handleCancelSchedule(scheduleId)} disabled={busy === `cancel-${scheduleId}`} className="rounded-xl border border-amber-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 hover:bg-amber-50 disabled:opacity-50">Cancel</button>
                         )}
-                        <button onClick={() => setDeleteTarget(schedule)} disabled={busy === `delete-${scheduleId}`} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50">Delete</button>
+                        <button onClick={() => setDeleteTarget({ id: scheduleId, name: schedule.name || "Scheduled call" })} disabled={busy === `delete-${scheduleId}`} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50">Delete</button>
                       </div>
                     </div>
                   </div>
@@ -889,7 +889,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
             </button>
             <button
               type="button"
-              onClick={() => deleteTarget?.id === "bulk" ? void handleBulkDelete() : void confirmDeleteSchedule()}
+              onClick={() => deleteTarget?.bulk ? void handleBulkDelete() : void confirmDeleteSchedule()}
               disabled={busy === "bulk-delete" || !!busy?.startsWith("delete-")}
               className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50"
             >
@@ -899,7 +899,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
         }
       >
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Permanently deleting <strong>{deleteTarget?.id === "bulk" ? `${selectedScheduleIds.length} selected schedules` : deleteTarget?.name || "this schedule"}</strong>. This cannot be recovered.
+          Permanently deleting <strong>{deleteTarget?.bulk ? `${selectedScheduleIds.length} selected schedules` : deleteTarget?.name || "this schedule"}</strong>. This cannot be recovered.
         </div>
       </AppModal>
 

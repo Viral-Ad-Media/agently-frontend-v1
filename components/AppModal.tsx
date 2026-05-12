@@ -57,7 +57,7 @@ const AppModal: React.FC<AppModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[400] overflow-y-auto bg-slate-950/75 backdrop-blur-md p-4 sm:p-6"
+      className="fixed inset-0 z-[400] overflow-y-auto bg-slate-950/65 p-4 sm:p-6"
       onMouseDown={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
           onClose();
