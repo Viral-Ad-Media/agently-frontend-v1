@@ -41,6 +41,13 @@ type CallDetail = CallListItem & {
   } | null;
 };
 
+type CallMetrics = {
+  totalCalls: number;
+  completed: number;
+  failed: number;
+  avg: number;
+};
+
 interface CallLogsProps {
   calls?: CallRecord[];
   onDownloadReport: (callId: string) => Promise<void>;
@@ -59,26 +66,87 @@ const STATUS_STYLE: Record<string, string> = {
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-const safeString = (value: unknown, fallback = ""): string => {
+const safeString = (value: unknown, fallback = "") => {
   if (value == null) return fallback;
   return String(value);
 };
 
-const titleCase = (value: string): string =>
+const titleCase = (value: string) =>
   value
     .replace(/_/g, " ")
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-const formatDuration = (seconds?: number | null): string => {
+const formatDuration = (seconds?: number | null) => {
   const total = Math.max(0, Number(seconds || 0));
   const mins = Math.floor(total / 60);
   const secs = total % 60;
   return mins ? `${mins}m ${secs}s` : `${secs}s`;
 };
 
+const normalizeCallStatus = (row: Record<string, unknown>) => {
+  const rawStatus = safeString(
+    row.status || row.call_status || "",
+    "",
+  ).toLowerCase();
+  const outcome = safeString(row.outcome || row.result || "", "").toLowerCase();
+  const duration =
+    Number(
+      row.duration || row.duration_seconds || row.recording_duration || 0,
+    ) || 0;
+  const completedAt =
+    row.completed_at || row.completedAt || row.ended_at || row.endedAt;
+  const failedHints = [
+    "failed",
+    "busy",
+    "no-answer",
+    "no_answer",
+    "canceled",
+    "cancelled",
+    "error",
+  ];
+  if (
+    failedHints.some(
+      (hint) => rawStatus.includes(hint) || outcome.includes(hint),
+    )
+  )
+    return rawStatus.includes("cancel") ? "cancelled" : "failed";
+  if (
+    completedAt ||
+    duration > 0 ||
+    rawStatus === "completed" ||
+    outcome.includes("answered") ||
+    outcome.includes("completed")
+  )
+    return "completed";
+  return rawStatus || "queued";
+};
+
+const normalizeCallDirection = (row: Record<string, unknown>) => {
+  const explicit = safeString(
+    row.direction || row.callDirection || row.call_direction || "",
+    "",
+  ).toLowerCase();
+  if (explicit === "outbound" || explicit === "inbound") return explicit;
+  const meta =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  const metadataText = JSON.stringify(meta).toLowerCase();
+  if (
+    metadataText.includes("outbound") ||
+    row.schedule_id ||
+    row.scheduleId ||
+    row.outreach_run_id ||
+    row.outreachRunId ||
+    row.lead_outreach_run_id
+  )
+    return "outbound";
+  return "inbound";
+};
+
 const getArrayPayload = (payload: unknown, keys: string[]): unknown[] => {
-  if (Array.isArray(payload)) return payload as unknown[];
+  if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== "object") return [];
   const record = payload as Record<string, unknown>;
   for (const key of keys) {
@@ -117,11 +185,11 @@ const normalizeTranscript = (payload: unknown): TranscriptMessage[] => {
       .filter((line) => line.text);
   }
 
-  const list: unknown[] = Array.isArray(payload)
-    ? (payload as unknown[])
+  const list = Array.isArray(payload)
+    ? payload
     : getArrayPayload(payload, ["transcript", "messages", "items", "data"]);
   return list
-    .map((item: unknown): TranscriptMessage | null => {
+    .map((item: unknown) => {
       if (typeof item === "string")
         return { speaker: "Unknown", text: item } as TranscriptMessage;
       if (!item || typeof item !== "object") return null;
@@ -162,12 +230,13 @@ const normalizeCall = (value: unknown): CallListItem | null => {
   );
   const duration =
     Number(
-      row.duration || row.duration_seconds || row.recording_duration || 0,
+      row.duration ||
+        row.duration_seconds ||
+        row.recording_duration ||
+        row.durationSeconds ||
+        0,
     ) || 0;
-  const status = safeString(
-    row.status || row.call_status || row.outcome || "completed",
-    "completed",
-  ).toLowerCase();
+  const status = normalizeCallStatus(row);
   const outcome = safeString(
     row.outcome || row.result || status || "Completed",
     "Completed",
@@ -195,10 +264,7 @@ const normalizeCall = (value: unknown): CallListItem | null => {
     id,
     callerName,
     callerPhone,
-    direction: safeString(
-      row.direction || row.callDirection || "inbound",
-      "inbound",
-    ),
+    direction: normalizeCallDirection(row),
     status,
     outcome,
     summary: safeString(row.summary || "", ""),
@@ -223,25 +289,47 @@ const normalizeCall = (value: unknown): CallListItem | null => {
 
 const normalizeCallsResponse = (
   payload: unknown,
-): { calls: CallListItem[]; total: number; page: number; limit: number } => {
-  const list: unknown[] = getArrayPayload(payload, [
-    "calls",
-    "data",
-    "items",
-    "results",
-  ]);
+): {
+  calls: CallListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  metrics?: CallMetrics;
+} => {
+  const list = getArrayPayload(payload, ["calls", "data", "items", "results"]);
   const record =
     payload && typeof payload === "object"
       ? (payload as Record<string, unknown>)
       : {};
-  const calls: CallListItem[] = list
-    .map((call: unknown) => normalizeCall(call))
+  const calls = list
+    .map((item: unknown) => normalizeCall(item))
     .filter((call: CallListItem | null): call is CallListItem => Boolean(call));
+  const metricsRaw =
+    record.metrics && typeof record.metrics === "object"
+      ? (record.metrics as Record<string, unknown>)
+      : null;
+  const metrics = metricsRaw
+    ? {
+        totalCalls:
+          Number(metricsRaw.totalCalls || metricsRaw.total_calls || 0) || 0,
+        completed:
+          Number(metricsRaw.completed || metricsRaw.completedCalls || 0) || 0,
+        failed: Number(metricsRaw.failed || metricsRaw.failedCalls || 0) || 0,
+        avg:
+          Number(
+            metricsRaw.avgDuration ||
+              metricsRaw.avg_duration ||
+              metricsRaw.averageDuration ||
+              0,
+          ) || 0,
+      }
+    : undefined;
   return {
     calls,
     total: Number(record.total || record.count || calls.length) || calls.length,
     page: Number(record.page || 1) || 1,
     limit: Number(record.limit || PAGE_SIZE) || PAGE_SIZE,
+    metrics,
   };
 };
 
@@ -297,7 +385,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
 }) => {
   const [calls, setCalls] = useState<CallListItem[]>(() =>
     initialCalls
-      .map((call: CallRecord) => normalizeCall(call))
+      .map((item: CallRecord) => normalizeCall(item))
       .filter((call: CallListItem | null): call is CallListItem =>
         Boolean(call),
       ),
@@ -315,6 +403,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [recordingLoading, setRecordingLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const [serverMetrics, setServerMetrics] = useState<CallMetrics | null>(null);
 
   const loadCalls = async (nextPage = page) => {
     setLoading(true);
@@ -332,6 +421,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         setCalls(normalized.calls);
         setTotal(normalized.total);
         setPage(normalized.page || nextPage);
+        setServerMetrics(normalized.metrics || null);
       });
     } catch (err) {
       setError(
@@ -365,6 +455,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   }, [calls, search]);
 
   const stats = useMemo(() => {
+    if (serverMetrics) return serverMetrics;
     const totalCalls = calls.length;
     const completed = calls.filter(
       (call) =>
@@ -374,6 +465,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
     const failed = calls.filter(
       (call) =>
         call.status.includes("failed") ||
+        call.status.includes("cancelled") ||
         call.outcome.toLowerCase().includes("failed"),
     ).length;
     const avg = totalCalls
@@ -382,7 +474,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         )
       : 0;
     return { totalCalls, completed, failed, avg };
-  }, [calls]);
+  }, [calls, serverMetrics]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -419,7 +511,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         messagesPayload.status === "fulfilled"
           ? normalizeTranscript(messagesPayload.value)
           : [];
-      const unanswered: unknown[] =
+      const unanswered =
         unansweredPayload.status === "fulfilled"
           ? getArrayPayload(unansweredPayload.value, [
               "unansweredQuestions",
@@ -544,7 +636,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
-            label: "Loaded calls",
+            label: "Total calls",
             value: stats.totalCalls,
             icon: "fa-phone-volume",
             color: "bg-indigo-50 text-indigo-600",
@@ -834,7 +926,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     the right.
                   </p>
                 </div>
-                <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 pr-3">
                   {(selected.transcript && selected.transcript.length
                     ? selected.transcript
                     : []
@@ -864,10 +956,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     })
                   ) : (
                     <div className="py-10 text-center text-sm text-slate-400">
-                      No transcript is available yet. If only agent messages
-                      appear for a call, the backend relay must also append
-                      caller transcription events to{" "}
-                      <code>call_records.transcript</code>.
+                      No transcript is available yet for this call.
                     </div>
                   )}
                 </div>

@@ -55,6 +55,8 @@ type OutreachSchedule = {
   startAt?: string;
   direct_recipients?: unknown;
   directRecipients?: unknown;
+  lead_ids?: unknown;
+  leadIds?: unknown;
   progress?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
@@ -127,7 +129,6 @@ const getTimezones = () => {
 };
 
 const TIMEZONES = getTimezones();
-const isKnownTimezone = (value: string) => TIMEZONES.includes(value);
 
 const DAYS = [
   { key: "monday", label: "Mon" },
@@ -188,8 +189,41 @@ const getAssignedAgentId = (number: TwilioNumberRecord) =>
 
 const getScheduleId = (schedule: OutreachSchedule, fallback: number) =>
   String(schedule.id || fallback);
-const getScheduleStatus = (schedule: OutreachSchedule) =>
-  String(schedule.status || "active").toLowerCase();
+const getScheduleProgress = (schedule: OutreachSchedule) => {
+  const progress =
+    schedule.progress && typeof schedule.progress === "object"
+      ? (schedule.progress as Record<string, unknown>)
+      : {};
+  const total =
+    Number(progress.totalRuns || progress.total_runs || progress.total || 0) ||
+    0;
+  const remaining = Number(progress.remaining || progress.pending || 0) || 0;
+  const completed = Number(progress.completed || 0) || 0;
+  const failed = Number(progress.failed || 0) || 0;
+  return { total, remaining, completed, failed };
+};
+
+const getScheduleStatus = (schedule: OutreachSchedule) => {
+  const raw = String(schedule.status || "active").toLowerCase();
+  if (
+    [
+      "completed",
+      "complete",
+      "done",
+      "cancelled",
+      "canceled",
+      "failed",
+      "deleted",
+    ].includes(raw)
+  )
+    return raw;
+  const progress = getScheduleProgress(schedule);
+  if (progress.total > 0 && progress.remaining <= 0) {
+    if (progress.failed >= progress.total) return "failed";
+    return "completed";
+  }
+  return raw;
+};
 const isDoneStatus = (status: string) =>
   ["completed", "complete", "done", "cancelled", "canceled", "failed"].includes(
     status,
@@ -209,6 +243,68 @@ const statusClass = (status: string) => {
   if (["queued", "pending", "draft"].some((v) => s.includes(v)))
     return "bg-amber-50 text-amber-700";
   return "bg-emerald-50 text-emerald-700";
+};
+
+const humanDateTime = (value: unknown) => {
+  if (!value) return "—";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const parseScheduleRecipients = (schedule: OutreachSchedule) => {
+  const raw =
+    schedule.directRecipients ||
+    schedule.direct_recipients ||
+    schedule.metadata?.directRecipients ||
+    [];
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? (() => {
+          try {
+            return JSON.parse(raw);
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+  return Array.isArray(list)
+    ? list
+        .map((item) =>
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : null,
+        )
+        .filter(Boolean)
+    : [];
+};
+
+const recipientSummary = (schedule: OutreachSchedule) => {
+  const recipients = parseScheduleRecipients(schedule);
+  if (recipients.length) {
+    const names = recipients
+      .map((recipient) =>
+        String(recipient?.name || recipient?.phone || "Recipient"),
+      )
+      .slice(0, 3);
+    return `${names.join(", ")}${recipients.length > 3 ? ` +${recipients.length - 3} more` : ""}`;
+  }
+  const leadIds = Array.isArray(schedule.lead_ids)
+    ? schedule.lead_ids.length
+    : Array.isArray(schedule.leadIds)
+      ? schedule.leadIds.length
+      : 0;
+  return leadIds
+    ? `${leadIds} lead${leadIds === 1 ? "" : "s"}`
+    : "No recipients shown";
 };
 
 const getPreviewCalls = (preview: SchedulePreview | null) => {
@@ -254,8 +350,8 @@ const addThirtyMinutes = (time: string) => {
 };
 
 const PAGE_SIZE = 10;
-const normalizeTimeValue = (value: string) =>
-  /^\d{2}:\d{2}$/.test(value) ? value : timePlusMinutes(5);
+const HOURS = Array.from({ length: 24 }, (_, hour) => pad(hour));
+const MINUTES = Array.from({ length: 60 }, (_, minute) => pad(minute));
 
 const TimePicker = memo(
   ({
@@ -267,18 +363,37 @@ const TimePicker = memo(
     value: string;
     onChange: (value: string) => void;
   }) => {
-    const safeValue = normalizeTimeValue(value);
+    const [hour = "00", minute = "00"] = value.split(":");
     return (
-      <label className="block space-y-1.5">
+      <div className="space-y-1.5">
         <span className="text-xs font-bold text-slate-500">{label}</span>
-        <input
-          type="time"
-          step={60}
-          value={safeValue}
-          onChange={(event) => onChange(event.target.value || safeValue)}
-          className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none focus:border-amber-300"
-        />
-      </label>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={hour}
+            onChange={(event) => onChange(`${event.target.value}:${minute}`)}
+            className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-amber-300"
+            aria-label={`${label} hour`}
+          >
+            {HOURS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <select
+            value={minute}
+            onChange={(event) => onChange(`${hour}:${event.target.value}`)}
+            className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-amber-300"
+            aria-label={`${label} minute`}
+          >
+            {MINUTES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     );
   },
 );
@@ -355,35 +470,6 @@ const TimeListEditor = memo(
   },
 );
 TimeListEditor.displayName = "TimeListEditor";
-
-const TimezonePicker = memo(
-  ({
-    value,
-    onChange,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-  }) => {
-    return (
-      <label className="block space-y-1.5">
-        <span className="text-xs font-bold text-slate-500">Timezone</span>
-        <input
-          value={value}
-          list="agently-timezones"
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search timezone, e.g. Africa/Lagos"
-          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-        />
-        <datalist id="agently-timezones">
-          {TIMEZONES.map((zone) => (
-            <option key={zone} value={zone} />
-          ))}
-        </datalist>
-      </label>
-    );
-  },
-);
-TimezonePicker.displayName = "TimezonePicker";
 
 const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   org,
@@ -624,8 +710,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     if (!voiceAgentId) return "Choose a voice agent.";
     if (!fromNumber) return "Choose a from number.";
     if (!callPurpose.trim()) return "Call purpose is required.";
-    if (callType !== "call_now" && !isKnownTimezone(timezone))
-      return "Choose a valid timezone from the timezone search list.";
     const invalidRecipient = directRecipients.find(
       (recipient) => recipient.displayPhone && recipient.phoneError,
     );
@@ -993,9 +1077,13 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                             {schedule.fromNumber ||
                               schedule.from_number ||
                               "No from number"}{" "}
-                            · {schedule.timezone || timezone}
+                            · {recipientSummary(schedule)}
                           </p>
                           <p className="mt-1 text-xs text-slate-400">
+                            {humanDateTime(
+                              schedule.startAt || schedule.start_at,
+                            )}{" "}
+                            ·{" "}
                             {schedule.callPurpose ||
                               schedule.call_purpose ||
                               "No purpose shown"}
@@ -1308,13 +1396,22 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
                       />
                     </label>
-                    <TimezonePicker
-                      value={timezone}
-                      onChange={(value) => {
-                        setTimezone(value);
-                        setPreview(null);
-                      }}
-                    />
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-bold text-slate-500">
+                        Timezone
+                      </span>
+                      <select
+                        value={timezone}
+                        onChange={(event) => setTimezone(event.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      >
+                        {TIMEZONES.map((zone) => (
+                          <option key={zone} value={zone}>
+                            {zone}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     {callType !== "one_time_batch" &&
                     callType !== "custom_rule" ? (
                       <TimePicker
@@ -1592,6 +1689,14 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               </div>
               <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Recipients
+                </p>
+                <p className="mt-1 font-medium text-slate-700">
+                  {recipientSummary(selectedSchedule)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Purpose
                 </p>
                 <p className="mt-1 font-medium text-slate-700">
@@ -1605,9 +1710,9 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   Created
                 </p>
                 <p className="mt-1 font-bold text-slate-900">
-                  {selectedSchedule.createdAt ||
-                    selectedSchedule.created_at ||
-                    "—"}
+                  {humanDateTime(
+                    selectedSchedule.createdAt || selectedSchedule.created_at,
+                  )}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
@@ -1615,7 +1720,9 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   Starts
                 </p>
                 <p className="mt-1 font-bold text-slate-900">
-                  {selectedSchedule.startAt || selectedSchedule.start_at || "—"}
+                  {humanDateTime(
+                    selectedSchedule.startAt || selectedSchedule.start_at,
+                  )}
                 </p>
               </div>
             </div>
