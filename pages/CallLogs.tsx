@@ -85,6 +85,25 @@ const formatDuration = (seconds?: number | null) => {
   return mins ? `${mins}m ${secs}s` : `${secs}s`;
 };
 
+const isDirectTwilioUrl = (value?: string | null) => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (
+      /(^|\.)api\.twilio\.com$/i.test(url.hostname) ||
+      /(^|\.)twilio\.com$/i.test(url.hostname)
+    );
+  } catch {
+    return /api\.twilio\.com|twilio\.com/i.test(String(value));
+  }
+};
+
+const safePlayableUrl = (value?: string | null) => {
+  const url = safeString(value || "", "").trim();
+  if (!url || isDirectTwilioUrl(url)) return "";
+  return url;
+};
+
 const normalizeCallStatus = (row: Record<string, unknown>) => {
   const rawStatus = safeString(
     row.status || row.call_status || "",
@@ -279,9 +298,10 @@ const normalizeCall = (value: unknown): CallListItem | null => {
       row.recordingUrl ||
       row.recording_url,
     ),
-    recordingUrl: safeString(
-      row.recordingUrl || row.recording_url || row.recording_public_url || "",
-      "",
+    recordingUrl: safePlayableUrl(
+      (row.recordingUrl as string | undefined) ||
+        (row.recording_url as string | undefined) ||
+        (row.recording_public_url as string | undefined),
     ),
     transcript: normalizeTranscript(row.transcript),
     raw: row,
@@ -553,18 +573,34 @@ const CallLogs: React.FC<CallLogsProps> = ({
       const recording = (payload.recording ||
         payload.data ||
         payload) as Record<string, unknown>;
+      const signedUrl = safePlayableUrl(
+        (recording.signed_url as string | undefined) ||
+          (recording.signedUrl as string | undefined) ||
+          (recording.url as string | undefined),
+      );
+      const audioBase64 = safeString(
+        recording.audioBase64 || recording.audio_base64 || "",
+        "",
+      );
+      if (
+        !signedUrl &&
+        !audioBase64 &&
+        isDirectTwilioUrl(
+          String(
+            recording.signed_url || recording.signedUrl || recording.url || "",
+          ),
+        )
+      ) {
+        throw new Error(
+          "Recording must be proxied by the backend before playback. Direct Twilio recording URLs cannot be played in the browser.",
+        );
+      }
       setSelected((current) =>
         current
           ? {
               ...current,
               recording: {
-                signedUrl: safeString(
-                  recording.signed_url ||
-                    recording.signedUrl ||
-                    recording.url ||
-                    "",
-                  "",
-                ),
+                signedUrl,
                 recordingStatus: safeString(
                   recording.recording_status || recording.status || "",
                   "",
@@ -573,10 +609,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   recording.mime_type || recording.mimeType || "audio/mpeg",
                   "audio/mpeg",
                 ),
-                audioBase64: safeString(
-                  recording.audioBase64 || recording.audio_base64 || "",
-                  "",
-                ),
+                audioBase64,
               },
             }
           : current,
@@ -855,7 +888,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             : undefined
         }
         size="2xl"
-        bodyClassName=""
+        bodyClassName="pb-4"
         footer={
           selected ? (
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -886,7 +919,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         }
       >
         {selected ? (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {detailLoading ? (
               <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-400">
                 Loading latest call details...
@@ -930,7 +963,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     Caller left · Agent right
                   </p>
                 </div>
-                <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="max-h-[360px] space-y-3 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4 pr-3 custom-scrollbar">
                   {(selected.transcript && selected.transcript.length
                     ? selected.transcript
                     : []
@@ -944,7 +977,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                           className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
                         >
                           <div
-                            className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 text-[13px] shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
+                            className={`max-w-[84%] rounded-2xl px-3 py-2 text-[12px] shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
                           >
                             <p
                               className={`mb-1 text-[10px] font-black uppercase tracking-widest ${isAgent ? "text-white/60" : "text-slate-400"}`}
@@ -983,7 +1016,8 @@ const CallLogs: React.FC<CallLogsProps> = ({
                       src={selected.recording.signedUrl}
                       className="mt-3 w-full"
                     />
-                  ) : selected.recordingUrl ? (
+                  ) : selected.recordingUrl &&
+                    !isDirectTwilioUrl(selected.recordingUrl) ? (
                     <audio
                       controls
                       src={selected.recordingUrl}
@@ -1041,9 +1075,9 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Related lead
                     </p>
-                    <pre className="mt-3 max-h-36 overflow-auto rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
-                      {JSON.stringify(selected.lead, null, 2)}
-                    </pre>
+                    <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-500">
+                      Lead attached to this call
+                    </p>
                   </div>
                 ) : null}
               </aside>

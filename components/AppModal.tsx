@@ -37,7 +37,12 @@ const AppModal: React.FC<AppModalProps> = ({
   closeOnBackdrop = true,
 }) => {
   useEffect(() => {
-    if (!open) return;
+    if (!open || typeof document === "undefined") return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -46,6 +51,8 @@ const AppModal: React.FC<AppModalProps> = ({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [open, onClose]);
 
@@ -53,7 +60,7 @@ const AppModal: React.FC<AppModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[400] overflow-y-auto bg-slate-950/65 p-4 sm:p-6"
+      className="fixed inset-0 z-[400] overflow-hidden bg-slate-950/65 p-4 sm:p-6"
       onClick={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
           onClose();
@@ -63,9 +70,9 @@ const AppModal: React.FC<AppModalProps> = ({
       role="dialog"
       aria-label={title}
     >
-      <div className="flex min-h-full items-center justify-center">
+      <div className="flex h-full min-h-0 items-center justify-center">
         <div
-          className={`relative w-full ${SIZE_CLASS[size]} rounded-[2rem] border border-white/70 bg-white shadow-2xl ${className}`}
+          className={`relative flex max-h-[calc(100vh-2rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-xl ${className}`}
           onClick={(event) => event.stopPropagation()}
         >
           {!hideHeader ? (
@@ -90,13 +97,13 @@ const AppModal: React.FC<AppModalProps> = ({
           ) : null}
 
           <div
-            className={`max-h-[calc(100vh-11rem)] overflow-y-auto px-6 py-6 sm:px-8 ${hideHeader ? "p-0 sm:p-0 " : ""}${bodyClassName}`}
+            className={`min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8 ${hideHeader ? "p-0 sm:p-0 " : ""}${bodyClassName}`}
           >
             {children}
           </div>
 
           {footer ? (
-            <div className="border-t border-slate-100 px-6 py-5 sm:px-8">
+            <div className="shrink-0 border-t border-slate-100 px-6 py-5 sm:px-8">
               {footer}
             </div>
           ) : null}
