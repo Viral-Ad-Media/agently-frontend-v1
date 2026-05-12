@@ -37,12 +37,7 @@ const AppModal: React.FC<AppModalProps> = ({
   closeOnBackdrop = true,
 }) => {
   useEffect(() => {
-    if (!open || typeof document === "undefined") return;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
+    if (!open) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -51,8 +46,6 @@ const AppModal: React.FC<AppModalProps> = ({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [open, onClose]);
 
@@ -60,7 +53,7 @@ const AppModal: React.FC<AppModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[400] overflow-hidden bg-slate-950/65 p-4 sm:p-6"
+      className="fixed inset-0 z-[400] bg-slate-950/65 p-4 sm:p-6"
       onClick={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
           onClose();
@@ -70,9 +63,9 @@ const AppModal: React.FC<AppModalProps> = ({
       role="dialog"
       aria-label={title}
     >
-      <div className="flex h-full min-h-0 items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div
-          className={`relative flex max-h-[calc(100vh-2rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-xl ${className}`}
+          className={`relative flex max-h-[calc(100vh-2rem)] w-full flex-col ${SIZE_CLASS[size]} rounded-[2rem] border border-white/70 bg-white shadow-xl ${className}`}
           onClick={(event) => event.stopPropagation()}
         >
           {!hideHeader ? (
@@ -103,7 +96,7 @@ const AppModal: React.FC<AppModalProps> = ({
           </div>
 
           {footer ? (
-            <div className="shrink-0 border-t border-slate-100 px-6 py-5 sm:px-8">
+            <div className="border-t border-slate-100 px-6 py-5 sm:px-8">
               {footer}
             </div>
           ) : null}

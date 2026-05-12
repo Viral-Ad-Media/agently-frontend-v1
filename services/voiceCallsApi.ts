@@ -254,6 +254,8 @@ class VoiceApiError extends Error {
 const authHeaders = (includeJson = false) => {
   const headers = new Headers();
   if (includeJson) headers.set('Content-Type', 'application/json');
+  headers.set('Cache-Control', 'no-cache');
+  headers.set('Pragma', 'no-cache');
   const token = getSessionToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   return headers;
@@ -267,6 +269,7 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
     method,
     headers,
     body: body != null ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -513,6 +516,7 @@ const postForAudio = async (path: string, body: unknown): Promise<TestVoiceResul
     method: 'POST',
     headers: authHeaders(true),
     body: JSON.stringify(body),
+    cache: 'no-store',
   });
 
   if (!response.ok) {

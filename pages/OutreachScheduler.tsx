@@ -350,8 +350,9 @@ const addThirtyMinutes = (time: string) => {
 };
 
 const PAGE_SIZE = 10;
-const HOURS = Array.from({ length: 24 }, (_, hour) => pad(hour));
-const MINUTES = Array.from({ length: 60 }, (_, minute) => pad(minute));
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const isValidTime = (value: string) => TIME_PATTERN.test(value);
 
 const TimePicker = memo(
   ({
@@ -363,41 +364,105 @@ const TimePicker = memo(
     value: string;
     onChange: (value: string) => void;
   }) => {
-    const [hour = "00", minute = "00"] = value.split(":");
+    const safeValue = isValidTime(value) ? value : timePlusMinutes(5);
     return (
-      <div className="space-y-1.5">
+      <label className="space-y-1.5">
         <span className="text-xs font-bold text-slate-500">{label}</span>
-        <div className="grid grid-cols-2 gap-2">
-          <select
-            value={hour}
-            onChange={(event) => onChange(`${event.target.value}:${minute}`)}
-            className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-amber-300"
-            aria-label={`${label} hour`}
-          >
-            {HOURS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <select
-            value={minute}
-            onChange={(event) => onChange(`${hour}:${event.target.value}`)}
-            className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-amber-300"
-            aria-label={`${label} minute`}
-          >
-            {MINUTES.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+        <input
+          type="time"
+          step={60}
+          value={safeValue}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+        />
+        <span className="block text-[10px] font-semibold text-slate-400">
+          Type a time or use your device time picker.
+        </span>
+      </label>
     );
   },
 );
 TimePicker.displayName = "TimePicker";
+
+const TimezonePicker = memo(
+  ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => {
+    const [query, setQuery] = useState(value || "");
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+      setQuery(value || "");
+    }, [value]);
+
+    const filtered = useMemo(() => {
+      const needle = query.trim().toLowerCase();
+      const base = needle
+        ? TIMEZONES.filter((zone) => zone.toLowerCase().includes(needle))
+        : TIMEZONES;
+      return base.slice(0, 50);
+    }, [query]);
+
+    const isValid = TIMEZONES.includes(value);
+
+    return (
+      <div className="relative space-y-1.5">
+        <span className="text-xs font-bold text-slate-500">Timezone</span>
+        <input
+          value={query}
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onBlur={() => {
+            window.setTimeout(() => {
+              setOpen(false);
+              if (!TIMEZONES.includes(query)) setQuery(value);
+            }, 120);
+          }}
+          placeholder="Search timezone..."
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-amber-300"
+        />
+        {!isValid ? (
+          <p className="text-[10px] font-bold text-red-500">
+            Choose a valid timezone from the list.
+          </p>
+        ) : null}
+        {open ? (
+          <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">
+            {filtered.length ? (
+              filtered.map((zone) => (
+                <button
+                  key={zone}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(zone);
+                    setQuery(zone);
+                    setOpen(false);
+                  }}
+                  className={`block w-full rounded-xl px-3 py-2 text-left text-xs font-bold transition-all ${zone === value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {zone}
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-3 text-xs font-bold text-slate-400">
+                No matching timezones.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  },
+);
+TimezonePicker.displayName = "TimezonePicker";
 
 const TimeListEditor = memo(
   ({
@@ -724,8 +789,20 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       return "Select at least one lead.";
     if (startLocalDate > sixMonthsFromToday())
       return "Schedules can only be created up to 6 months ahead. Please choose a closer date or reduce the recurrence duration.";
+    if (
+      callType !== "call_now" &&
+      callType !== "one_time_batch" &&
+      callType !== "custom_rule" &&
+      !isValidTime(startTime)
+    )
+      return "Choose a valid call time.";
     if (callType === "one_time_batch" && startTimes.length === 0)
       return "Add at least one batch start time.";
+    if (
+      (callType === "one_time_batch" || callType === "custom_rule") &&
+      startTimes.some((time) => !isValidTime(time))
+    )
+      return "Choose valid call times.";
     if (callType === "recurring_monthly") {
       if (repeatCount < 1)
         return "Monthly occurrence count must be at least 1.";
@@ -1396,22 +1473,13 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
                       />
                     </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-bold text-slate-500">
-                        Timezone
-                      </span>
-                      <select
-                        value={timezone}
-                        onChange={(event) => setTimezone(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      >
-                        {TIMEZONES.map((zone) => (
-                          <option key={zone} value={zone}>
-                            {zone}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <TimezonePicker
+                      value={timezone}
+                      onChange={(value) => {
+                        setTimezone(value);
+                        setPreview(null);
+                      }}
+                    />
                     {callType !== "one_time_batch" &&
                     callType !== "custom_rule" ? (
                       <TimePicker
