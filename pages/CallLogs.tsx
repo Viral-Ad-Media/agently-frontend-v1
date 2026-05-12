@@ -1,213 +1,954 @@
-import React, { useState } from 'react';
-import { CallRecord, CallOutcome } from '../types';
-import AppModal from '../components/AppModal';
+import React, { useEffect, useMemo, useState, useTransition } from "react";
+import { CallRecord } from "../types";
+import AppModal from "../components/AppModal";
+import { voiceCallsApi } from "../services/voiceCallsApi";
 
-const OUTCOME_STYLE: Record<string, string> = {
-  'Lead Captured':       'bg-emerald-50 text-emerald-700 border-emerald-100',
-  'Appointment Booked':  'bg-indigo-50 text-indigo-700 border-indigo-100',
-  'FAQ Answered':        'bg-blue-50 text-blue-600 border-blue-100',
-  'Escalated':           'bg-amber-50 text-amber-700 border-amber-100',
-  'Voicemail':           'bg-slate-100 text-slate-500 border-slate-200',
+type TranscriptMessage = {
+  speaker: "Agent" | "Caller" | "System" | "Unknown";
+  text: string;
+  at?: string;
+  timestamp?: string;
 };
 
-const OUTCOME_DOT: Record<string, string> = {
-  'Lead Captured': 'bg-emerald-500', 'Appointment Booked': 'bg-indigo-500',
-  'FAQ Answered': 'bg-blue-400', 'Escalated': 'bg-amber-500', 'Voicemail': 'bg-slate-300',
+type CallListItem = {
+  id: string;
+  callerName: string;
+  callerPhone: string;
+  direction: string;
+  status: string;
+  outcome: string;
+  summary: string;
+  duration: number;
+  timestamp: string;
+  voiceAgentId?: string | null;
+  recordingAvailable?: boolean;
+  recordingUrl?: string;
+  transcript?: TranscriptMessage[];
+  raw?: Record<string, unknown>;
 };
 
-const FILTERS = ['All', ...Object.values(CallOutcome)];
+type CallDetail = CallListItem & {
+  from?: string;
+  to?: string;
+  lead?: unknown;
+  metadata?: unknown;
+  messages?: TranscriptMessage[];
+  unansweredQuestions?: unknown[];
+  recording?: {
+    signedUrl?: string;
+    recordingStatus?: string | null;
+    mimeType?: string;
+  } | null;
+};
 
-const CallLogs: React.FC<{ calls: CallRecord[]; onDownloadReport: (callId: string) => Promise<void> }> = ({ calls, onDownloadReport }) => {
-  const [search, setSearch]         = useState('');
-  const [filter, setFilter]         = useState('All');
-  const [selected, setSelected]     = useState<CallRecord | null>(null);
-  const [error, setError]           = useState('');
+interface CallLogsProps {
+  calls?: CallRecord[];
+  onDownloadReport: (callId: string) => Promise<void>;
+}
+
+const PAGE_SIZE = 10;
+
+const STATUS_STYLE: Record<string, string> = {
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  failed: "bg-red-50 text-red-600 border-red-100",
+  queued: "bg-amber-50 text-amber-700 border-amber-100",
+  initiated: "bg-blue-50 text-blue-700 border-blue-100",
+  ringing: "bg-blue-50 text-blue-700 border-blue-100",
+  "in-progress": "bg-indigo-50 text-indigo-700 border-indigo-100",
+  canceled: "bg-slate-100 text-slate-500 border-slate-200",
+  cancelled: "bg-slate-100 text-slate-500 border-slate-200",
+};
+
+const safeString = (value: unknown, fallback = ""): string => {
+  if (value == null) return fallback;
+  return String(value);
+};
+
+const titleCase = (value: string): string =>
+  value
+    .replace(/_/g, " ")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatDuration = (seconds?: number | null): string => {
+  const total = Math.max(0, Number(seconds || 0));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return mins ? `${mins}m ${secs}s` : `${secs}s`;
+};
+
+const getArrayPayload = (payload: unknown, keys: string[]): unknown[] => {
+  if (Array.isArray(payload)) return payload as unknown[];
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") {
+      const nested: unknown[] = getArrayPayload(value, keys);
+      if (nested.length) return nested;
+    }
+  }
+  return [];
+};
+
+const normalizeSpeaker = (raw: unknown): TranscriptMessage["speaker"] => {
+  const value = safeString(raw, "").toLowerCase();
+  if (["agent", "assistant", "ai", "model", "bot"].includes(value))
+    return "Agent";
+  if (["caller", "user", "human", "customer", "lead"].includes(value))
+    return "Caller";
+  if (["system", "tool"].includes(value)) return "System";
+  return "Unknown";
+};
+
+const normalizeTranscript = (payload: unknown): TranscriptMessage[] => {
+  if (typeof payload === "string") {
+    return payload
+      .split("\n")
+      .map((line) => {
+        const [speakerPart, ...rest] = line.split(":");
+        const text = rest.length ? rest.join(":").trim() : line.trim();
+        return {
+          speaker: rest.length ? normalizeSpeaker(speakerPart) : "Unknown",
+          text,
+        } as TranscriptMessage;
+      })
+      .filter((line) => line.text);
+  }
+
+  const list: unknown[] = Array.isArray(payload)
+    ? (payload as unknown[])
+    : getArrayPayload(payload, ["transcript", "messages", "items", "data"]);
+  return list
+    .map((item: unknown): TranscriptMessage | null => {
+      if (typeof item === "string")
+        return { speaker: "Unknown", text: item } as TranscriptMessage;
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const text = safeString(
+        row.text ||
+          row.transcript ||
+          row.content ||
+          row.message ||
+          row.delta ||
+          "",
+        "",
+      ).trim();
+      if (!text) return null;
+      return {
+        speaker: normalizeSpeaker(
+          row.speaker || row.role || row.author || row.type,
+        ),
+        text,
+        at: safeString(row.at || row.created_at || row.timestamp || "", ""),
+      } as TranscriptMessage;
+    })
+    .filter((item): item is TranscriptMessage => Boolean(item));
+};
+
+const normalizeCall = (value: unknown): CallListItem | null => {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const id = safeString(row.id || row.callId || row.call_id || "").trim();
+  if (!id) return null;
+  const timestamp = safeString(
+    row.timestamp ||
+      row.createdAt ||
+      row.created_at ||
+      row.started_at ||
+      row.created_at ||
+      new Date().toISOString(),
+  );
+  const duration =
+    Number(
+      row.duration || row.duration_seconds || row.recording_duration || 0,
+    ) || 0;
+  const status = safeString(
+    row.status || row.call_status || row.outcome || "completed",
+    "completed",
+  ).toLowerCase();
+  const outcome = safeString(
+    row.outcome || row.result || status || "Completed",
+    "Completed",
+  );
+  const callerName = safeString(
+    row.callerName ||
+      row.caller_name ||
+      row.target_name ||
+      row.name ||
+      "Unknown Caller",
+    "Unknown Caller",
+  );
+  const callerPhone = safeString(
+    row.callerPhone ||
+      row.caller_phone ||
+      row.target_phone ||
+      row.destination_phone ||
+      row.from ||
+      row.to ||
+      "",
+    "",
+  );
+
+  return {
+    id,
+    callerName,
+    callerPhone,
+    direction: safeString(
+      row.direction || row.callDirection || "inbound",
+      "inbound",
+    ),
+    status,
+    outcome,
+    summary: safeString(row.summary || "", ""),
+    duration,
+    timestamp,
+    voiceAgentId:
+      safeString(row.voice_agent_id || row.voiceAgentId || "", "") || null,
+    recordingAvailable: Boolean(
+      row.recording_available ||
+      row.recordingAvailable ||
+      row.recordingUrl ||
+      row.recording_url,
+    ),
+    recordingUrl: safeString(
+      row.recordingUrl || row.recording_url || row.recording_public_url || "",
+      "",
+    ),
+    transcript: normalizeTranscript(row.transcript),
+    raw: row,
+  };
+};
+
+const normalizeCallsResponse = (
+  payload: unknown,
+): { calls: CallListItem[]; total: number; page: number; limit: number } => {
+  const list: unknown[] = getArrayPayload(payload, [
+    "calls",
+    "data",
+    "items",
+    "results",
+  ]);
+  const record =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const calls: CallListItem[] = list
+    .map((call: unknown) => normalizeCall(call))
+    .filter((call: CallListItem | null): call is CallListItem => Boolean(call));
+  return {
+    calls,
+    total: Number(record.total || record.count || calls.length) || calls.length,
+    page: Number(record.page || 1) || 1,
+    limit: Number(record.limit || PAGE_SIZE) || PAGE_SIZE,
+  };
+};
+
+const normalizeDetailResponse = (
+  payload: unknown,
+  fallback?: CallListItem,
+): CallDetail => {
+  const record =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const rawCall = (record.call || record.data || payload) as unknown;
+  const base = normalizeCall(rawCall) ||
+    fallback || {
+      id: "",
+      callerName: "Unknown Caller",
+      callerPhone: "",
+      direction: "inbound",
+      status: "completed",
+      outcome: "Completed",
+      summary: "",
+      duration: 0,
+      timestamp: new Date().toISOString(),
+    };
+  const callRecord =
+    rawCall && typeof rawCall === "object"
+      ? (rawCall as Record<string, unknown>)
+      : {};
+  return {
+    ...base,
+    from: safeString(
+      callRecord.from ||
+        callRecord.caller_phone ||
+        callRecord.callerPhone ||
+        "",
+      "",
+    ),
+    to: safeString(
+      callRecord.to || callRecord.toPhone || callRecord.destination_phone || "",
+      "",
+    ),
+    lead: callRecord.lead || null,
+    metadata: callRecord.metadata || null,
+    transcript: normalizeTranscript(
+      callRecord.transcript || record.transcript || base.transcript || [],
+    ),
+  };
+};
+
+const CallLogs: React.FC<CallLogsProps> = ({
+  calls: initialCalls = [],
+  onDownloadReport,
+}) => {
+  const [calls, setCalls] = useState<CallListItem[]>(() =>
+    initialCalls
+      .map((call: CallRecord) => normalizeCall(call))
+      .filter((call: CallListItem | null): call is CallListItem =>
+        Boolean(call),
+      ),
+  );
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [directionFilter, setDirectionFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(initialCalls.length);
+  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<CallDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [recordingLoading, setRecordingLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
 
-  const filtered = calls.filter(c => {
-    const matchSearch = (c.callerName || '').toLowerCase().includes(search.toLowerCase()) ||
-                        (c.callerPhone || '').includes(search);
-    const matchFilter = filter === 'All' || c.outcome === filter;
-    return matchSearch && matchFilter;
-  });
-
-  const stats = {
-    total:    calls.length,
-    leads:    calls.filter(c => c.outcome === CallOutcome.LEAD_CAPTURED || c.outcome === CallOutcome.APPOINTMENT_BOOKED).length,
-    missed:   calls.filter(c => c.outcome === CallOutcome.VOICEMAIL || c.outcome === CallOutcome.ESCALATED).length,
-    avgDur:   calls.length ? Math.round(calls.reduce((s, c) => s + c.duration, 0) / calls.length) : 0,
+  const loadCalls = async (nextPage = page) => {
+    setLoading(true);
+    setError("");
+    try {
+      const params: Record<string, string | number | undefined> = {
+        page: nextPage,
+        limit: PAGE_SIZE,
+      };
+      if (directionFilter !== "all") params.direction = directionFilter;
+      if (statusFilter !== "all") params.status = statusFilter;
+      const payload = await voiceCallsApi.calls.getCalls(params);
+      const normalized = normalizeCallsResponse(payload);
+      startTransition(() => {
+        setCalls(normalized.calls);
+        setTotal(normalized.total);
+        setPage(normalized.page || nextPage);
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load call logs.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDownload = async (callId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); setError(''); setDownloading(callId);
-    try { await onDownloadReport(callId); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Download failed'); }
-    finally { setDownloading(null); }
+  useEffect(() => {
+    void loadCalls(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, directionFilter]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return calls;
+    return calls.filter((call) => {
+      return [
+        call.callerName,
+        call.callerPhone,
+        call.summary,
+        call.outcome,
+        call.status,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [calls, search]);
+
+  const stats = useMemo(() => {
+    const totalCalls = calls.length;
+    const completed = calls.filter(
+      (call) =>
+        call.status.includes("completed") ||
+        call.outcome.toLowerCase().includes("completed"),
+    ).length;
+    const failed = calls.filter(
+      (call) =>
+        call.status.includes("failed") ||
+        call.outcome.toLowerCase().includes("failed"),
+    ).length;
+    const avg = totalCalls
+      ? Math.round(
+          calls.reduce((sum, call) => sum + call.duration, 0) / totalCalls,
+        )
+      : 0;
+    return { totalCalls, completed, failed, avg };
+  }, [calls]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const openDetail = async (call: CallListItem) => {
+    setSelected({
+      ...call,
+      messages: call.transcript || [],
+      unansweredQuestions: [],
+    });
+    setDetailLoading(true);
+    setError("");
+    try {
+      const [
+        detailPayload,
+        transcriptPayload,
+        messagesPayload,
+        unansweredPayload,
+      ] = await Promise.allSettled([
+        voiceCallsApi.calls.getCall(call.id),
+        voiceCallsApi.calls.getCallTranscript(call.id),
+        voiceCallsApi.calls.getCallMessages(call.id),
+        voiceCallsApi.calls.getCallUnansweredQuestions(call.id),
+      ]);
+
+      const detail =
+        detailPayload.status === "fulfilled"
+          ? normalizeDetailResponse(detailPayload.value, call)
+          : normalizeDetailResponse(call, call);
+      const transcript =
+        transcriptPayload.status === "fulfilled"
+          ? normalizeTranscript(transcriptPayload.value)
+          : normalizeTranscript(detail.transcript || []);
+      const messages =
+        messagesPayload.status === "fulfilled"
+          ? normalizeTranscript(messagesPayload.value)
+          : [];
+      const unanswered: unknown[] =
+        unansweredPayload.status === "fulfilled"
+          ? getArrayPayload(unansweredPayload.value, [
+              "unansweredQuestions",
+              "questions",
+              "data",
+              "items",
+            ])
+          : [];
+
+      const mergedTranscript = transcript.length
+        ? transcript
+        : messages.length
+          ? messages
+          : detail.transcript || [];
+      setSelected({
+        ...detail,
+        transcript: mergedTranscript,
+        messages,
+        unansweredQuestions: unanswered,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load call details.",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const loadRecording = async () => {
+    if (!selected) return;
+    setRecordingLoading(true);
+    setError("");
+    try {
+      const payload = (await voiceCallsApi.calls.getCallRecording(
+        selected.id,
+      )) as Record<string, unknown>;
+      const recording = (payload.recording ||
+        payload.data ||
+        payload) as Record<string, unknown>;
+      setSelected((current) =>
+        current
+          ? {
+              ...current,
+              recording: {
+                signedUrl: safeString(
+                  recording.signed_url ||
+                    recording.signedUrl ||
+                    recording.url ||
+                    "",
+                  "",
+                ),
+                recordingStatus: safeString(
+                  recording.recording_status || recording.status || "",
+                  "",
+                ),
+                mimeType: safeString(
+                  recording.mime_type || recording.mimeType || "audio/mpeg",
+                  "audio/mpeg",
+                ),
+              },
+            }
+          : current,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Recording is not available yet.",
+      );
+    } finally {
+      setRecordingLoading(false);
+    }
+  };
+
+  const handleDownload = async (callId: string, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setDownloading(callId);
+    setError("");
+    try {
+      await onDownloadReport(callId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed.");
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (!selected) return;
+    setSummarizing(true);
+    setError("");
+    try {
+      const payload = (await voiceCallsApi.calls.summarizeCall(selected.id, {
+        force: true,
+      })) as Record<string, unknown>;
+      const summary = safeString(
+        payload.summary ||
+          (payload.call as Record<string, unknown> | undefined)?.summary ||
+          "",
+        "",
+      );
+      setSelected((current) =>
+        current ? { ...current, summary: summary || current.summary } : current,
+      );
+      await loadCalls(page);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not summarize this call.",
+      );
+    } finally {
+      setSummarizing(false);
+    }
   };
 
   return (
     <div className="space-y-5 animate-fade-up">
-      {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">{error}</div>}
+      {error ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
+        </div>
+      ) : null}
 
-      {/* Mini stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          { label: 'Total Calls',  value: stats.total,                      icon: 'fa-phone-volume',  color: 'text-indigo-600 bg-indigo-50' },
-          { label: 'Leads',        value: stats.leads,                      icon: 'fa-users',          color: 'text-emerald-600 bg-emerald-50' },
-          { label: 'Missed',       value: stats.missed,                     icon: 'fa-phone-slash',    color: 'text-amber-600 bg-amber-50' },
-          { label: 'Avg Duration', value: `${Math.floor(stats.avgDur/60)}m ${stats.avgDur%60}s`, icon: 'fa-stopwatch', color: 'text-blue-600 bg-blue-50' },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>
-              <i className={`fa-sharp fa-solid ${s.icon} text-sm`} />
+          {
+            label: "Loaded calls",
+            value: stats.totalCalls,
+            icon: "fa-phone-volume",
+            color: "bg-indigo-50 text-indigo-600",
+          },
+          {
+            label: "Completed",
+            value: stats.completed,
+            icon: "fa-circle-check",
+            color: "bg-emerald-50 text-emerald-600",
+          },
+          {
+            label: "Failed",
+            value: stats.failed,
+            icon: "fa-triangle-exclamation",
+            color: "bg-red-50 text-red-600",
+          },
+          {
+            label: "Avg duration",
+            value: formatDuration(stats.avg),
+            icon: "fa-stopwatch",
+            color: "bg-blue-50 text-blue-600",
+          },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+          >
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.color}`}
+            >
+              <i className={`fa-sharp fa-solid ${item.icon} text-sm`} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
-              <p className="font-black text-slate-900">{s.value}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {item.label}
+              </p>
+              <p className="font-black text-slate-900">{item.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Header + filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Call History</h2>
-          <p className="text-xs text-slate-400">{filtered.length} of {calls.length} calls</p>
-        </div>
-        <div className="flex gap-3 sm:ml-auto flex-wrap">
-          <div className="relative">
-            <i className="fa-sharp fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-            <input type="text" placeholder="Search caller…" value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400 w-52" />
+      <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-slate-900">
+              Call Logs
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Review calls, transcripts, recordings, summaries, and captured
+              questions.
+            </p>
           </div>
-          <select value={filter} onChange={e => setFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest outline-none bg-white focus:ring-2 focus:ring-amber-400">
-            {FILTERS.map(f => <option key={f} value={f}>{f === 'All' ? 'All Outcomes' : f}</option>)}
-          </select>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search calls..."
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300 md:w-64"
+            />
+            <select
+              value={directionFilter}
+              onChange={(event) => {
+                setDirectionFilter(event.target.value);
+                setPage(1);
+              }}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+            >
+              <option value="all">All directions</option>
+              <option value="inbound">Inbound</option>
+              <option value="outbound">Outbound</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+            >
+              <option value="all">All statuses</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="queued">Queued</option>
+              <option value="in-progress">In progress</option>
+            </select>
+            <button
+              onClick={() => void loadCalls(page)}
+              disabled={loading || isPending}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
+            >
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Outcome filter pills */}
-      <div className="flex gap-2 flex-wrap">
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${filter === f ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {/* Call cards */}
-      {filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 py-20 text-center">
-          <i className="fa-sharp fa-solid fa-phone-slash text-4xl text-slate-200 mb-4 block" />
-          <p className="text-slate-400 font-bold">No calls match your filters</p>
-          <p className="text-xs text-slate-300 mt-1">{calls.length === 0 ? 'Calls will appear here once your agent starts receiving them.' : 'Try a different filter or search term.'}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(call => (
-            <div key={call.id}
-              className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group"
-              onClick={() => setSelected(call)}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm shrink-0">
-                    {(call.callerName || 'U')[0].toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-black text-slate-900">{call.callerName || 'Unknown Caller'}</p>
-                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${OUTCOME_STYLE[call.outcome] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                        <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${OUTCOME_DOT[call.outcome] || 'bg-slate-400'}`} />
-                        {call.outcome}
+      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+        {loading && !calls.length ? (
+          <div className="py-16 text-center text-sm font-bold text-slate-400">
+            Loading call logs...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <i className="fa-sharp fa-solid fa-phone-slash mb-3 block text-4xl text-slate-200" />
+            <p className="font-black text-slate-800">No calls found</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Calls will appear here after your agents make or receive calls.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filtered.map((call) => {
+              const statusKey = call.status.toLowerCase();
+              return (
+                <button
+                  key={call.id}
+                  type="button"
+                  onClick={() => void openDetail(call)}
+                  className="block w-full bg-white p-5 text-left transition-colors hover:bg-slate-50"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
+                        {(call.callerName ||
+                          call.callerPhone ||
+                          "C")[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-black text-slate-900">
+                            {call.callerName || "Unknown caller"}
+                          </p>
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${STATUS_STYLE[statusKey] || "border-slate-200 bg-slate-100 text-slate-600"}`}
+                          >
+                            {titleCase(call.status || call.outcome)}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                            {titleCase(call.direction || "call")}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                          <span>{call.callerPhone || "No number"}</span>
+                          <span>·</span>
+                          <span>{formatDuration(call.duration)}</span>
+                          <span>·</span>
+                          <span>
+                            {new Date(call.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {call.summary ? (
+                          <p className="mt-2 line-clamp-1 text-sm text-slate-500">
+                            {call.summary}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {call.transcript?.length ? (
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                          Transcript
+                        </span>
+                      ) : null}
+                      {call.recordingAvailable ? (
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
+                          Recording
+                        </span>
+                      ) : null}
+                      <span className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Details
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <p className="text-xs text-slate-400">{call.callerPhone}</p>
-                      <span className="text-slate-200">·</span>
-                      <p className="text-xs text-slate-400">{Math.floor(call.duration/60)}m {call.duration%60}s</p>
-                      <span className="text-slate-200">·</span>
-                      <p className="text-xs text-slate-400">{new Date(call.timestamp).toLocaleDateString()} {new Date(call.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
-                    </div>
                   </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={e => { e.stopPropagation(); setSelected(call); }}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">
-                    Transcript
-                  </button>
-                  <button onClick={e => void handleDownload(call.id, e)} disabled={downloading === call.id}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 disabled:opacity-50 transition-all">
-                    {downloading === call.id ? <i className="fa-sharp fa-solid fa-spinner fa-spin" /> : 'Report'}
-                  </button>
-                </div>
-              </div>
-              {call.summary && (
-                <p className="mt-3 text-xs text-slate-500 italic bg-slate-50 rounded-xl px-4 py-2.5 line-clamp-2">"{call.summary}"</p>
-              )}
-            </div>
-          ))}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+        <span>
+          Showing page {page} of {totalPages} · {total} total calls
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => void loadCalls(Math.max(1, page - 1))}
+            disabled={page <= 1 || loading}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => void loadCalls(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages || loading}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 disabled:opacity-40"
+          >
+            Next
+          </button>
         </div>
-      )}
+      </div>
 
       <AppModal
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected?.callerName || 'Call transcript'}
-        description={selected ? `${selected.callerPhone} · ${Math.floor(selected.duration / 60)}m ${selected.duration % 60}s` : undefined}
-        size="xl"
-        footer={selected ? (
-          <div className="flex gap-3">
-            <button onClick={e => void handleDownload(selected.id, e)} disabled={downloading === selected.id}
-              className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-600 disabled:opacity-50 transition-all">
-              {downloading === selected.id ? 'Downloading…' : 'Download Report'}
-            </button>
-            <button onClick={() => setSelected(null)}
-              className="flex-1 border-2 border-slate-200 text-slate-600 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:border-slate-300 transition-all">
-              Close
-            </button>
-          </div>
-        ) : null}
+        title={selected?.callerName || "Call details"}
+        description={
+          selected
+            ? `${selected.callerPhone || "No number"} · ${formatDuration(selected.duration)} · ${new Date(selected.timestamp).toLocaleString()}`
+            : undefined
+        }
+        size="2xl"
+        bodyClassName="max-h-[72vh] overflow-y-auto"
+        footer={
+          selected ? (
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleSummarize}
+                disabled={summarizing}
+                className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:border-slate-300 disabled:opacity-50"
+              >
+                {summarizing ? "Summarizing..." : "Summarize"}
+              </button>
+              <button
+                onClick={(event) => void handleDownload(selected.id, event)}
+                disabled={downloading === selected.id}
+                className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {downloading === selected.id
+                  ? "Downloading..."
+                  : "Download Report"}
+              </button>
+              <button
+                onClick={() => setSelected(null)}
+                className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:border-slate-300"
+              >
+                Close
+              </button>
+            </div>
+          ) : null
+        }
       >
         {selected ? (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3">
-              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${OUTCOME_STYLE[selected.outcome] || ''}`}>{selected.outcome}</span>
-              <p className="text-xs text-slate-400">{new Date(selected.timestamp).toLocaleDateString()} {new Date(selected.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
-            {selected.summary && (
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">AI Summary</p>
-                <p className="text-sm text-amber-900 font-medium">{selected.summary}</p>
+          <div className="space-y-6">
+            {detailLoading ? (
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-400">
+                Loading latest call details...
               </div>
-            )}
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Full Transcript</p>
-              <div className="space-y-3">
-                {(selected.transcript.length > 0 ? selected.transcript : [
-                  { speaker: 'Agent', text: 'Hello! Thank you for calling. How can I help you today?' },
-                  { speaker: 'Caller', text: selected.summary || 'Caller inquiry.' },
-                ]).map((m, i) => {
-                  const isAgent = m.speaker === 'Agent';
-                  return (
-                    <div key={i} className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
-                      <span className={`text-[10px] font-black uppercase ${isAgent ? 'text-amber-600' : 'text-slate-400'}`}>{m.speaker}</span>
-                      <p className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[82%] ${isAgent ? 'bg-slate-50 text-slate-800 rounded-tl-none' : 'bg-slate-900 text-white rounded-tr-none'}`}>
-                        {m.text}
-                      </p>
+            ) : null}
+
+            <div className="grid gap-3 md:grid-cols-4">
+              {[
+                ["Direction", titleCase(selected.direction || "call")],
+                ["Status", titleCase(selected.status || selected.outcome)],
+                ["From", selected.from || selected.callerPhone || "—"],
+                ["To", selected.to || "—"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {label}
+                  </p>
+                  <p className="mt-1 break-words text-sm font-black text-slate-800">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                Summary
+              </p>
+              <p className="mt-2 text-sm font-medium text-amber-950">
+                {selected.summary || "No summary is available yet."}
+              </p>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Conversation transcript
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400">
+                    Caller messages appear on the left. Agent messages appear on
+                    the right.
+                  </p>
+                </div>
+                <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  {(selected.transcript && selected.transcript.length
+                    ? selected.transcript
+                    : []
+                  ).length ? (
+                    selected.transcript!.map((message, index) => {
+                      const isAgent = message.speaker === "Agent";
+                      const isCaller = message.speaker === "Caller";
+                      return (
+                        <div
+                          key={`${message.speaker}-${index}`}
+                          className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm shadow-sm ${isAgent ? "rounded-tr-sm bg-slate-900 text-white" : isCaller ? "rounded-tl-sm bg-white text-slate-800" : "bg-slate-200 text-slate-700"}`}
+                          >
+                            <p
+                              className={`mb-1 text-[10px] font-black uppercase tracking-widest ${isAgent ? "text-white/60" : "text-slate-400"}`}
+                            >
+                              {message.speaker}
+                            </p>
+                            <p className="whitespace-pre-wrap leading-relaxed">
+                              {message.text}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-10 text-center text-sm text-slate-400">
+                      No transcript is available yet. If only agent messages
+                      appear for a call, the backend relay must also append
+                      caller transcription events to{" "}
+                      <code>call_records.transcript</code>.
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
+
+              <aside className="space-y-4">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Recording
+                  </p>
+                  {selected.recording?.signedUrl ? (
+                    <audio
+                      controls
+                      src={selected.recording.signedUrl}
+                      className="mt-3 w-full"
+                    />
+                  ) : selected.recordingUrl ? (
+                    <audio
+                      controls
+                      src={selected.recordingUrl}
+                      className="mt-3 w-full"
+                    />
+                  ) : (
+                    <button
+                      onClick={loadRecording}
+                      disabled={recordingLoading}
+                      className="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                    >
+                      {recordingLoading
+                        ? "Loading..."
+                        : selected.recordingAvailable
+                          ? "Load recording"
+                          : "Check recording"}
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Unanswered questions
+                  </p>
+                  {selected.unansweredQuestions?.length ? (
+                    <div className="mt-3 space-y-2">
+                      {selected.unansweredQuestions
+                        .slice(0, 5)
+                        .map((item, index) => {
+                          const row =
+                            item && typeof item === "object"
+                              ? (item as Record<string, unknown>)
+                              : {};
+                          return (
+                            <p
+                              key={safeString(row.id || index)}
+                              className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600"
+                            >
+                              {safeString(
+                                row.question || row.text || "Question captured",
+                              )}
+                            </p>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-400">
+                      No unresolved questions captured for this call.
+                    </p>
+                  )}
+                </div>
+
+                {selected.lead ? (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Related lead
+                    </p>
+                    <pre className="mt-3 max-h-36 overflow-auto rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
+                      {JSON.stringify(selected.lead, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+              </aside>
             </div>
-            {selected.recordingUrl && (
-              <div className="bg-slate-50 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recording</p>
-                <audio controls src={selected.recordingUrl} className="w-full" />
-              </div>
-            )}
           </div>
         ) : null}
       </AppModal>
