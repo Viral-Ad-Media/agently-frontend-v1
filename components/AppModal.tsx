@@ -1,5 +1,5 @@
-import React, { useEffect, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface AppModalProps {
   open: boolean;
@@ -8,19 +8,19 @@ interface AppModalProps {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   hideHeader?: boolean;
   className?: string;
   bodyClassName?: string;
   closeOnBackdrop?: boolean;
 }
 
-const SIZE_CLASS: Record<NonNullable<AppModalProps['size']>, string> = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-  '2xl': 'max-w-5xl',
+const SIZE_CLASS: Record<NonNullable<AppModalProps["size"]>, string> = {
+  sm: "max-w-md",
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+  "2xl": "max-w-5xl",
 };
 
 const AppModal: React.FC<AppModalProps> = ({
@@ -30,35 +30,31 @@ const AppModal: React.FC<AppModalProps> = ({
   description,
   children,
   footer,
-  size = 'lg',
+  size = "lg",
   hideHeader = false,
-  className = '',
-  bodyClassName = '',
+  className = "",
+  bodyClassName = "",
   closeOnBackdrop = true,
 }) => {
   useEffect(() => {
     if (!open) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === "Escape") onClose();
     };
 
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);
 
-  if (!open || typeof document === 'undefined') return null;
+  if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div
       className="fixed inset-0 z-[400] overflow-y-auto bg-slate-950/65 p-4 sm:p-6"
-      onMouseDown={(event) => {
+      onClick={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
           onClose();
         }
@@ -69,8 +65,8 @@ const AppModal: React.FC<AppModalProps> = ({
     >
       <div className="flex min-h-full items-center justify-center">
         <div
-          className={`relative w-full ${SIZE_CLASS[size]} rounded-[2rem] border border-white/70 bg-white shadow-[0_30px_120px_rgba(15,23,42,0.28)] ${className}`}
-          onMouseDown={(event) => event.stopPropagation()}
+          className={`relative w-full ${SIZE_CLASS[size]} rounded-[2rem] border border-white/70 bg-white shadow-2xl ${className}`}
+          onClick={(event) => event.stopPropagation()}
         >
           {!hideHeader ? (
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 sm:px-8">
@@ -93,7 +89,9 @@ const AppModal: React.FC<AppModalProps> = ({
             </div>
           ) : null}
 
-          <div className={`max-h-[calc(100vh-11rem)] overflow-y-auto px-6 py-6 sm:px-8 ${hideHeader ? 'p-0 sm:p-0 ' : ''}${bodyClassName}`}>
+          <div
+            className={`max-h-[calc(100vh-11rem)] overflow-y-auto px-6 py-6 sm:px-8 ${hideHeader ? "p-0 sm:p-0 " : ""}${bodyClassName}`}
+          >
             {children}
           </div>
 

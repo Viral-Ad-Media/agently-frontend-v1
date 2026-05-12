@@ -339,6 +339,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
     window.setTimeout(() => setToast(null), 4200);
   };
 
+  const openDeleteModal = (target: { id: string; name?: string; bulk?: boolean }) => {
+    window.requestAnimationFrame(() => setDeleteTarget(target));
+  };
+
   const loadNumbers = async () => {
     if (!org.id) return;
     try {
@@ -627,7 +631,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
                 {pageScheduleIds.length > 0 && pageScheduleIds.every((id) => selectedScheduleIds.includes(id)) ? "Clear Page" : "Select Page"}
               </button>
               {selectedScheduleIds.length > 0 && (
-                <button onClick={() => setDeleteTarget({ id: "bulk", name: `${selectedScheduleIds.length} selected schedules`, bulk: true })} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">Delete Selected</button>
+                <button onClick={() => openDeleteModal({ id: "bulk", name: `${selectedScheduleIds.length} selected schedules`, bulk: true })} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50">Delete Selected</button>
               )}
               <button onClick={() => void loadSchedules()} disabled={busy === "load-schedules"} className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 disabled:opacity-50">
                 {busy === "load-schedules" ? "Loading..." : "Refresh"}
@@ -671,7 +675,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
                         {!completed && (
                           <button onClick={() => void handleCancelSchedule(scheduleId)} disabled={busy === `cancel-${scheduleId}`} className="rounded-xl border border-amber-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 hover:bg-amber-50 disabled:opacity-50">Cancel</button>
                         )}
-                        <button onClick={() => setDeleteTarget({ id: scheduleId, name: schedule.name || "Scheduled call" })} disabled={busy === `delete-${scheduleId}`} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50">Delete</button>
+                        <button onClick={() => openDeleteModal({ id: scheduleId, name: schedule.name || "Scheduled call" })} disabled={busy === `delete-${scheduleId}`} className="rounded-xl border border-red-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50">Delete</button>
                       </div>
                     </div>
                   </div>
@@ -863,10 +867,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({ org, leads, onCha
               <div className="rounded-2xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Created</p><p className="mt-1 font-bold text-slate-900">{selectedSchedule.createdAt || selectedSchedule.created_at || "—"}</p></div>
               <div className="rounded-2xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Starts</p><p className="mt-1 font-bold text-slate-900">{selectedSchedule.startAt || selectedSchedule.start_at || "—"}</p></div>
             </div>
-            <details className="rounded-2xl border border-slate-100 bg-white p-4">
-              <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-500">Raw schedule data</summary>
-              <pre className="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-50 p-4 text-[11px] text-slate-500">{JSON.stringify(selectedSchedule, null, 2)}</pre>
-            </details>
           </div>
         )}
       </AppModal>

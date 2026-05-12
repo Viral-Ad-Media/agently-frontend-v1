@@ -978,9 +978,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <option value="openai">OpenAI</option>
                   <option value="elevenlabs">ElevenLabs</option>
                 </Sel>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Voice config is saved on this agent and reused by live calls.
-                </p>
               </div>
 
               {voiceProvider === "openai" ? (
@@ -1022,9 +1019,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       </option>
                     ))}
                   </Sel>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Voices are fetched from the backend — nothing is hardcoded.
-                  </p>
                 </div>
               )}
 
@@ -1054,28 +1048,17 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   {draft.twilioPhoneNumber && (
                     <button
                       onClick={() => {
-                        if (
-                          !window.confirm(
-                            "Remove this number from the agent? The number stays in All Owned and can be re-assigned.",
-                          )
-                        )
-                          return;
-                        void run(
-                          "unassign",
-                          () => onUpdateAgent({ unassignNumber: true } as any),
-                          "Number unassigned",
-                        );
+                        window.location.hash = "#/phone-numbers";
                       }}
-                      disabled={!!busy}
-                      className="shrink-0 rounded-xl border border-red-200 text-red-400 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 hover:border-red-300 disabled:opacity-40 transition-all"
+                      className="shrink-0 rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 hover:border-amber-300 transition-all"
                     >
-                      Unassign
+                      Manage
                     </button>
                   )}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
                   {draft.twilioPhoneNumber
-                    ? "Number locked — use Unassign to free it for another agent."
+                    ? "Manage or unassign this number in Phone Numbers."
                     : "Assign a number in the Phone Numbers section."}
                 </p>
               </div>
