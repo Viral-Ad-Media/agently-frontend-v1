@@ -176,6 +176,11 @@ const formatMinutes = (minutes: number): string => {
   return `${rounded}m`;
 };
 
+const formatUsageMinutes = (minutes: number): string => {
+  const rounded = Math.round(Math.max(0, minutes) * 10) / 10;
+  return `${rounded}m`;
+};
+
 const formatBytes = (bytes: number): string => {
   if (!bytes || bytes <= 0) return "0 KB";
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -476,19 +481,19 @@ const StatCard: React.FC<{
   sub?: string;
   icon: string;
 }> = React.memo(({ label, value, sub, icon }) => (
-  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+  <div className="min-w-[10.5rem] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:min-w-0">
+    <div className="flex items-center justify-between gap-2">
+      <p className="truncate text-[9px] font-black uppercase tracking-widest text-slate-400">
         {label}
       </p>
-      <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 text-sm">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-xs">
         {icon}
       </span>
     </div>
-    <p className="mt-3 text-3xl font-black tracking-tight text-slate-900">
+    <p className="mt-2 truncate text-2xl font-black tracking-tight text-slate-900">
       {value}
     </p>
-    {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
+    {sub && <p className="mt-1 truncate text-[11px] text-slate-400">{sub}</p>}
   </div>
 ));
 StatCard.displayName = "StatCard";
@@ -786,86 +791,58 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard
-          label="Total calls"
-          value={String(selectedStats.totalCalls)}
-          icon="☎️"
-          sub="All call records"
-        />
-        <StatCard
-          label="Completed"
-          value={String(selectedStats.completedCalls)}
-          icon="✅"
-          sub="Finished calls"
-        />
-        <StatCard
-          label="Failed"
-          value={String(selectedStats.failedCalls)}
-          icon="⚠️"
-          sub="Failed / cancelled"
-        />
-        <StatCard
-          label="Call usage"
-          value={formatMinutes(
-            selectedStats.totalDuration / 60 || live.totalCallMinutes,
-          )}
-          icon="⏱️"
-          sub={`${formatMinutes(live.remainingMinutes)} remaining`}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard
-          label="Chatbot answers"
-          value={String(live.chatbotMessagesAnswered)}
-          icon="💬"
-          sub={`${live.chatbotTotalMessages} total messages`}
-        />
-        <StatCard
-          label="Leads captured"
-          value={String(live.totalLeadsCaptured)}
-          icon="🧲"
-          sub={`${live.chatbotLeadsCaptured} chatbot · ${live.callLeadsCaptured} calls`}
-        />
-        <StatCard
-          label="Converted leads"
-          value={String(live.convertedLeads)}
-          icon="📈"
-          sub={`${live.conversionRate}% conversion`}
-        />
-        <StatCard
-          label="Knowledge storage"
-          value={live.estimatedStorageLabel}
-          icon="🗂️"
-          sub={`${live.knowledgeChunks} knowledge chunks`}
-        />
-      </div>
-
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Minute usage
-            </p>
-            <h2 className="text-base font-black text-slate-900">
-              {org.subscription.plan} plan
-            </h2>
-          </div>
-          <span className="text-xs font-black text-slate-500">
-            {formatMinutes(live.totalCallMinutes)} /{" "}
-            {formatMinutes(live.minuteLimit)}
-          </span>
-        </div>
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-slate-900 transition-[width] duration-700"
-            style={{ width: `${live.usagePercent}%` }}
+      <div className="overflow-x-auto pb-2">
+        <div className="grid min-w-[88rem] grid-cols-8 gap-3 xl:min-w-0">
+          <StatCard
+            label="Total calls"
+            value={String(selectedStats.totalCalls)}
+            icon="☎️"
+            sub="All call records"
           />
-        </div>
-        <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          <span>{formatMinutes(live.totalCallMinutes)} used</span>
-          <span>{formatMinutes(live.remainingMinutes)} remaining</span>
+          <StatCard
+            label="Completed"
+            value={String(selectedStats.completedCalls)}
+            icon="✅"
+            sub="Finished calls"
+          />
+          <StatCard
+            label="Failed"
+            value={String(selectedStats.failedCalls)}
+            icon="⚠️"
+            sub="Failed/cancelled"
+          />
+          <StatCard
+            label="Call usage"
+            value={formatUsageMinutes(
+              selectedStats.totalDuration / 60 || live.totalCallMinutes,
+            )}
+            icon="⏱️"
+            sub={`of ${formatUsageMinutes(live.minuteLimit)} limit`}
+          />
+          <StatCard
+            label="Chatbot answers"
+            value={String(live.chatbotMessagesAnswered)}
+            icon="💬"
+            sub={`${live.chatbotTotalMessages} messages`}
+          />
+          <StatCard
+            label="Leads captured"
+            value={String(live.totalLeadsCaptured)}
+            icon="🧲"
+            sub={`${live.chatbotLeadsCaptured} bot · ${live.callLeadsCaptured} call`}
+          />
+          <StatCard
+            label="Converted"
+            value={String(live.convertedLeads)}
+            icon="📈"
+            sub={`${live.conversionRate}% rate`}
+          />
+          <StatCard
+            label="Knowledge"
+            value={live.estimatedStorageLabel}
+            icon="🗂️"
+            sub={`${live.knowledgeChunks} chunks`}
+          />
         </div>
       </div>
 
@@ -991,12 +968,12 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.75fr_1.25fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Direction mix
           </p>
-          <div className="mt-4 h-56">
+          <div className="mt-4 h-[21rem]">
             {chartsReady ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -1091,8 +1068,34 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           </div>
         </div>
       </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Minute usage
+            </p>
+            <h2 className="text-base font-black text-slate-900">
+              {org.subscription.plan} plan
+            </h2>
+          </div>
+          <span className="text-xs font-black text-slate-500">
+            {formatUsageMinutes(live.totalCallMinutes)} /{" "}
+            {formatUsageMinutes(live.minuteLimit)}
+          </span>
+        </div>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-slate-900 transition-[width] duration-700"
+            style={{ width: `${live.usagePercent}%` }}
+          />
+        </div>
+        <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <span>{formatUsageMinutes(live.totalCallMinutes)} used</span>
+          <span>{formatUsageMinutes(live.remainingMinutes)} remaining</span>
+        </div>
+      </div>
     </div>
   );
 };
-
 export default Dashboard;
