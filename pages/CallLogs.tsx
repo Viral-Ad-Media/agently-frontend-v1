@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useTransition } from "react";
+import { useLocation } from "react-router-dom";
 import { CallRecord } from "../types";
 import AppModal from "../components/AppModal";
 import { voiceCallsApi } from "../services/voiceCallsApi";
@@ -395,6 +396,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   calls: initialCalls = [],
   onDownloadReport,
 }) => {
+  const location = useLocation();
   const [calls, setCalls] = useState<CallListItem[]>(() =>
     initialCalls
       .map((item: CallRecord) => normalizeCall(item))
@@ -416,6 +418,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<CallMetrics | null>(null);
+  const [openedDeepLinkId, setOpenedDeepLinkId] = useState<string | null>(null);
 
   const loadCalls = async (nextPage = page) => {
     setLoading(true);
@@ -490,6 +493,11 @@ const CallLogs: React.FC<CallLogsProps> = ({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const deepLinkedCallId = useMemo(
+    () => new URLSearchParams(location.search).get("callId") || "",
+    [location.search],
+  );
+
   const openDetail = async (call: CallListItem) => {
     setSelected({
       ...call,
@@ -552,6 +560,26 @@ const CallLogs: React.FC<CallLogsProps> = ({
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!deepLinkedCallId || openedDeepLinkId === deepLinkedCallId) return;
+    const existing = calls.find((call) => call.id === deepLinkedCallId);
+    const fallback: CallListItem = existing || {
+      id: deepLinkedCallId,
+      callerName: "Loading call...",
+      callerPhone: "",
+      direction: "outbound",
+      status: "completed",
+      outcome: "Completed",
+      summary: "",
+      duration: 0,
+      timestamp: new Date().toISOString(),
+      transcript: [],
+    };
+    setOpenedDeepLinkId(deepLinkedCallId);
+    void openDetail(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkedCallId, calls, openedDeepLinkId]);
 
   const loadRecording = async () => {
     if (!selected) return;

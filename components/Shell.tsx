@@ -358,14 +358,17 @@ const formatNotificationTime = (value?: string) => {
 const getNotificationTarget = (notification: TenantNotification): string => {
   const entityType = String(notification.entity_type || "").toLowerCase();
   const type = String(notification.type || "").toLowerCase();
-  if (
+  const callId =
     notification.call_record_id ||
+    (entityType.includes("call") ? notification.entity_id : "");
+  if (
+    callId ||
     entityType.includes("call") ||
     type.includes("call") ||
     type.includes("recording") ||
     type.includes("transcript")
   ) {
-    return "/calls";
+    return callId ? `/calls?callId=${encodeURIComponent(callId)}` : "/calls";
   }
   if (entityType.includes("lead") || type.includes("lead")) return "/leads";
   if (entityType.includes("schedule") || type.includes("schedule"))

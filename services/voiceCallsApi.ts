@@ -682,7 +682,9 @@ export const voiceCallsApi = {
     },
     getUnreadNotificationCount: () => request('/api/notifications/unread-count'),
     markNotificationRead: (notificationId: string, payload: unknown = { is_read: true }) => request(`/api/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH', body: payload }),
+    markNotificationUnread: (notificationId: string) => request(`/api/notifications/${encodeURIComponent(notificationId)}/unread`, { method: 'PATCH', body: {} }),
     markAllNotificationsRead: () => request('/api/notifications/read-all', { method: 'PATCH', body: {} }),
+    bulkUpdateNotifications: (payload: { notificationIds: string[]; action: 'read' | 'unread' | 'delete' }) => request('/api/notifications/bulk', { method: 'POST', body: payload }),
     deleteNotification: (notificationId: string) => request(`/api/notifications/${encodeURIComponent(notificationId)}`, { method: 'DELETE' }),
   },
 };

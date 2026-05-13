@@ -18,6 +18,7 @@ type NotificationRecord = {
 };
 
 type ToastState = { message: string; tone: "success" | "error" } | null;
+type BulkAction = "read" | "unread" | "delete";
 
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   call_completed: "Call completed",
@@ -33,8 +34,30 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   schedule_failed: "Schedule failed",
 };
 
+const PAGE_SIZE = 12;
+
 const getString = (value: unknown, fallback = "") =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
+
+const isNetworkError = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error || "").toLowerCase();
+  return (
+    !navigator.onLine ||
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed")
+  );
+};
+
+const getFriendlyError = (error: unknown, fallback: string) => {
+  if (isNetworkError(error)) {
+    return "You are currently not connected to the internet. Please connect to the internet and try again.";
+  }
+  return error instanceof Error ? error.message : fallback;
+};
 
 const normalizeNotification = (value: unknown): NotificationRecord | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -89,14 +112,17 @@ const getUnreadCount = (payload: unknown): number => {
 const getNotificationTarget = (notification: NotificationRecord) => {
   const entityType = notification.entityType.toLowerCase();
   const type = notification.type.toLowerCase();
-  if (
+  const callId =
     notification.callRecordId ||
+    (entityType.includes("call") ? notification.entityId : "");
+  if (
+    callId ||
     entityType.includes("call") ||
     type.includes("call") ||
     type.includes("recording") ||
     type.includes("transcript")
   ) {
-    return "/calls";
+    return callId ? `/calls?callId=${encodeURIComponent(callId)}` : "/calls";
   }
   if (entityType.includes("lead") || type.includes("lead")) return "/leads";
   if (entityType.includes("schedule") || type.includes("schedule"))
@@ -125,12 +151,14 @@ const toneForType = (type: string) => {
     return "bg-red-50 text-red-600 border-red-100";
   if (lower.includes("completed") || lower.includes("ready"))
     return "bg-emerald-50 text-emerald-600 border-emerald-100";
-  if (lower.includes("question") || lower.includes("follow"))
+  if (
+    lower.includes("question") ||
+    lower.includes("follow") ||
+    lower.includes("message")
+  )
     return "bg-amber-50 text-amber-700 border-amber-100";
   return "bg-indigo-50 text-indigo-600 border-indigo-100";
 };
-
-const PAGE_SIZE = 12;
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
@@ -138,12 +166,15 @@ const Notifications: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<BulkAction | null>(null);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [page, setPage] = useState(1);
   const [toast, setToast] = useState<ToastState>(null);
   const [deleteTarget, setDeleteTarget] = useState<NotificationRecord | null>(
     null,
   );
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [, startTransition] = useTransition();
 
   const showToast = (
@@ -168,12 +199,11 @@ const Notifications: React.FC = () => {
           getUnreadCount(countPayload) ||
             next.filter((item) => !item.isRead).length,
         );
+        setSelectedIds(new Set());
       });
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "Could not load notifications.",
+        getFriendlyError(error, "Could not load notifications."),
         "error",
       );
     } finally {
@@ -187,6 +217,7 @@ const Notifications: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [filter]);
 
   const visibleNotifications = useMemo(() => {
@@ -203,23 +234,121 @@ const Notifications: React.FC = () => {
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
+  const pageIds = useMemo(
+    () => pagedNotifications.map((item) => item.id),
+    [pagedNotifications],
+  );
+  const selectedCount = selectedIds.size;
+  const selectedOnPage =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  const recomputeUnread = (items: NotificationRecord[]) =>
+    items.filter((item) => !item.isRead).length;
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePageSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (selectedOnPage) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const applyLocalBulk = (ids: string[], action: BulkAction) => {
+    setNotifications((current) => {
+      let next = current;
+      if (action === "delete")
+        next = current.filter((item) => !ids.includes(item.id));
+      if (action === "read")
+        next = current.map((item) =>
+          ids.includes(item.id) ? { ...item, isRead: true } : item,
+        );
+      if (action === "unread")
+        next = current.map((item) =>
+          ids.includes(item.id) ? { ...item, isRead: false } : item,
+        );
+      setUnreadCount(recomputeUnread(next));
+      return next;
+    });
+  };
+
+  const runBulkAction = async (action: BulkAction) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkBusy(action);
+    applyLocalBulk(ids, action);
+    setSelectedIds(new Set());
+    try {
+      await voiceCallsApi.notifications.bulkUpdateNotifications({
+        notificationIds: ids,
+        action,
+      });
+      showToast(
+        action === "delete"
+          ? "Selected notifications deleted."
+          : action === "read"
+            ? "Selected notifications marked as read."
+            : "Selected notifications marked as unread.",
+      );
+    } catch (error) {
+      showToast(
+        getFriendlyError(error, "Could not update selected notifications."),
+        "error",
+      );
+      await loadNotifications();
+    } finally {
+      setBulkBusy(null);
+      setBulkDeleteOpen(false);
+    }
+  };
 
   const markRead = async (notification: NotificationRecord) => {
     if (notification.isRead) return;
     setBusyId(notification.id);
-    setNotifications((current) =>
-      current.map((item) =>
+    setNotifications((current) => {
+      const next = current.map((item) =>
         item.id === notification.id ? { ...item, isRead: true } : item,
-      ),
-    );
-    setUnreadCount((current) => Math.max(0, current - 1));
+      );
+      setUnreadCount(recomputeUnread(next));
+      return next;
+    });
     try {
       await voiceCallsApi.notifications.markNotificationRead(notification.id);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "Could not mark notification read.",
+        getFriendlyError(error, "Could not mark notification read."),
+        "error",
+      );
+      await loadNotifications();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markUnread = async (notification: NotificationRecord) => {
+    if (!notification.isRead) return;
+    setBusyId(notification.id);
+    setNotifications((current) => {
+      const next = current.map((item) =>
+        item.id === notification.id ? { ...item, isRead: false } : item,
+      );
+      setUnreadCount(recomputeUnread(next));
+      return next;
+    });
+    try {
+      await voiceCallsApi.notifications.markNotificationUnread(notification.id);
+    } catch (error) {
+      showToast(
+        getFriendlyError(error, "Could not mark notification unread."),
         "error",
       );
       await loadNotifications();
@@ -244,9 +373,7 @@ const Notifications: React.FC = () => {
       showToast("All notifications marked as read.");
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "Could not mark all notifications read.",
+        getFriendlyError(error, "Could not mark all notifications read."),
         "error",
       );
       await loadNotifications();
@@ -258,18 +385,22 @@ const Notifications: React.FC = () => {
     const target = deleteTarget;
     setBusyId(target.id);
     setDeleteTarget(null);
-    setNotifications((current) =>
-      current.filter((item) => item.id !== target.id),
-    );
-    if (!target.isRead) setUnreadCount((current) => Math.max(0, current - 1));
+    setNotifications((current) => {
+      const next = current.filter((item) => item.id !== target.id);
+      setUnreadCount(recomputeUnread(next));
+      return next;
+    });
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      next.delete(target.id);
+      return next;
+    });
     try {
       await voiceCallsApi.notifications.deleteNotification(target.id);
       showToast("Notification deleted.");
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "Could not delete notification.",
+        getFriendlyError(error, "Could not delete notification."),
         "error",
       );
       await loadNotifications();
@@ -322,8 +453,8 @@ const Notifications: React.FC = () => {
           <div>
             <h2 className="text-xl font-black text-slate-900">Notifications</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Call events, follow-up requests, recordings, transcripts, and
-              schedule updates.
+              Workspace alerts for calls, follow-ups, unanswered questions, and
+              schedules.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -360,6 +491,49 @@ const Notifications: React.FC = () => {
           </div>
         </div>
 
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
+              <input
+                type="checkbox"
+                checked={selectedOnPage}
+                onChange={togglePageSelection}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Select page
+            </label>
+            <span className="text-xs font-bold text-slate-400">
+              {selectedCount} selected
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void runBulkAction("read")}
+              disabled={!selectedCount || bulkBusy !== null}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white disabled:opacity-40"
+            >
+              Mark read
+            </button>
+            <button
+              type="button"
+              onClick={() => void runBulkAction("unread")}
+              disabled={!selectedCount || bulkBusy !== null}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white disabled:opacity-40"
+            >
+              Mark unread
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={!selectedCount || bulkBusy !== null}
+              className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-40"
+            >
+              Delete selected
+            </button>
+          </div>
+        </div>
+
         {loading ? (
           <div className="p-12 text-center text-sm font-bold text-slate-400">
             Loading notifications...
@@ -374,45 +548,65 @@ const Notifications: React.FC = () => {
                   className={`p-5 transition ${notification.isRead ? "bg-white" : "bg-amber-50/40"}`}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <button
-                      type="button"
-                      onClick={() => void openRelated(notification)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`mt-2 h-2.5 w-2.5 rounded-full ${notification.isRead ? "bg-slate-200" : "bg-amber-400"}`}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${toneForType(notification.type)}`}
-                            >
-                              {getTypeLabel(notification.type)}
-                            </span>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                              {formatDate(notification.createdAt)}
-                            </span>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(notification.id)}
+                        onChange={() => toggleSelected(notification.id)}
+                        className="mt-3 h-4 w-4 rounded border-slate-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void openRelated(notification)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={`mt-2 h-2.5 w-2.5 rounded-full ${notification.isRead ? "bg-slate-200" : "bg-amber-400"}`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${toneForType(notification.type)}`}
+                              >
+                                {getTypeLabel(notification.type)}
+                              </span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                {formatDate(notification.createdAt)}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-base font-black text-slate-900">
+                              {notification.title}
+                            </p>
+                            {notification.body ? (
+                              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                                {notification.body}
+                              </p>
+                            ) : null}
+                            {target ? (
+                              <p className="mt-2 text-xs font-bold text-indigo-600">
+                                Open related{" "}
+                                {target.startsWith("/calls?")
+                                  ? "call"
+                                  : target.replace("/", "")}
+                              </p>
+                            ) : null}
                           </div>
-                          <p className="mt-2 text-base font-black text-slate-900">
-                            {notification.title}
-                          </p>
-                          {notification.body ? (
-                            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                              {notification.body}
-                            </p>
-                          ) : null}
-                          {target ? (
-                            <p className="mt-2 text-xs font-bold text-indigo-600">
-                              Open related {target.replace("/", "")}
-                            </p>
-                          ) : null}
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                    </div>
 
                     <div className="flex shrink-0 gap-2">
-                      {!notification.isRead ? (
+                      {notification.isRead ? (
+                        <button
+                          type="button"
+                          onClick={() => void markUnread(notification)}
+                          disabled={busyId === notification.id}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+                        >
+                          Mark unread
+                        </button>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => void markRead(notification)}
@@ -421,7 +615,7 @@ const Notifications: React.FC = () => {
                         >
                           Mark read
                         </button>
-                      ) : null}
+                      )}
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(notification)}
@@ -510,6 +704,38 @@ const Notifications: React.FC = () => {
         <p className="text-sm text-slate-600">
           {deleteTarget?.title || "This notification"} will be deleted. This
           will not delete the related call, lead, or schedule.
+        </p>
+      </AppModal>
+
+      <AppModal
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        title="Delete selected notifications?"
+        description="Selected alerts will be removed from your notification center."
+        size="sm"
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(false)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void runBulkAction("delete")}
+              disabled={bulkBusy === "delete"}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:opacity-50"
+            >
+              Delete selected
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          {selectedCount} notification{selectedCount === 1 ? "" : "s"} will be
+          deleted. Related calls, leads, and schedules will remain available.
         </p>
       </AppModal>
     </div>
