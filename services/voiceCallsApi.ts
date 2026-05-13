@@ -239,6 +239,20 @@ const normalizeAgentVoiceConfig = (payload: unknown): AgentVoiceConfig => {
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
+const NETWORK_OFFLINE_MESSAGE = 'You are currently not connected to the internet. Please connect to the internet and try again.';
+
+const isNetworkError = (error: unknown) => {
+  const message = String((error as { message?: unknown })?.message || error || '').toLowerCase();
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed') ||
+    message.includes('load failed') ||
+    message.includes('internet') ||
+    message.includes('offline')
+  );
+};
+
 class VoiceApiError extends Error {
   status: number;
   details: unknown;
@@ -265,12 +279,20 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
   const { method = 'GET', body, auth = true, responseType = 'json' } = options;
   const headers = auth ? authHeaders(body != null) : new Headers(body != null ? { 'Content-Type': 'application/json' } : undefined);
 
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (isNetworkError(error) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      throw new VoiceApiError(NETWORK_OFFLINE_MESSAGE, 0, error);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
@@ -512,12 +534,20 @@ const normalizeAudioResult = async (response: Response): Promise<TestVoiceResult
 };
 
 const postForAudio = async (path: string, body: unknown): Promise<TestVoiceResult> => {
-  const response = await fetch(buildUrl(path), {
-    method: 'POST',
-    headers: authHeaders(true),
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (isNetworkError(error) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      throw new VoiceApiError(NETWORK_OFFLINE_MESSAGE, 0, error);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;

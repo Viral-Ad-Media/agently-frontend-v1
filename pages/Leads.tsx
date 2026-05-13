@@ -121,6 +121,26 @@ const normTags = (v: string) =>
     .map((t) => t.trim())
     .filter(Boolean);
 
+const NETWORK_OFFLINE_MESSAGE =
+  "You are currently not connected to the internet. Please connect to the internet and try again.";
+
+const friendlyError = (error: unknown, fallback = "Something went wrong.") => {
+  const message = String(
+    (error as { message?: unknown })?.message || error || "",
+  );
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed") ||
+    lower.includes("load failed") ||
+    (typeof navigator !== "undefined" && !navigator.onLine)
+  ) {
+    return NETWORK_OFFLINE_MESSAGE;
+  }
+  return message || fallback;
+};
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -175,6 +195,130 @@ function countCompleted(start: string, weekdays: string[]): number {
   }
   return count;
 }
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const normalizeWindows = (value: unknown): LeadOutreachWindow[] => {
+  if (Array.isArray(value)) {
+    const windows = value
+      .map((item) => {
+        const raw = asRecord(item);
+        const weekdays = Array.isArray(raw.weekdays)
+          ? raw.weekdays.map(String)
+          : Array.isArray(raw.daysOfWeek)
+            ? raw.daysOfWeek.map(String)
+            : [];
+        return {
+          weekdays: weekdays.length
+            ? weekdays
+            : ["mon", "tue", "wed", "thu", "fri"],
+          time: String(raw.time || raw.startTime || "10:00").slice(0, 5),
+        };
+      })
+      .filter((window) => window.weekdays.length);
+    if (windows.length) return windows;
+  }
+  const raw = asRecord(value);
+  const scheduleConfig = asRecord(raw.scheduleConfig || raw.schedule_config);
+  const weeklyRules = Array.isArray(scheduleConfig.weeklyRules)
+    ? scheduleConfig.weeklyRules
+    : Array.isArray(scheduleConfig.weekly_rules)
+      ? scheduleConfig.weekly_rules
+      : [];
+  const windows = weeklyRules
+    .map((rule) => {
+      const rawRule = asRecord(rule);
+      const days = Array.isArray(rawRule.daysOfWeek)
+        ? rawRule.daysOfWeek.map(String)
+        : Array.isArray(rawRule.days_of_week)
+          ? rawRule.days_of_week.map(String)
+          : [];
+      const times = Array.isArray(rawRule.times)
+        ? rawRule.times.map(String)
+        : [];
+      return {
+        weekdays: days.length ? days : ["mon", "tue", "wed", "thu", "fri"],
+        time: String(times[0] || "10:00").slice(0, 5),
+      };
+    })
+    .filter((window) => window.weekdays.length);
+  return windows.length ? windows : [emptyWindow()];
+};
+
+const normalizeSchedule = (value: unknown): Schedule => {
+  const raw = asRecord(value);
+  const scheduleConfig = asRecord(raw.scheduleConfig || raw.schedule_config);
+  const dateRange = asRecord(
+    scheduleConfig.dateRange || scheduleConfig.date_range,
+  );
+  const directRecipients = Array.isArray(raw.directRecipients)
+    ? raw.directRecipients
+    : Array.isArray(raw.direct_recipients)
+      ? raw.direct_recipients
+      : [];
+  const firstRecipient = asRecord(directRecipients[0]);
+  const tag = String(raw.tag || raw.targetTag || raw.target_tag || "");
+  const name = String(
+    raw.name ||
+      raw.title ||
+      raw.callPurpose ||
+      raw.call_purpose ||
+      firstRecipient.name ||
+      (tag ? `#${tag}` : "Outreach schedule"),
+  );
+  const startDate = String(
+    raw.startDate ||
+      raw.start_date ||
+      dateRange.startDate ||
+      dateRange.start_date ||
+      "",
+  );
+  const endDate = String(
+    raw.endDate ||
+      raw.end_date ||
+      dateRange.endDate ||
+      dateRange.end_date ||
+      startDate ||
+      "",
+  );
+  return {
+    ...(raw as Partial<Schedule>),
+    id: String(raw.id || ""),
+    name,
+    targetType: String(
+      raw.targetType || raw.target_type || (tag ? "tag" : "lead"),
+    ) as Schedule["targetType"],
+    leadId: String(raw.leadId || raw.lead_id || ""),
+    tag,
+    voiceAgentId: String(raw.voiceAgentId || raw.voice_agent_id || ""),
+    windows: normalizeWindows(raw.windows || value),
+    timezone: String(raw.timezone || "America/New_York"),
+    extraContext: String(
+      raw.extraContext ||
+        raw.extra_context ||
+        raw.customInstructions ||
+        raw.custom_instructions ||
+        raw.callPurpose ||
+        raw.call_purpose ||
+        "",
+    ),
+    isActive:
+      raw.isActive !== undefined
+        ? Boolean(raw.isActive)
+        : raw.is_active !== undefined
+          ? Boolean(raw.is_active)
+          : String(raw.status || "active") !== "deleted",
+    createdAt: String(raw.createdAt || raw.created_at || ""),
+    updatedAt: String(
+      raw.updatedAt || raw.updated_at || raw.createdAt || raw.created_at || "",
+    ),
+    startDate,
+    endDate,
+  } as Schedule;
+};
 
 const Leads: React.FC<LeadsProps> = ({
   leads: externalLeads,
@@ -458,13 +602,8 @@ const Leads: React.FC<LeadsProps> = ({
           conversionRate: Number(response.metrics.conversionRate || 0),
         });
       }
-    } catch (error: any) {
-      const message = String(error?.message || "")
-        .toLowerCase()
-        .includes("failed to fetch")
-        ? "You are currently not connected to the internet. Please connect to the internet and try again."
-        : error?.message || "Could not refresh leads.";
-      showMsg(message, false);
+    } catch (error) {
+      showMsg(friendlyError(error, "Could not refresh leads."), false);
     } finally {
       setRefreshingLeads(false);
     }
@@ -477,8 +616,18 @@ const Leads: React.FC<LeadsProps> = ({
 
   const refreshSchedules = async () => {
     try {
-      setSchedules((await api.listLeadSchedules()).schedules as Schedule[]);
-    } catch {}
+      const response = await api.listOutreachSchedules();
+      setSchedules(
+        (response.schedules || [])
+          .map(normalizeSchedule)
+          .filter((schedule) => schedule.id),
+      );
+    } catch (error) {
+      showMsg(
+        friendlyError(error, "Could not load outreach schedules."),
+        false,
+      );
+    }
   };
   useEffect(() => {
     void refreshSchedules();
@@ -489,7 +638,7 @@ const Leads: React.FC<LeadsProps> = ({
     try {
       await fn();
     } catch (e) {
-      showMsg(e instanceof Error ? e.message : "Something went wrong.", false);
+      showMsg(friendlyError(e), false);
     } finally {
       setBusy(null);
     }
@@ -779,16 +928,21 @@ const Leads: React.FC<LeadsProps> = ({
       return;
     }
     await withBusy("edit-sch", async () => {
-      await api.updateLeadSchedule(editingSchedule.id, {
+      await api.updateOutreachSchedule(editingSchedule.id, {
         name: editingSchedule.name,
         voiceAgentId: editingSchedule.voiceAgentId,
+        voice_agent_id: editingSchedule.voiceAgentId,
         windows: editingSchedule.windows,
         timezone: editingSchedule.timezone,
         extraContext: editingSchedule.extraContext,
+        extra_context: editingSchedule.extraContext,
         isActive: editingSchedule.isActive,
+        is_active: editingSchedule.isActive,
         startDate: start,
+        start_date: start,
         endDate: end,
-      } as any);
+        end_date: end,
+      } as Record<string, unknown>);
       setEditingSchedule(null); // auto-close
       await refreshSchedules();
       showMsg("Schedule updated.");
@@ -1064,8 +1218,8 @@ const Leads: React.FC<LeadsProps> = ({
               value: leadMetrics.total,
               hint:
                 backendTotal != null
-                  ? `${backendTotal} in backend`
-                  : "Live backend source",
+                  ? `${backendTotal} total`
+                  : "Live lead count",
             },
             {
               label: "New",
@@ -1384,8 +1538,11 @@ const Leads: React.FC<LeadsProps> = ({
                           <button
                             onClick={() =>
                               void withBusy(`del-${sch.id}`, async () => {
-                                await api.deleteLeadSchedule(sch.id);
-                                await refreshSchedules();
+                                await api.deleteOutreachSchedule(sch.id);
+                                setSchedules((current) =>
+                                  current.filter((item) => item.id !== sch.id),
+                                );
+                                void refreshSchedules();
                                 showMsg("Deleted.");
                               })
                             }

@@ -33,6 +33,20 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, ''
 
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
+export const NETWORK_OFFLINE_MESSAGE = 'You are currently not connected to the internet. Please connect to the internet and try again.';
+
+const isNetworkError = (error: unknown) => {
+  const message = String((error as { message?: unknown })?.message || error || '').toLowerCase();
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('network request failed') ||
+    message.includes('load failed') ||
+    message.includes('internet') ||
+    message.includes('offline')
+  );
+};
+
 const request = async <T>(path: string, options: {
   method?: HttpMethod;
   body?: unknown;
@@ -58,11 +72,20 @@ const request = async <T>(path: string, options: {
     }
   }
 
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (isNetworkError(error) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      throw new ApiError(NETWORK_OFFLINE_MESSAGE, 0, error);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     let errorPayload: { error?: { message?: string; details?: unknown } } | null = null;
@@ -449,6 +472,31 @@ export const api = {
     return request<{ success: boolean }>(`/api/leads/schedules/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  async listOutreachSchedules() {
+    const response = await request<{ schedules?: unknown[]; data?: unknown[]; results?: unknown[]; items?: unknown[] }>('/api/outreach/schedules');
+    const raw = response.schedules || response.data || response.results || response.items || [];
+    return { schedules: Array.isArray(raw) ? raw : [] };
+  },
+
+  async updateOutreachSchedule(id: string, updates: Record<string, unknown>) {
+    return request<{ schedule?: unknown; success?: boolean }>(`/api/outreach/schedules/${id}`, {
+      method: 'PATCH',
+      body: updates,
+    });
+  },
+
+  async deleteOutreachSchedule(id: string) {
+    try {
+      return await request<{ success: boolean }>(`/api/outreach/schedules/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      return request<{ success: boolean }>(`/api/call-schedules/${id}`, {
+        method: 'DELETE',
+      });
+    }
   },
 
   async deleteLead(id: string) {
