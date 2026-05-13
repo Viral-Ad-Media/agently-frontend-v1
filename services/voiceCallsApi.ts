@@ -670,6 +670,10 @@ export const voiceCallsApi = {
     transferCall: (callId: string, payload: unknown) => request(`/api/calls/${encodeURIComponent(callId)}/transfer`, { method: 'POST', body: payload }),
   },
 
+  dashboard: {
+    getMetrics: () => request('/api/dashboard/metrics'),
+  },
+
   // Prepared for Phase 5. Do not wire into UI in Phase 1.
   notifications: {
     getNotifications: (params?: { limit?: number; page?: number; unreadOnly?: boolean }) => {

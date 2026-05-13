@@ -44,14 +44,31 @@ type ScheduleRow = {
   createdAt: string;
 };
 
-type DashboardLiveState = {
+type ExtraDashboardMetrics = {
+  totalCallSeconds: number;
+  totalCallMinutes: number;
+  minuteLimit: number;
+  remainingMinutes: number;
+  usagePercent: number;
+  chatbotMessagesAnswered: number;
+  chatbotTotalMessages: number;
+  chatbotLeadsCaptured: number;
+  callLeadsCaptured: number;
+  totalLeadsCaptured: number;
+  convertedLeads: number;
+  conversionRate: number;
+  knowledgeChunks: number;
+  estimatedStorageBytes: number;
+  estimatedStorageLabel: string;
+};
+
+type DashboardLiveState = ExtraDashboardMetrics & {
   calls: CallRow[];
   totalCalls: number;
   completedCalls: number;
   failedCalls: number;
   outboundCalls: number;
   inboundCalls: number;
-  avgDuration: number;
   activeSchedules: number;
   completedSchedules: number;
   failedSchedules: number;
@@ -64,7 +81,7 @@ type AgentStats = {
   totalCalls: number;
   completedCalls: number;
   failedCalls: number;
-  avgDuration: number;
+  totalDuration: number;
   inboundCalls: number;
   outboundCalls: number;
 };
@@ -75,6 +92,24 @@ type FlowPoint = {
   completed: number;
 };
 
+const EMPTY_EXTRA: ExtraDashboardMetrics = {
+  totalCallSeconds: 0,
+  totalCallMinutes: 0,
+  minuteLimit: 500,
+  remainingMinutes: 500,
+  usagePercent: 0,
+  chatbotMessagesAnswered: 0,
+  chatbotTotalMessages: 0,
+  chatbotLeadsCaptured: 0,
+  callLeadsCaptured: 0,
+  totalLeadsCaptured: 0,
+  convertedLeads: 0,
+  conversionRate: 0,
+  knowledgeChunks: 0,
+  estimatedStorageBytes: 0,
+  estimatedStorageLabel: "0 KB",
+};
+
 const EMPTY_LIVE_STATE: DashboardLiveState = {
   calls: [],
   totalCalls: 0,
@@ -82,11 +117,11 @@ const EMPTY_LIVE_STATE: DashboardLiveState = {
   failedCalls: 0,
   outboundCalls: 0,
   inboundCalls: 0,
-  avgDuration: 0,
   activeSchedules: 0,
   completedSchedules: 0,
   failedSchedules: 0,
   unreadNotifications: 0,
+  ...EMPTY_EXTRA,
 };
 
 const safeString = (value: unknown, fallback = ""): string => {
@@ -113,7 +148,7 @@ const getArrayPayload = (payload: unknown, keys: string[]): unknown[] => {
   for (const key of keys) {
     const candidate = record[key];
     if (Array.isArray(candidate)) return candidate;
-    const nested = getArrayPayload(candidate, keys);
+    const nested: unknown[] = getArrayPayload(candidate, keys);
     if (nested.length) return nested;
   }
   return [];
@@ -129,6 +164,22 @@ const formatDuration = (seconds: number): string => {
     return `${hours}h ${remainingMins}m`;
   }
   return mins ? `${mins}m ${secs}s` : `${secs}s`;
+};
+
+const formatMinutes = (minutes: number): string => {
+  const rounded = Math.round(minutes * 10) / 10;
+  if (rounded >= 60) {
+    const hours = Math.floor(rounded / 60);
+    const mins = Math.round(rounded % 60);
+    return `${hours}h ${mins}m`;
+  }
+  return `${rounded}m`;
+};
+
+const formatBytes = (bytes: number): string => {
+  if (!bytes || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 const formatDateTime = (value: string): string => {
@@ -272,7 +323,7 @@ const normalizeCallsResponse = (
 ): { calls: CallRow[]; metrics: Partial<DashboardLiveState> } => {
   const record = getObject(payload);
   const calls = getArrayPayload(payload, ["calls", "data", "items", "results"])
-    .map(normalizeCall)
+    .map((item: unknown) => normalizeCall(item))
     .filter((call): call is CallRow => Boolean(call));
   const metricsRaw = getObject(record.metrics);
   return {
@@ -292,13 +343,130 @@ const normalizeCallsResponse = (
         metricsRaw.failed || metricsRaw.failedCalls || metricsRaw.failed_calls,
         0,
       ),
-      avgDuration: safeNumber(
-        metricsRaw.avgDuration ||
-          metricsRaw.avg_duration ||
-          metricsRaw.averageDuration,
+      totalCallSeconds: safeNumber(
+        metricsRaw.totalCallSeconds ||
+          metricsRaw.total_call_seconds ||
+          metricsRaw.totalDurationSeconds,
+        0,
+      ),
+      totalCallMinutes: safeNumber(
+        metricsRaw.totalCallMinutes ||
+          metricsRaw.total_call_minutes ||
+          metricsRaw.totalMinutes,
         0,
       ),
     },
+  };
+};
+
+const normalizeDashboardMetrics = (
+  payload: unknown,
+  fallbackMinuteLimit: number,
+): ExtraDashboardMetrics => {
+  const record = getObject(payload);
+  const metrics = getObject(
+    record.metrics || record.dashboard || record.data || record,
+  );
+  const usage = getObject(metrics.usage || record.usage);
+  const chatbot = getObject(metrics.chatbot || record.chatbot);
+  const leads = getObject(metrics.leads || record.leads);
+  const knowledge = getObject(
+    metrics.knowledge || metrics.storage || record.knowledge || record.storage,
+  );
+  const totalCallSeconds = safeNumber(
+    usage.totalCallSeconds ||
+      usage.total_call_seconds ||
+      metrics.totalCallSeconds ||
+      metrics.total_call_seconds,
+    0,
+  );
+  const totalCallMinutes = safeNumber(
+    usage.totalCallMinutes ||
+      usage.total_call_minutes ||
+      metrics.totalCallMinutes ||
+      metrics.total_call_minutes,
+    totalCallSeconds / 60,
+  );
+  const minuteLimit = safeNumber(
+    usage.minuteLimit ||
+      usage.minute_limit ||
+      metrics.minuteLimit ||
+      metrics.minute_limit,
+    fallbackMinuteLimit,
+  );
+  const estimatedStorageBytes = safeNumber(
+    knowledge.estimatedStorageBytes ||
+      knowledge.estimated_storage_bytes ||
+      knowledge.bytes ||
+      0,
+    0,
+  );
+  const totalLeadsCaptured = safeNumber(
+    leads.totalCaptured ||
+      leads.total_captured ||
+      leads.total ||
+      metrics.totalLeadsCaptured,
+    0,
+  );
+  const convertedLeads = safeNumber(
+    leads.converted ||
+      leads.convertedLeads ||
+      leads.converted_leads ||
+      metrics.convertedLeads,
+    0,
+  );
+  return {
+    totalCallSeconds,
+    totalCallMinutes,
+    minuteLimit,
+    remainingMinutes: Math.max(0, minuteLimit - totalCallMinutes),
+    usagePercent: Math.min(
+      100,
+      minuteLimit ? (totalCallMinutes / minuteLimit) * 100 : 0,
+    ),
+    chatbotMessagesAnswered: safeNumber(
+      chatbot.messagesAnswered ||
+        chatbot.messages_answered ||
+        chatbot.answers ||
+        0,
+      0,
+    ),
+    chatbotTotalMessages: safeNumber(
+      chatbot.totalMessages || chatbot.total_messages || 0,
+      0,
+    ),
+    chatbotLeadsCaptured: safeNumber(
+      chatbot.leadsCaptured ||
+        chatbot.leads_captured ||
+        leads.chatbotLeadsCaptured ||
+        leads.chatbot_leads_captured ||
+        0,
+      0,
+    ),
+    callLeadsCaptured: safeNumber(
+      leads.callLeadsCaptured || leads.call_leads_captured || 0,
+      0,
+    ),
+    totalLeadsCaptured,
+    convertedLeads,
+    conversionRate: totalLeadsCaptured
+      ? Math.round((convertedLeads / totalLeadsCaptured) * 1000) / 10
+      : 0,
+    knowledgeChunks: safeNumber(
+      knowledge.chunks ||
+        knowledge.knowledgeChunks ||
+        knowledge.knowledge_chunks ||
+        0,
+      0,
+    ),
+    estimatedStorageBytes,
+    estimatedStorageLabel:
+      safeString(
+        knowledge.estimatedStorageLabel ||
+          knowledge.estimated_storage_label ||
+          "",
+        "",
+      ) || formatBytes(estimatedStorageBytes),
   };
 };
 
@@ -326,23 +494,56 @@ const StatCard: React.FC<{
 StatCard.displayName = "StatCard";
 
 const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
-  const [live, setLive] = useState<DashboardLiveState>(EMPTY_LIVE_STATE);
+  const minuteLimitFromOrg =
+    dashboard.usage.minuteLimit || org.subscription?.usage?.minuteLimit || 500;
+  const [live, setLive] = useState<DashboardLiveState>({
+    ...EMPTY_LIVE_STATE,
+    minuteLimit: minuteLimitFromOrg,
+    remainingMinutes: minuteLimitFromOrg,
+  });
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [chartsReady, setChartsReady] = useState(false);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    const run = () => setChartsReady(true);
+    const windowWithIdle = window as Window & {
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout?: number },
+      ) => number;
+    };
+    if (windowWithIdle.requestIdleCallback) {
+      const id = windowWithIdle.requestIdleCallback(run, { timeout: 900 });
+      return () => {
+        if ("cancelIdleCallback" in window)
+          (
+            window as Window & { cancelIdleCallback?: (id: number) => void }
+          ).cancelIdleCallback?.(id);
+      };
+    }
+    const timer = window.setTimeout(run, 80);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
     setError("");
     try {
-      const [callsPayload, schedulesPayload, notificationPayload] =
-        await Promise.allSettled([
-          voiceCallsApi.calls.getCalls({ page: 1, limit: 200 }),
-          voiceCallsApi.outreach.getOutreachSchedules(),
-          voiceCallsApi.notifications.getUnreadNotificationCount(),
-        ]);
+      const [
+        callsPayload,
+        schedulesPayload,
+        notificationPayload,
+        dashboardPayload,
+      ] = await Promise.allSettled([
+        voiceCallsApi.calls.getCalls({ page: 1, limit: 200 }),
+        voiceCallsApi.outreach.getOutreachSchedules(),
+        voiceCallsApi.notifications.getUnreadNotificationCount(),
+        voiceCallsApi.dashboard.getMetrics(),
+      ]);
 
       const callsResult =
         callsPayload.status === "fulfilled"
@@ -356,13 +557,24 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               "items",
               "results",
             ])
-              .map(normalizeSchedule)
+              .map((item: unknown) => normalizeSchedule(item))
               .filter((item): item is ScheduleRow => Boolean(item))
           : [];
       const notificationRecord =
         notificationPayload.status === "fulfilled"
           ? getObject(notificationPayload.value)
           : {};
+      const extraMetrics =
+        dashboardPayload.status === "fulfilled"
+          ? normalizeDashboardMetrics(
+              dashboardPayload.value,
+              minuteLimitFromOrg,
+            )
+          : {
+              ...EMPTY_EXTRA,
+              minuteLimit: minuteLimitFromOrg,
+              remainingMinutes: minuteLimitFromOrg,
+            };
 
       const calls = callsResult.calls;
       const completed = calls.filter(
@@ -378,11 +590,19 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           "canceled",
         ].includes(call.status),
       ).length;
-      const durationCalls = calls.filter((call) => call.duration > 0);
-      const avgDuration = durationCalls.length
-        ? durationCalls.reduce((sum, call) => sum + call.duration, 0) /
-          durationCalls.length
-        : 0;
+      const totalDurationFromCalls = calls.reduce(
+        (sum, call) => sum + Math.max(0, call.duration),
+        0,
+      );
+      const totalSeconds =
+        extraMetrics.totalCallSeconds ||
+        callsResult.metrics.totalCallSeconds ||
+        totalDurationFromCalls;
+      const totalMinutes =
+        extraMetrics.totalCallMinutes ||
+        callsResult.metrics.totalCallMinutes ||
+        totalSeconds / 60;
+      const minuteLimit = extraMetrics.minuteLimit || minuteLimitFromOrg;
       const activeSchedules = schedules.filter((schedule) =>
         ["active", "queued", "scheduled", "draft"].includes(schedule.status),
       ).length;
@@ -403,7 +623,6 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
             .length,
           inboundCalls: calls.filter((call) => call.direction === "inbound")
             .length,
-          avgDuration: callsResult.metrics.avgDuration || avgDuration,
           activeSchedules,
           completedSchedules,
           failedSchedules,
@@ -412,6 +631,15 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               notificationRecord.unread_count ||
               getObject(notificationRecord.metrics).unread,
             0,
+          ),
+          ...extraMetrics,
+          totalCallSeconds: totalSeconds,
+          totalCallMinutes: totalMinutes,
+          minuteLimit,
+          remainingMinutes: Math.max(0, minuteLimit - totalMinutes),
+          usagePercent: Math.min(
+            100,
+            minuteLimit ? (totalMinutes / minuteLimit) * 100 : 0,
           ),
         });
         setLastUpdated(new Date().toISOString());
@@ -425,7 +653,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [minuteLimitFromOrg]);
 
   useEffect(() => {
     void loadDashboard();
@@ -440,17 +668,16 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       const failed = calls.filter((call) =>
         ["failed", "cancelled", "canceled"].includes(call.status),
       ).length;
-      const durationCalls = calls.filter((call) => call.duration > 0);
       return {
         agentId: agent.id,
         agentName: agent.name,
         totalCalls: calls.length,
         completedCalls: completed,
         failedCalls: failed,
-        avgDuration: durationCalls.length
-          ? durationCalls.reduce((sum, call) => sum + call.duration, 0) /
-            durationCalls.length
-          : 0,
+        totalDuration: calls.reduce(
+          (sum, call) => sum + Math.max(0, call.duration),
+          0,
+        ),
         inboundCalls: calls.filter((call) => call.direction === "inbound")
           .length,
         outboundCalls: calls.filter((call) => call.direction === "outbound")
@@ -464,7 +691,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       selectedAgentId === "all"
         ? live.calls
         : live.calls.filter((call) => call.agentId === selectedAgentId);
-    return source.slice(0, 8);
+    return source.slice(0, 5);
   }, [live.calls, selectedAgentId]);
 
   const selectedStats = useMemo(() => {
@@ -473,7 +700,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         totalCalls: live.totalCalls,
         completedCalls: live.completedCalls,
         failedCalls: live.failedCalls,
-        avgDuration: live.avgDuration,
+        totalDuration: live.totalCallSeconds,
         inboundCalls: live.inboundCalls,
         outboundCalls: live.outboundCalls,
       };
@@ -483,7 +710,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         totalCalls: 0,
         completedCalls: 0,
         failedCalls: 0,
-        avgDuration: 0,
+        totalDuration: 0,
         inboundCalls: 0,
         outboundCalls: 0,
       }
@@ -533,7 +760,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
             Workspace overview
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Live call, schedule, and notification metrics from your backend.
+            Live voice, chatbot, lead, and usage metrics from your backend.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -559,12 +786,12 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
           label="Total calls"
           value={String(selectedStats.totalCalls)}
           icon="☎️"
-          sub="From call records"
+          sub="All call records"
         />
         <StatCard
           label="Completed"
@@ -579,23 +806,67 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           sub="Failed / cancelled"
         />
         <StatCard
-          label="Avg duration"
-          value={formatDuration(selectedStats.avgDuration)}
+          label="Call usage"
+          value={formatMinutes(
+            selectedStats.totalDuration / 60 || live.totalCallMinutes,
+          )}
           icon="⏱️"
-          sub="Completed calls"
+          sub={`${formatMinutes(live.remainingMinutes)} remaining`}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard
+          label="Chatbot answers"
+          value={String(live.chatbotMessagesAnswered)}
+          icon="💬"
+          sub={`${live.chatbotTotalMessages} total messages`}
         />
         <StatCard
-          label="Active schedules"
-          value={String(live.activeSchedules)}
-          icon="📅"
-          sub={`${live.completedSchedules} completed`}
+          label="Leads captured"
+          value={String(live.totalLeadsCaptured)}
+          icon="🧲"
+          sub={`${live.chatbotLeadsCaptured} chatbot · ${live.callLeadsCaptured} calls`}
         />
         <StatCard
-          label="Unread alerts"
-          value={String(live.unreadNotifications)}
-          icon="🔔"
-          sub="Needs review"
+          label="Converted leads"
+          value={String(live.convertedLeads)}
+          icon="📈"
+          sub={`${live.conversionRate}% conversion`}
         />
+        <StatCard
+          label="Knowledge storage"
+          value={live.estimatedStorageLabel}
+          icon="🗂️"
+          sub={`${live.knowledgeChunks} knowledge chunks`}
+        />
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Minute usage
+            </p>
+            <h2 className="text-base font-black text-slate-900">
+              {org.subscription.plan} plan
+            </h2>
+          </div>
+          <span className="text-xs font-black text-slate-500">
+            {formatMinutes(live.totalCallMinutes)} /{" "}
+            {formatMinutes(live.minuteLimit)}
+          </span>
+        </div>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-slate-900 transition-[width] duration-700"
+            style={{ width: `${live.usagePercent}%` }}
+          />
+        </div>
+        <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <span>{formatMinutes(live.totalCallMinutes)} used</span>
+          <span>{formatMinutes(live.remainingMinutes)} remaining</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.3fr_0.7fr]">
@@ -609,7 +880,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                 Last 7 days
               </h2>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
               <button
                 type="button"
                 onClick={() => setSelectedAgentId("all")}
@@ -629,54 +900,60 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               ))}
             </div>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={flowData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#f1f5f9"
-                />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "14px",
-                    border: "none",
-                    boxShadow: "0 12px 35px rgba(15, 23, 42, 0.12)",
-                    fontSize: "12px",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="calls"
-                  name="Calls"
-                  stroke="#6366f1"
-                  fill="#6366f1"
-                  fillOpacity={0.12}
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="completed"
-                  name="Completed"
-                  stroke="#10b981"
-                  fill="#10b981"
-                  fillOpacity={0.12}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-64">
+            {chartsReady ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={flowData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#f1f5f9"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "14px",
+                      border: "none",
+                      boxShadow: "0 12px 35px rgba(15, 23, 42, 0.12)",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="calls"
+                    name="Calls"
+                    stroke="#6366f1"
+                    fill="#6366f1"
+                    fillOpacity={0.12}
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="completed"
+                    name="Completed"
+                    stroke="#10b981"
+                    fill="#10b981"
+                    fillOpacity={0.12}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-3xl bg-slate-50 text-sm font-semibold text-slate-400">
+                Preparing chart…
+              </div>
+            )}
           </div>
         </div>
 
@@ -684,7 +961,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Agent performance
           </p>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 max-h-[23rem] space-y-3 overflow-y-auto pr-1">
             {agentStats.map((agent) => (
               <button
                 key={agent.agentId}
@@ -701,7 +978,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] font-bold uppercase tracking-widest opacity-80">
                   <span>{agent.completedCalls} done</span>
                   <span>{agent.outboundCalls} out</span>
-                  <span>{formatDuration(agent.avgDuration)}</span>
+                  <span>{formatDuration(agent.totalDuration)}</span>
                 </div>
               </button>
             ))}
@@ -719,46 +996,52 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Direction mix
           </p>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={[
-                  { name: "Inbound", calls: selectedStats.inboundCalls },
-                  { name: "Outbound", calls: selectedStats.outboundCalls },
-                ]}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#f1f5f9"
-                />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "14px",
-                    border: "none",
-                    fontSize: "12px",
-                  }}
-                />
-                <Bar
-                  dataKey="calls"
-                  name="Calls"
-                  fill="#0f172a"
-                  radius={[10, 10, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="mt-4 h-56">
+            {chartsReady ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { name: "Inbound", calls: selectedStats.inboundCalls },
+                    { name: "Outbound", calls: selectedStats.outboundCalls },
+                  ]}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#f1f5f9"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "14px",
+                      border: "none",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Bar
+                    dataKey="calls"
+                    name="Calls"
+                    fill="#0f172a"
+                    radius={[10, 10, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-3xl bg-slate-50 text-sm font-semibold text-slate-400">
+                Preparing chart…
+              </div>
+            )}
           </div>
         </div>
 
@@ -769,11 +1052,11 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                 Recent calls
               </p>
               <h2 className="text-base font-black text-slate-900">
-                Latest activity
+                Latest 5 activities
               </h2>
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="max-h-[21rem] space-y-2 overflow-y-auto pr-1">
             {displayedCalls.map((call) => (
               <div
                 key={call.id}
@@ -806,37 +1089,6 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               </p>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Plan usage
-            </p>
-            <h2 className="text-base font-black text-slate-900">
-              {org.subscription.plan} plan
-            </h2>
-          </div>
-          <span className="text-xs font-black text-slate-500">
-            {dashboard.usage.minutes} / {dashboard.usage.minuteLimit} minutes
-          </span>
-        </div>
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-slate-900 transition-[width] duration-700"
-            style={{
-              width: `${Math.min(100, (dashboard.usage.minutes / Math.max(dashboard.usage.minuteLimit, 1)) * 100)}%`,
-            }}
-          />
-        </div>
-        <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          <span>{dashboard.usage.calls} calls used</span>
-          <span>
-            {Math.max(0, dashboard.usage.callLimit - dashboard.usage.calls)}{" "}
-            calls remaining
-          </span>
         </div>
       </div>
     </div>
