@@ -344,8 +344,9 @@ const App: React.FC = () => {
   const handleInviteMember = async (
     email: string,
     role: "Admin" | "Viewer",
+    name: string,
   ) => {
-    await api.inviteMember(email, role);
+    await api.inviteMember(email, role, name);
     await refreshWorkspace();
   };
 

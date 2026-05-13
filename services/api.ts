@@ -510,6 +510,17 @@ export const api = {
     });
   },
 
+
+  async getTeamMembers() {
+    return request('/api/team/members');
+  },
+
+  async updateTeamMemberRole(id: string, role: Extract<UserRole, 'Admin' | 'Viewer'>) {
+    return request<{ member: User }>(`/api/team/members/${id}/role`, {
+      method: 'PATCH',
+      body: { role },
+    });
+  },
   async inviteMember(email: string, role: Extract<UserRole, 'Admin' | 'Viewer'>, name?: string) {
     return request<{ member: User }>(
       '/api/team/invitations',
@@ -521,6 +532,10 @@ export const api = {
     return request<{ success: boolean }>(`/api/team/members/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  async getBillingSummary() {
+    return request('/api/billing/summary');
   },
 
   async updatePlan(plan: Extract<Organization['subscription']['plan'], 'Starter' | 'Pro'>) {
@@ -549,6 +564,10 @@ export const api = {
       responseType: 'blob',
     });
     triggerDownload(blob, `${callId}-report.txt`);
+  },
+
+  async getSettings() {
+    return request<WorkspaceSettings>('/api/settings');
   },
 
   async updateSettings(settings: {

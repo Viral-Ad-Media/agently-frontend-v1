@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Organization } from '../types';
+import React, { useEffect, useMemo, useState } from "react";
+import { Organization, WorkspaceSettings } from "../types";
+import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 
 interface SettingsProps {
   org: Organization;
@@ -9,46 +10,112 @@ interface SettingsProps {
   }) => Promise<void>;
 }
 
-const TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Asia/Dubai',
-  'Asia/Lagos',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-  'Africa/Lagos',
-  'Africa/Nairobi',
-  'Africa/Johannesburg',
-];
+const getTimeZones = () => {
+  try {
+    const supported = Intl.supportedValuesOf?.("timeZone") || [];
+    if (supported.length) return supported;
+  } catch {
+    // Fall through.
+  }
+  return [
+    "Africa/Lagos",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Toronto",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Asia/Dubai",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "UTC",
+  ];
+};
+
+const cleanError = (error: unknown, fallback: string) => {
+  const message = error instanceof Error ? error.message : fallback;
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("network") ||
+    lower.includes("offline")
+  ) {
+    return NETWORK_OFFLINE_MESSAGE;
+  }
+  return message;
+};
 
 const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
-  const [timezone, setTimezone]     = useState(org.settings.timezone);
-  const [phoneNumber, setPhoneNumber] = useState(org.settings.phoneNumber);
-  const [saving, setSaving]         = useState(false);
-  const [message, setMessage]       = useState('');
-  const [error, setError]           = useState('');
+  const [timezone, setTimezone] = useState(
+    org.settings.timezone || org.profile.timezone || "Africa/Lagos",
+  );
+  const [phoneNumber, setPhoneNumber] = useState(
+    org.settings.phoneNumber || org.phoneNumber || "",
+  );
+  const [timezoneSearch, setTimezoneSearch] = useState(timezone);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const timezones = useMemo(() => getTimeZones(), []);
+  const filteredTimezones = useMemo(() => {
+    const query = timezoneSearch.trim().toLowerCase();
+    return timezones
+      .filter((zone) => zone.toLowerCase().includes(query))
+      .slice(0, 80);
+  }, [timezoneSearch, timezones]);
+
+  const applySettings = (settings: Partial<WorkspaceSettings>) => {
+    const nextTimezone =
+      settings.timezone ||
+      org.settings.timezone ||
+      org.profile.timezone ||
+      "Africa/Lagos";
+    const nextPhone =
+      settings.phoneNumber || org.settings.phoneNumber || org.phoneNumber || "";
+    setTimezone(nextTimezone);
+    setTimezoneSearch(nextTimezone);
+    setPhoneNumber(nextPhone);
+  };
+
+  const loadSettings = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const settings = await api.getSettings();
+      applySettings(settings);
+    } catch (err) {
+      setError(cleanError(err, "Unable to load settings."));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setTimezone(org.settings.timezone);
-    setPhoneNumber(org.settings.phoneNumber);
-  }, [org.settings.timezone, org.settings.phoneNumber]);
+    applySettings(org.settings);
+    void loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [org.id]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    setMessage('');
-    setError('');
+    setMessage("");
+    setError("");
     try {
+      if (!timezones.includes(timezone)) {
+        setError("Choose a valid timezone from the list.");
+        return;
+      }
       await onSave({ timezone, phoneNumber });
-      setMessage('Settings saved.');
+      await loadSettings();
+      setMessage("Settings saved.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to save settings.');
+      setError(cleanError(e, "Unable to save settings."));
     } finally {
       setSaving(false);
     }
@@ -56,83 +123,118 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
 
   return (
     <div className="space-y-6 animate-fade-up">
-
-      <div>
-        <h2 className="text-xl font-black text-slate-900">Organization Settings</h2>
-        <p className="text-xs text-slate-400 mt-0.5">Manage global settings for {org.profile.name}.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">
+            Organization Settings
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Manage global settings for {org.profile.name}.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={loadSettings}
+          disabled={loading}
+          className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 disabled:opacity-50"
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
-      {message && (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          ✓ {message}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+      {(message || error) && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm font-medium ${error ? "border-red-100 bg-red-50 text-red-600" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}
+        >
+          {error || `✓ ${message}`}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-
-        {/* Org info */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-2">
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
               Organization Name
             </label>
             <input
               type="text"
               value={org.profile.name}
               disabled
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-100 font-medium bg-slate-50 text-slate-500 text-sm"
+              className="w-full rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-500"
             />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-              Timezone
-            </label>
-            <select
-              value={timezone}
-              onChange={e => setTimezone(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-            >
-              {[timezone, ...TIMEZONES.filter(v => v !== timezone)].map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-              Primary Contact Number
-            </label>
-            <input
-              value={phoneNumber}
-              onChange={e => setPhoneNumber(e.target.value)}
-              placeholder="+1 555 000 0000"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
               Industry
             </label>
             <input
               value={org.profile.industry}
               disabled
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-100 font-medium bg-slate-50 text-slate-500 text-sm"
+              className="w-full rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-500"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Timezone
+            </label>
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+              <div>
+                <input
+                  value={timezoneSearch}
+                  onChange={(e) => setTimezoneSearch(e.target.value)}
+                  placeholder="Search timezones..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Selected: {timezone}
+                </p>
+              </div>
+              <select
+                value={timezone}
+                onChange={(e) => {
+                  setTimezone(e.target.value);
+                  setTimezoneSearch(e.target.value);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                {filteredTimezones.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Primary Contact Number
+            </label>
+            <input
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+1 555 000 0000"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Website
+            </label>
+            <input
+              value={org.profile.website || ""}
+              disabled
+              className="w-full rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-500"
             />
           </div>
         </div>
-
 
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-2xl bg-slate-900 text-white px-8 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all active:scale-95"
+            className="rounded-2xl bg-slate-900 px-8 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save Settings'}
+            {saving ? "Saving…" : "Save Settings"}
           </button>
         </div>
       </form>
