@@ -586,6 +586,14 @@ export const api = {
     });
   },
 
+
+  async requestOrganizationDeletion(payload: { organizationName: string; acknowledgeNoRefund: boolean }) {
+    return request<{ success: boolean; deletionRequested: boolean; scheduledDeletionAt: string }>(
+      '/api/organization/delete-request',
+      { method: 'POST', body: payload },
+    );
+  },
+
   async submitContact(payload: { name: string; email: string; subject: string; message: string }) {
     return request<{ success: boolean; message: string }>('/api/contact', {
       method: 'POST',

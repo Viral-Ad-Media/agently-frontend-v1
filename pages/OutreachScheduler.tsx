@@ -596,6 +596,34 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   const [maxAttemptsPerLead, setMaxAttemptsPerLead] = useState(1);
   const [retryDelayMinutes, setRetryDelayMinutes] = useState(60);
   const [voicemailBehavior, setVoicemailBehavior] = useState("hangup");
+  const orgTimezone =
+    org.settings?.timezone || org.profile.timezone || "Africa/Lagos";
+
+  useEffect(() => {
+    setTimezone(orgTimezone);
+  }, [orgTimezone]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash || "";
+    const query = hash.includes("?")
+      ? new URLSearchParams(hash.split("?")[1])
+      : new URLSearchParams();
+    const tag = query.get("tag");
+    if (!tag) return;
+    const taggedLeads = leads.filter((lead) =>
+      (lead.tags || []).some(
+        (leadTag) => leadTag.toLowerCase() === tag.toLowerCase(),
+      ),
+    );
+    if (!taggedLeads.length) return;
+    setActiveTab("create");
+    setRecipientMode("leads");
+    setSelectedLeadIds(taggedLeads.map((lead) => lead.id));
+    setScheduleName(`${tag} outreach`);
+    setCallPurpose((current) => current || `Follow up with ${tag} leads.`);
+    setPreview(null);
+  }, [leads]);
 
   const tenantNumbers = useMemo(
     () => numbers.filter((number) => getNumberOrgId(number) === org.id),

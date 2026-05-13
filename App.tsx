@@ -389,7 +389,27 @@ const App: React.FC = () => {
     timezone: string;
     phoneNumber: string;
   }) => {
-    await api.updateSettings(settings);
+    const saved = await api.updateSettings(settings);
+    setWorkspace((currentWorkspace) => {
+      if (!currentWorkspace) return currentWorkspace;
+      return {
+        ...currentWorkspace,
+        organization: {
+          ...currentWorkspace.organization,
+          settings: {
+            ...currentWorkspace.organization.settings,
+            ...saved,
+          },
+          profile: {
+            ...currentWorkspace.organization.profile,
+            timezone:
+              saved.timezone || currentWorkspace.organization.profile.timezone,
+          },
+          phoneNumber:
+            saved.phoneNumber ?? currentWorkspace.organization.phoneNumber,
+        },
+      };
+    });
     await refreshWorkspace();
   };
 

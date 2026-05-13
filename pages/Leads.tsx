@@ -872,20 +872,9 @@ const Leads: React.FC<LeadsProps> = ({
     );
 
   const openTagSchedule = (tag: string) => {
-    const wins = [emptyWindow()];
-    const firstOutbound = outboundAgents[0]?.id || "";
-    setScheduleTarget({ tag, label: `Tag · ${tag}` });
-    setScheduleForm({
-      name: `${tag} campaign`,
-      voiceAgentId: firstOutbound,
-      timezone: defaultTz,
-      extraContext: "",
-      syncExistingLeads: true,
-      windows: wins,
-      startDate: smartStartDate(wins[0].weekdays),
-      endDate: "",
-      dateError: "",
-    });
+    // Use the main Outreach builder so lead-tag campaigns support the same call types,
+    // direct/lead modes, timing options, and preview/create flow as the Outreach page.
+    window.location.hash = `/outreach?tag=${encodeURIComponent(tag)}`;
   };
 
   const saveSchedule = async () => {
@@ -1479,7 +1468,7 @@ const Leads: React.FC<LeadsProps> = ({
                         onClick={() => openTagSchedule(tag)}
                         className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700"
                       >
-                        Schedule
+                        Schedule in Outreach
                       </button>
                     </div>
                   </div>

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Organization, WorkspaceSettings } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
+import { clearSessionToken } from "../services/session";
+import AppModal from "../components/AppModal";
 
 interface SettingsProps {
   org: Organization;
@@ -60,6 +62,11 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteAgree, setDeleteAgree] = useState(false);
+  const [deletingOrg, setDeletingOrg] = useState(false);
 
   const timezones = useMemo(() => getTimeZones(), []);
   const filteredTimezones = useMemo(() => {
@@ -177,33 +184,49 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
             <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
               Timezone
             </label>
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-              <div>
-                <input
-                  value={timezoneSearch}
-                  onChange={(e) => setTimezoneSearch(e.target.value)}
-                  placeholder="Search timezones..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
-                />
-                <p className="mt-1 text-xs text-slate-400">
-                  Selected: {timezone}
-                </p>
-              </div>
-              <select
-                value={timezone}
+            <div className="relative">
+              <input
+                value={timezoneSearch}
+                onFocus={() => setTimezoneOpen(true)}
                 onChange={(e) => {
-                  setTimezone(e.target.value);
-                  setTimezoneSearch(e.target.value);
+                  const next = e.target.value;
+                  setTimezoneSearch(next);
+                  setTimezoneOpen(true);
+                  if (timezones.includes(next)) setTimezone(next);
                 }}
+                placeholder="Search and select timezone..."
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400"
-              >
-                {filteredTimezones.map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
-                  </option>
-                ))}
-              </select>
+              />
+              {timezoneOpen && (
+                <div className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                  {filteredTimezones.length ? (
+                    filteredTimezones.map((zone) => (
+                      <button
+                        key={zone}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setTimezone(zone);
+                          setTimezoneSearch(zone);
+                          setTimezoneOpen(false);
+                        }}
+                        className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-bold ${timezone === zone ? "bg-amber-50 text-amber-700" : "text-slate-600 hover:bg-slate-50"}`}
+                      >
+                        {zone}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-3 text-xs font-bold text-slate-400">
+                      No matching timezone. Choose a valid timezone from the
+                      list.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Selected timezone: {timezone}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -238,6 +261,114 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
           </button>
         </div>
       </form>
+
+      <section className="rounded-3xl border border-red-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-500">
+              Danger zone
+            </p>
+            <h3 className="mt-1 text-lg font-black text-slate-900">
+              Request organization deletion
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              This starts a 30-day deletion process. Your workspace access will
+              be disabled immediately after the request is confirmed.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDeleteModal(true)}
+            className="rounded-2xl border border-red-100 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-50"
+          >
+            Request deletion
+          </button>
+        </div>
+      </section>
+
+      <AppModal
+        open={showDeleteModal}
+        onClose={() => !deletingOrg && setShowDeleteModal(false)}
+        title="Delete organization?"
+        description="This request starts a 30-day deletion process. Your team will lose access immediately. Paid and ongoing subscriptions are not refunded upon deletion."
+        footer={
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deletingOrg}
+              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={
+                deletingOrg ||
+                deleteConfirmName.trim() !== org.profile.name ||
+                !deleteAgree
+              }
+              onClick={async () => {
+                setDeletingOrg(true);
+                setError("");
+                try {
+                  await api.requestOrganizationDeletion({
+                    organizationName: deleteConfirmName.trim(),
+                    acknowledgeNoRefund: deleteAgree,
+                  });
+                  clearSessionToken();
+                  window.location.hash = "/login";
+                  window.location.reload();
+                } catch (err) {
+                  setError(
+                    cleanError(err, "Unable to request organization deletion."),
+                  );
+                  setDeletingOrg(false);
+                }
+              }}
+              className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {deletingOrg ? "Submitting…" : "Confirm deletion request"}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-sm text-slate-600">
+          <div className="rounded-2xl bg-red-50 p-4 text-red-700">
+            <p className="font-black">
+              This action disables access immediately.
+            </p>
+            <p className="mt-1">
+              Your organization will be queued for manual deletion and data
+              removal within 30 days. Agently will email you and notify the
+              platform owner for review.
+            </p>
+          </div>
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Type your organization name to continue
+            </span>
+            <input
+              value={deleteConfirmName}
+              onChange={(event) => setDeleteConfirmName(event.target.value)}
+              placeholder={org.profile.name}
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-red-200"
+            />
+          </label>
+          <label className="flex items-start gap-3 rounded-2xl border border-slate-100 p-4">
+            <input
+              type="checkbox"
+              checked={deleteAgree}
+              onChange={(event) => setDeleteAgree(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              I understand paid and ongoing subscriptions will not be refunded
+              upon deletion.
+            </span>
+          </label>
+        </div>
+      </AppModal>
     </div>
   );
 };
