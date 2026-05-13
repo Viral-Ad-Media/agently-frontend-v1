@@ -491,48 +491,50 @@ const Notifications: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
-              <input
-                type="checkbox"
-                checked={selectedOnPage}
-                onChange={togglePageSelection}
-                className="h-4 w-4 rounded border-slate-300"
-              />
-              Select page
-            </label>
-            <span className="text-xs font-bold text-slate-400">
-              {selectedCount} selected
-            </span>
+        {selectedCount > 0 ? (
+          <div className="flex flex-col gap-3 border-b border-slate-100 bg-amber-50/70 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amber-700">
+                <input
+                  type="checkbox"
+                  checked={selectedOnPage}
+                  onChange={togglePageSelection}
+                  className="h-4 w-4 rounded border-amber-300"
+                />
+                Select page
+              </label>
+              <span className="text-xs font-bold text-amber-700">
+                {selectedCount} selected
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void runBulkAction("read")}
+                disabled={bulkBusy !== null}
+                className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 disabled:opacity-40"
+              >
+                Mark read
+              </button>
+              <button
+                type="button"
+                onClick={() => void runBulkAction("unread")}
+                disabled={bulkBusy !== null}
+                className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 disabled:opacity-40"
+              >
+                Mark unread
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={bulkBusy !== null}
+                className="rounded-xl border border-red-100 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-40"
+              >
+                Delete selected
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void runBulkAction("read")}
-              disabled={!selectedCount || bulkBusy !== null}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white disabled:opacity-40"
-            >
-              Mark read
-            </button>
-            <button
-              type="button"
-              onClick={() => void runBulkAction("unread")}
-              disabled={!selectedCount || bulkBusy !== null}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white disabled:opacity-40"
-            >
-              Mark unread
-            </button>
-            <button
-              type="button"
-              onClick={() => setBulkDeleteOpen(true)}
-              disabled={!selectedCount || bulkBusy !== null}
-              className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-40"
-            >
-              Delete selected
-            </button>
-          </div>
-        </div>
+        ) : null}
 
         {loading ? (
           <div className="p-12 text-center text-sm font-bold text-slate-400">

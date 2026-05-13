@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
@@ -229,23 +236,42 @@ const SidebarLink: React.FC<{
   label: string;
   description: string;
   onNavigate?: () => void;
-}> = ({ to, icon, label, description, onNavigate }) => {
+}> = memo(({ to, icon, label, description, onNavigate }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [, startRouteTransition] = useTransition();
   const isActive = location.pathname === to;
 
+  const handleNavigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
+      return;
+    event.preventDefault();
+    onNavigate?.();
+    if (isActive) return;
+    startRouteTransition(() => {
+      navigate(to);
+    });
+  };
+
   return (
-    <Link
-      to={to}
+    <a
+      href={`#${to}`}
       title={description}
-      onClick={onNavigate}
-      className={`group flex items-center gap-3 rounded-[1.25rem] border px-3.5 py-3 transition-all duration-200 ${
+      onClick={handleNavigate}
+      className={`group flex items-center gap-3 rounded-[1.25rem] border px-3.5 py-3 transition-colors duration-150 ${
         isActive
-          ? "border-amber-200 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-[0_18px_40px_rgba(255,153,0,0.26)]"
+          ? "border-amber-200 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-[0_18px_40px_rgba(255,153,0,0.18)]"
           : "border-transparent bg-transparent text-slate-500 hover:border-white/70 hover:bg-white/70 hover:text-slate-900"
       }`}
     >
       <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors duration-150 ${
           isActive
             ? "bg-white/18 text-white"
             : "bg-slate-100 text-slate-700 group-hover:bg-white"
@@ -257,11 +283,12 @@ const SidebarLink: React.FC<{
         <p className="truncate text-sm font-black tracking-tight">{label}</p>
       </div>
       <div
-        className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-300"}`}
+        className={`h-2.5 w-2.5 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-300"}`}
       />
-    </Link>
+    </a>
   );
-};
+});
+SidebarLink.displayName = "SidebarLink";
 
 type TenantNotification = {
   id: string;
