@@ -347,6 +347,34 @@ export const api = {
     });
   },
 
+  async listLeads(params: { page?: number; limit?: number; search?: string; status?: string; source?: string; tag?: string } = {}) {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        qs.set(key, String(value));
+      }
+    });
+    const query = qs.toString();
+    return request<{
+      success?: boolean;
+      leads: Lead[];
+      page?: number;
+      limit?: number;
+      total?: number;
+      metrics?: {
+        total?: number;
+        new?: number;
+        contacted?: number;
+        closed?: number;
+        callLeads?: number;
+        chatbotLeads?: number;
+        manualLeads?: number;
+        converted?: number;
+        conversionRate?: number;
+      };
+    }>(`/api/leads${query ? `?${query}` : ''}`);
+  },
+
   async createLead(payload: Pick<Lead, 'name' | 'email' | 'phone' | 'reason'> & { status?: Lead['status']; tags?: string[]; voiceAgentId?: string; assignmentContext?: string }) {
     return request<Lead>('/api/leads', {
       method: 'POST',

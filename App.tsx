@@ -624,6 +624,8 @@ const App: React.FC = () => {
               <ProtectedRoute>
                 <Leads
                   leads={leads}
+                  org={org || undefined}
+                  onRefresh={refreshWorkspace}
                   onUpdateLead={handleUpdateLead}
                   onDeleteLead={handleDeleteLead}
                   onBulkDeleteLeads={handleBulkDeleteLeads}

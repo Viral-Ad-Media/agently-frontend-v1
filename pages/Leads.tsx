@@ -33,6 +33,18 @@ interface Schedule extends LeadOutreachSchedule {
 
 type TagAction = "add" | "remove" | "set";
 
+type LeadMetrics = {
+  total: number;
+  new: number;
+  contacted: number;
+  closed: number;
+  callLeads: number;
+  chatbotLeads: number;
+  manualLeads: number;
+  converted: number;
+  conversionRate: number;
+};
+
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-blue-50 text-blue-600 border-blue-200",
   contacted: "bg-amber-50 text-amber-700 border-amber-200",
@@ -221,6 +233,9 @@ const Leads: React.FC<LeadsProps> = ({
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
   const [csvText, setCsvText] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<LeadMetrics | null>(null);
+  const [backendTotal, setBackendTotal] = useState<number | null>(null);
+  const [refreshingLeads, setRefreshingLeads] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const defaultTz =
@@ -233,6 +248,42 @@ const Leads: React.FC<LeadsProps> = ({
     localLeads.forEach((l) => (l.tags || []).forEach((t) => s.add(t)));
     return [...s].sort();
   }, [localLeads]);
+
+  const leadMetrics = useMemo<LeadMetrics>(() => {
+    if (liveMetrics) return liveMetrics;
+    const total = localLeads.length;
+    const newCount = localLeads.filter((lead) => lead.status === "new").length;
+    const contacted = localLeads.filter(
+      (lead) => lead.status === "contacted",
+    ).length;
+    const closed = localLeads.filter((lead) => lead.status === "closed").length;
+    const callLeads = localLeads.filter((lead) =>
+      String(lead.source || "")
+        .toLowerCase()
+        .includes("call"),
+    ).length;
+    const chatbotLeads = localLeads.filter((lead) =>
+      String(lead.source || "")
+        .toLowerCase()
+        .includes("chat"),
+    ).length;
+    const manualLeads = localLeads.filter((lead) =>
+      String(lead.source || "")
+        .toLowerCase()
+        .includes("manual"),
+    ).length;
+    return {
+      total,
+      new: newCount,
+      contacted,
+      closed,
+      callLeads,
+      chatbotLeads,
+      manualLeads,
+      converted: closed,
+      conversionRate: total ? Math.round((closed / total) * 100) : 0,
+    };
+  }, [liveMetrics, localLeads]);
 
   const [leadForm, setLeadForm] = useState({
     name: "",
@@ -385,6 +436,44 @@ const Leads: React.FC<LeadsProps> = ({
   );
 
   const showMsg = (msg: string, ok = true) => setToast({ msg, ok });
+
+  const refreshLeadsFromBackend = async () => {
+    setRefreshingLeads(true);
+    try {
+      const response = await api.listLeads({ limit: 500 });
+      setLocalLeads(response.leads || []);
+      setBackendTotal(response.total ?? (response.leads || []).length);
+      if (response.metrics) {
+        setLiveMetrics({
+          total: Number(response.metrics.total || 0),
+          new: Number(response.metrics.new || 0),
+          contacted: Number(response.metrics.contacted || 0),
+          closed: Number(response.metrics.closed || 0),
+          callLeads: Number(response.metrics.callLeads || 0),
+          chatbotLeads: Number(response.metrics.chatbotLeads || 0),
+          manualLeads: Number(response.metrics.manualLeads || 0),
+          converted: Number(
+            response.metrics.converted || response.metrics.closed || 0,
+          ),
+          conversionRate: Number(response.metrics.conversionRate || 0),
+        });
+      }
+    } catch (error: any) {
+      const message = String(error?.message || "")
+        .toLowerCase()
+        .includes("failed to fetch")
+        ? "You are currently not connected to the internet. Please connect to the internet and try again."
+        : error?.message || "Could not refresh leads.";
+      showMsg(message, false);
+    } finally {
+      setRefreshingLeads(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshLeadsFromBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshSchedules = async () => {
     try {
@@ -940,6 +1029,13 @@ const Leads: React.FC<LeadsProps> = ({
             </>
           )}
           <button
+            onClick={() => void refreshLeadsFromBackend()}
+            disabled={refreshingLeads}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300 disabled:opacity-50"
+          >
+            {refreshingLeads ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
             onClick={() => setShowImportModal(true)}
             className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300"
           >
@@ -957,6 +1053,66 @@ const Leads: React.FC<LeadsProps> = ({
           >
             + Add Lead
           </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto pb-2 custom-scrollbar">
+        <div className="flex min-w-max gap-3">
+          {[
+            {
+              label: "Total leads",
+              value: leadMetrics.total,
+              hint:
+                backendTotal != null
+                  ? `${backendTotal} in backend`
+                  : "Live backend source",
+            },
+            {
+              label: "New",
+              value: leadMetrics.new,
+              hint: "Needs first contact",
+            },
+            {
+              label: "Contacted",
+              value: leadMetrics.contacted,
+              hint: "Already reached",
+            },
+            {
+              label: "Converted",
+              value: leadMetrics.converted,
+              hint: `${leadMetrics.conversionRate}% conversion`,
+            },
+            {
+              label: "Call leads",
+              value: leadMetrics.callLeads,
+              hint: "Captured from calls",
+            },
+            {
+              label: "Chatbot leads",
+              value: leadMetrics.chatbotLeads,
+              hint: "Captured from chat",
+            },
+            {
+              label: "Manual leads",
+              value: leadMetrics.manualLeads,
+              hint: "Added by team",
+            },
+          ].map((metric) => (
+            <div
+              key={metric.label}
+              className="w-40 shrink-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {metric.label}
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {metric.value}
+              </p>
+              <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
+                {metric.hint}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
