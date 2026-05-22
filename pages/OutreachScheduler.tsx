@@ -1,7 +1,9 @@
 import React, {
   memo,
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -536,6 +538,114 @@ const TimeListEditor = memo(
 );
 TimeListEditor.displayName = "TimeListEditor";
 
+const DirectRecipientRow = memo(
+  ({
+    recipient,
+    index,
+    canRemove,
+    onCommit,
+    onRemove,
+  }: {
+    recipient: DirectRecipient;
+    index: number;
+    canRemove: boolean;
+    onCommit: (id: string, patch: Partial<DirectRecipient>) => void;
+    onRemove: (id: string) => void;
+  }) => {
+    const [name, setName] = useState(recipient.name);
+    const [displayPhone, setDisplayPhone] = useState(recipient.displayPhone);
+    const debounceRef = useRef<number | null>(null);
+
+    useEffect(() => {
+      setName(recipient.name);
+    }, [recipient.name]);
+
+    useEffect(() => {
+      setDisplayPhone(recipient.displayPhone);
+    }, [recipient.displayPhone]);
+
+    useEffect(
+      () => () => {
+        if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      },
+      [],
+    );
+
+    const commitName = useCallback(
+      (nextName: string) => {
+        onCommit(recipient.id, { name: nextName });
+      },
+      [onCommit, recipient.id],
+    );
+
+    const commitPhone = useCallback(
+      (nextPhone: string) => {
+        const normalized = normalizeNorthAmericaPhone(nextPhone);
+        onCommit(recipient.id, {
+          displayPhone: nextPhone,
+          phone: normalized.value,
+          phoneError: normalized.error,
+        });
+      },
+      [onCommit, recipient.id],
+    );
+
+    const queuePhoneCommit = (nextPhone: string) => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = window.setTimeout(
+        () => commitPhone(nextPhone),
+        220,
+      );
+    };
+
+    return (
+      <div className="space-y-1">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => commitName(name)}
+            placeholder={`Recipient ${index + 1} name`}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+          />
+          <input
+            value={displayPhone}
+            onChange={(event) => {
+              const nextPhone = event.target.value;
+              setDisplayPhone(nextPhone);
+              queuePhoneCommit(nextPhone);
+            }}
+            onBlur={() => commitPhone(displayPhone)}
+            placeholder="+1 (555) 123-4567"
+            inputMode="tel"
+            autoComplete="tel"
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(recipient.id)}
+            disabled={!canRemove}
+            className="rounded-2xl border border-red-100 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Remove
+          </button>
+        </div>
+        {recipient.phone && (
+          <p className="text-[11px] font-bold text-emerald-600">
+            Will call {recipient.phone}
+          </p>
+        )}
+        {recipient.phoneError && (
+          <p className="text-[11px] font-bold text-red-500">
+            {recipient.phoneError}
+          </p>
+        )}
+      </div>
+    );
+  },
+);
+DirectRecipientRow.displayName = "DirectRecipientRow";
+
 const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   org,
   leads,
@@ -571,6 +681,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [draftLeadIds, setDraftLeadIds] = useState<string[]>([]);
+  const [draftSelectedTags, setDraftSelectedTags] = useState<string[]>([]);
+  const [draftExcludedLeadIds, setDraftExcludedLeadIds] = useState<string[]>(
+    [],
+  );
   const [reviewOpen, setReviewOpen] = useState(false);
   const [callPurpose, setCallPurpose] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
@@ -658,6 +772,43 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => a.tag.localeCompare(b.tag));
   }, [leads]);
+  const draftTagLeadIds = useMemo(() => {
+    if (!draftSelectedTags.length) return [];
+    const selectedTagSet = new Set(
+      draftSelectedTags.map((tag) => tag.toLowerCase()),
+    );
+    return leads
+      .filter((lead) =>
+        (lead.tags || []).some((tag) => selectedTagSet.has(tag.toLowerCase())),
+      )
+      .map((lead) => lead.id);
+  }, [draftSelectedTags, leads]);
+  const draftResolvedLeadIds = useMemo(() => {
+    const excluded = new Set(draftExcludedLeadIds);
+    return Array.from(new Set([...draftTagLeadIds, ...draftLeadIds])).filter(
+      (leadId) => !excluded.has(leadId),
+    );
+  }, [draftExcludedLeadIds, draftLeadIds, draftTagLeadIds]);
+  const modalSortedLeads = useMemo(() => {
+    const selectedTagSet = new Set(
+      draftSelectedTags.map((tag) => tag.toLowerCase()),
+    );
+    return [...leads].sort((a, b) => {
+      const aTagMatch = (a.tags || []).some((tag) =>
+        selectedTagSet.has(tag.toLowerCase()),
+      );
+      const bTagMatch = (b.tags || []).some((tag) =>
+        selectedTagSet.has(tag.toLowerCase()),
+      );
+      if (aTagMatch !== bTagMatch) return aTagMatch ? -1 : 1;
+      const aSelected = draftResolvedLeadIds.includes(a.id);
+      const bSelected = draftResolvedLeadIds.includes(b.id);
+      if (aSelected !== bSelected) return aSelected ? -1 : 1;
+      return String(a.name || a.phone || a.email || "").localeCompare(
+        String(b.name || b.phone || b.email || ""),
+      );
+    });
+  }, [draftResolvedLeadIds, draftSelectedTags, leads]);
   const selectedRecipientCount =
     recipientMode === "direct"
       ? directRecipients.filter((recipient) => recipient.phone.trim()).length
@@ -757,36 +908,26 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     setPreview(null);
   }, [voiceAgentId, assignedNumbers]);
 
-  const updateRecipient = (
-    id: string,
-    field: keyof DirectRecipient,
-    value: string,
-  ) => {
-    setDirectRecipients((current) =>
-      current.map((recipient) => {
-        if (recipient.id !== id) return recipient;
-        if (field !== "phone" && field !== "displayPhone")
-          return { ...recipient, [field]: value };
-        const normalized = normalizeNorthAmericaPhone(value);
-        return {
-          ...recipient,
-          displayPhone: value,
-          phone: normalized.value,
-          phoneError: normalized.error,
-        };
-      }),
-    );
-    setPreview(null);
-  };
+  const commitRecipientPatch = useCallback(
+    (id: string, patch: Partial<DirectRecipient>) => {
+      setDirectRecipients((current) =>
+        current.map((recipient) =>
+          recipient.id === id ? { ...recipient, ...patch } : recipient,
+        ),
+      );
+      setPreview(null);
+    },
+    [],
+  );
 
-  const removeRecipient = (id: string) => {
+  const removeRecipient = useCallback((id: string) => {
     setDirectRecipients((current) =>
       current.length === 1
         ? current
         : current.filter((recipient) => recipient.id !== id),
     );
     setPreview(null);
-  };
+  }, []);
 
   const toggleLead = (leadId: string) => {
     setSelectedLeadIds((current) =>
@@ -799,32 +940,37 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const openLeadPicker = () => {
     setDraftLeadIds(selectedLeadIds);
+    setDraftSelectedTags([]);
+    setDraftExcludedLeadIds([]);
     setLeadPickerOpen(true);
   };
 
   const toggleDraftLead = (leadId: string) => {
-    setDraftLeadIds((current) =>
-      current.includes(leadId)
-        ? current.filter((id) => id !== leadId)
-        : [...current, leadId],
-    );
+    const isSelected = draftResolvedLeadIds.includes(leadId);
+    const isFromSelectedTag = draftTagLeadIds.includes(leadId);
+    if (isSelected) {
+      setDraftLeadIds((current) => current.filter((id) => id !== leadId));
+      if (isFromSelectedTag) {
+        setDraftExcludedLeadIds((current) =>
+          Array.from(new Set([...current, leadId])),
+        );
+      }
+      return;
+    }
+    setDraftLeadIds((current) => Array.from(new Set([...current, leadId])));
+    setDraftExcludedLeadIds((current) => current.filter((id) => id !== leadId));
   };
 
-  const selectDraftTag = (tag: string) => {
-    const tagLeadIds = leads
-      .filter((lead) =>
-        (lead.tags || []).some(
-          (leadTag) => leadTag.toLowerCase() === tag.toLowerCase(),
-        ),
-      )
-      .map((lead) => lead.id);
-    setDraftLeadIds((current) =>
-      Array.from(new Set([...current, ...tagLeadIds])),
+  const toggleDraftTag = (tag: string) => {
+    setDraftSelectedTags((current) =>
+      current.includes(tag)
+        ? current.filter((selectedTag) => selectedTag !== tag)
+        : [...current, tag],
     );
   };
 
   const applyLeadSelection = () => {
-    setSelectedLeadIds(draftLeadIds);
+    setSelectedLeadIds(draftResolvedLeadIds);
     setRecipientMode("leads");
     setPreview(null);
     setLeadPickerOpen(false);
@@ -1127,7 +1273,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between xl:max-w-[70%]">
         <div>
           <h2 className="text-2xl font-black text-slate-950">
             Outreach & Scheduled Calls
@@ -1154,7 +1300,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       </div>
 
       {activeTab === "scheduled" ? (
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mx-auto w-full max-w-6xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm xl:max-w-[70%]">
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="text-lg font-black text-slate-900">
@@ -1353,7 +1499,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           )}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="mx-auto w-full max-w-6xl space-y-6 xl:max-w-[70%]">
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
               Call type
@@ -1449,50 +1595,14 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
             {recipientMode === "direct" ? (
               <div className="space-y-3">
                 {directRecipients.map((recipient, index) => (
-                  <div key={recipient.id} className="space-y-1">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
-                      <input
-                        value={recipient.name}
-                        onChange={(event) =>
-                          updateRecipient(
-                            recipient.id,
-                            "name",
-                            event.target.value,
-                          )
-                        }
-                        placeholder={`Recipient ${index + 1} name`}
-                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-                      />
-                      <input
-                        value={recipient.displayPhone}
-                        onChange={(event) =>
-                          updateRecipient(
-                            recipient.id,
-                            "phone",
-                            event.target.value,
-                          )
-                        }
-                        placeholder="+1 (555) 123-4567"
-                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-                      />
-                      <button
-                        onClick={() => removeRecipient(recipient.id)}
-                        className="rounded-2xl border border-red-100 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    {recipient.phone && (
-                      <p className="text-[11px] font-bold text-emerald-600">
-                        Will call {recipient.phone}
-                      </p>
-                    )}
-                    {recipient.phoneError && (
-                      <p className="text-[11px] font-bold text-red-500">
-                        {recipient.phoneError}
-                      </p>
-                    )}
-                  </div>
+                  <DirectRecipientRow
+                    key={recipient.id}
+                    recipient={recipient}
+                    index={index}
+                    canRemove={directRecipients.length > 1}
+                    onCommit={commitRecipientPatch}
+                    onRemove={removeRecipient}
+                  />
                 ))}
                 <button
                   onClick={() =>
@@ -1779,7 +1889,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 </label>
               </div>
             </div>
-            <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+            <div className="mt-8 rounded-3xl border border-slate-100 bg-slate-50 p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-black text-slate-900">
@@ -1814,7 +1924,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
         open={leadPickerOpen}
         onClose={() => setLeadPickerOpen(false)}
         title="Select outreach leads"
-        description="Choose leads one by one, select all, or import everyone under a tag."
+        description="Choose individual leads, select all, or import contacts from one or more tags without duplicate calls."
         size="xl"
         footer={
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -1830,8 +1940,8 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               onClick={applyLeadSelection}
               className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
             >
-              Use {draftLeadIds.length} selected lead
-              {draftLeadIds.length === 1 ? "" : "s"}
+              Use {draftResolvedLeadIds.length} selected lead
+              {draftResolvedLeadIds.length === 1 ? "" : "s"}
             </button>
           </div>
         }
@@ -1845,14 +1955,22 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setDraftLeadIds(leads.map((lead) => lead.id))}
+                  onClick={() => {
+                    setDraftLeadIds(leads.map((lead) => lead.id));
+                    setDraftSelectedTags([]);
+                    setDraftExcludedLeadIds([]);
+                  }}
                   className="rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 ring-1 ring-slate-200"
                 >
                   Select All
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDraftLeadIds([])}
+                  onClick={() => {
+                    setDraftLeadIds([]);
+                    setDraftSelectedTags([]);
+                    setDraftExcludedLeadIds([]);
+                  }}
                   className="rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 ring-1 ring-red-100"
                 >
                   Clear All
@@ -1865,16 +1983,23 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               </p>
               {leadTagOptions.length ? (
                 <div className="mt-3 flex max-h-64 flex-wrap gap-2 overflow-y-auto pr-1">
-                  {leadTagOptions.map(({ tag, count }) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => selectDraftTag(tag)}
-                      className="rounded-full bg-white px-3 py-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200 hover:ring-amber-300"
-                    >
-                      {tag} · {count}
-                    </button>
-                  ))}
+                  {leadTagOptions.map(({ tag, count }) => {
+                    const active = draftSelectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleDraftTag(tag)}
+                        className={`rounded-full px-3 py-2 text-xs font-bold ring-1 transition-all ${
+                          active
+                            ? "bg-slate-900 text-white ring-slate-900"
+                            : "bg-white text-slate-600 ring-slate-200 hover:ring-amber-300"
+                        }`}
+                      >
+                        {tag} · {count}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-slate-400">
@@ -1884,7 +2009,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
             </div>
             <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
               <p className="text-sm font-black text-emerald-800">
-                {draftLeadIds.length} selected
+                {draftResolvedLeadIds.length} selected
               </p>
               <p className="mt-1 text-xs text-emerald-700">
                 Click Use selected leads to import them into this outreach.
@@ -1899,7 +2024,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               </p>
             ) : (
               <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-                {leads.map((lead) => (
+                {modalSortedLeads.map((lead) => (
                   <label
                     key={lead.id}
                     className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 px-4 py-3 hover:bg-slate-50"
@@ -1919,7 +2044,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                     </div>
                     <input
                       type="checkbox"
-                      checked={draftLeadIds.includes(lead.id)}
+                      checked={draftResolvedLeadIds.includes(lead.id)}
                       onChange={() => toggleDraftLead(lead.id)}
                       className="h-4 w-4"
                     />
