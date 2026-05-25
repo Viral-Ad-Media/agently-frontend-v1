@@ -226,6 +226,56 @@ const normalizeTranscript = (payload: unknown): TranscriptMessage[] => {
     .filter((item): item is TranscriptMessage => Boolean(item));
 };
 
+const getRecordObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const extractProvidedCallerName = (row: Record<string, unknown>) => {
+  const meta = getRecordObject(row.metadata || row.call_metadata);
+  const lead = getRecordObject(row.lead);
+  const recipient = getRecordObject(
+    row.recipient ||
+      row.directRecipient ||
+      row.direct_recipient ||
+      meta.recipient ||
+      meta.directRecipient ||
+      meta.direct_recipient,
+  );
+  const target = getRecordObject(meta.target || meta.lead || meta.contact);
+  const directRecipients = Array.isArray(meta.directRecipients)
+    ? meta.directRecipients
+    : Array.isArray(meta.direct_recipients)
+      ? meta.direct_recipients
+      : [];
+  const firstDirectRecipient = getRecordObject(directRecipients[0]);
+  const value = safeString(
+    row.callerName ||
+      row.caller_name ||
+      row.recipientName ||
+      row.recipient_name ||
+      row.target_name ||
+      row.name ||
+      lead.name ||
+      recipient.name ||
+      target.name ||
+      meta.callerName ||
+      meta.caller_name ||
+      meta.recipientName ||
+      meta.recipient_name ||
+      meta.targetName ||
+      meta.target_name ||
+      firstDirectRecipient.name ||
+      "",
+    "",
+  ).trim();
+  return value &&
+    !/^unknown caller$/i.test(value) &&
+    !/^outbound recipient$/i.test(value)
+    ? value
+    : "Unknown Caller";
+};
+
 const normalizeCall = (value: unknown): CallListItem | null => {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
@@ -252,14 +302,7 @@ const normalizeCall = (value: unknown): CallListItem | null => {
     row.outcome || row.result || status || "Completed",
     "Completed",
   );
-  const callerName = safeString(
-    row.callerName ||
-      row.caller_name ||
-      row.target_name ||
-      row.name ||
-      "Unknown Caller",
-    "Unknown Caller",
-  );
+  const callerName = extractProvidedCallerName(row);
   const callerPhone = safeString(
     row.callerPhone ||
       row.caller_phone ||
@@ -979,6 +1022,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Conversation transcript
                   </p>
+                </div>
+                <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-800">
+                  Transcripts are AI-generated and may not be 100% accurate.
+                  Please listen to the recording when auditing important calls.
                 </div>
                 <div className="space-y-2 rounded-3xl border border-slate-200 bg-slate-50 p-3">
                   {(selected.transcript && selected.transcript.length

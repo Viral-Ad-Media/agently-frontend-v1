@@ -1040,17 +1040,19 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
               <div>
                 <Label>Assigned Number</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-slate-500 flex items-center gap-2">
-                    <span className="text-base">📱</span>
-                    {draft.twilioPhoneNumber || "Not assigned"}
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-slate-500 flex items-center gap-2">
+                    <span className="text-base shrink-0">📱</span>
+                    <span className="truncate">{draft.twilioPhoneNumber || "Not assigned"}</span>
                   </div>
                   {draft.twilioPhoneNumber && (
                     <button
                       onClick={() => {
-                        window.location.hash = "#/phone-numbers";
+                        window.requestAnimationFrame(() => {
+                          window.location.hash = "#/phone-numbers";
+                        });
                       }}
-                      className="shrink-0 rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 hover:border-amber-300 transition-all"
+                      className="shrink-0 whitespace-nowrap rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 hover:border-amber-300 transition-all"
                     >
                       Manage
                     </button>
@@ -1064,7 +1066,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-amber-50/40 p-5 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-slate-900">Voice Engine Settings</p>
@@ -1101,8 +1103,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     const key = control.key as keyof VoiceSettings;
                     const value = toSliderValue(voiceSettings[key] as number | undefined, control.fallback);
                     return (
-                      <div key={control.key}>
-                        <div className="flex items-center justify-between mb-1.5">
+                      <div key={control.key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
                           <Label>{control.label}</Label>
                           <span className="text-[10px] font-black text-slate-500">{value.toFixed(2)}</span>
                         </div>
@@ -1113,7 +1115,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           step={control.step}
                           value={value}
                           onChange={(e) => updateVoiceSetting(key, Number(e.target.value) as never)}
-                          className="w-full accent-amber-500"
+                          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gradient-to-r from-slate-200 via-amber-200 to-amber-500 accent-amber-500 outline-none"
                         />
                       </div>
                     );
@@ -1176,67 +1178,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     {t}
                   </button>
                 ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: live status card */}
-          <div className="space-y-4">
-            <div className="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden">
-              <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
-              <div className="relative z-10">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-3">
-                  Agent Status
-                </p>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-300">
-                    Active
-                  </span>
-                </div>
-                <p className="text-sm font-bold text-white/70 mb-5">
-                  {org.agent.direction === "outbound"
-                    ? "Outbound from"
-                    : "Inbound on"}{" "}
-                  <span className="text-white">
-                    {org.agent.twilioPhoneNumber ||
-                      org.phoneNumber ||
-                      "no number"}
-                  </span>
-                </p>
-                <button
-                  onClick={() =>
-                    void run("restart", onRestartAgent, "Agent restarted")
-                  }
-                  disabled={busy === "restart"}
-                  className="w-full rounded-xl bg-white text-slate-900 py-2.5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 active:scale-95 disabled:opacity-50 transition-all"
-                >
-                  {busy === "restart" ? "Restarting…" : "Restart Shift"}
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
-              <div className="flex gap-2.5 items-start">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#d97706"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mt-0.5 shrink-0"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4" />
-                  <path d="M12 8h.01" />
-                </svg>
-                <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                  Callers can press <strong>0</strong> or say "transfer me" to
-                  reach a human at any time.
-                </p>
               </div>
             </div>
           </div>

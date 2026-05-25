@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessage, ChatbotConfig, Organization } from "../types";
 import { api } from "../services/api";
+import AppModal from "../components/AppModal";
 
 interface MessengerProps {
   org: Organization;
@@ -109,6 +110,7 @@ const Messenger: React.FC<MessengerProps> = ({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -215,7 +217,7 @@ const Messenger: React.FC<MessengerProps> = ({
         chatLanguages: draft.chatLanguages,
       } as any);
       setSaveSuccess("Saved! Embed script updated.");
-      setTimeout(() => setSaveSuccess(""), 2500);
+      setSaveModalOpen(true);
     });
   };
 
@@ -530,11 +532,6 @@ const Messenger: React.FC<MessengerProps> = ({
               {error}
             </div>
           )}
-          {saveSuccess && (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-              {saveSuccess}
-            </div>
-          )}
 
           {/* Appearance */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7 space-y-4">
@@ -706,6 +703,61 @@ const Messenger: React.FC<MessengerProps> = ({
               />
             </div>
 
+            {/* Knowledge Base */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Knowledge Base
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Scraped content is stored in your database and used by the
+                    AI.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Import from Website URL
+                </label>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={scrapeUrl}
+                    onChange={(e) => setScrapeUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void handleImport()}
+                    placeholder="https://yourwebsite.com"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleImport()}
+                    disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
+                    className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {scrapeStatus === "loading" ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Importing…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-sharp fa-solid fa-upload text-xs" />
+                        Import Website
+                      </>
+                    )}
+                  </button>
+                </div>
+                {scrapeMsg && (
+                  <p
+                    className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
+                  >
+                    {scrapeMsg}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* ── Widget Voice Selection (no provider badge) ── */}
             <div className="pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between mb-3">
@@ -800,76 +852,6 @@ const Messenger: React.FC<MessengerProps> = ({
               )}
             </div>
           </div>
-
-          {/* Knowledge Base */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  Knowledge Base
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Scraped content is stored in Supabase and used by the AI.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                Import from Website URL
-              </label>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="text"
-                  value={scrapeUrl}
-                  onChange={(e) => setScrapeUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void handleImport()}
-                  placeholder="https://yourwebsite.com"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleImport()}
-                  disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {scrapeStatus === "loading" ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Importing…
-                    </>
-                  ) : (
-                    <>
-                      <i className="fa-sharp fa-solid fa-upload text-xs" />
-                      Import Website
-                    </>
-                  )}
-                </button>
-              </div>
-              {scrapeMsg && (
-                <p
-                  className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
-                >
-                  {scrapeMsg}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void saveCustomization()}
-            disabled={busyAction === "save"}
-            className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3"
-          >
-            {busyAction === "save" ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save All Changes"
-            )}
-          </button>
         </div>
 
         {/* RIGHT: live preview + embed */}
@@ -1113,7 +1095,9 @@ const Messenger: React.FC<MessengerProps> = ({
           <div>
             <h3 className="text-lg font-black text-slate-900">FAQs</h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Manually added – these override scraped content.
+              Manually added entries take more precedence over scraped content.
+              Add important details about your organization, services, policies,
+              pricing, hours, and support process here.
             </p>
           </div>
           <button
@@ -1188,6 +1172,42 @@ const Messenger: React.FC<MessengerProps> = ({
           </div>
         )}
       </div>
+      <button
+        type="button"
+        onClick={() => void saveCustomization()}
+        disabled={busyAction === "save"}
+        className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3"
+      >
+        {busyAction === "save" ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            Saving…
+          </>
+        ) : (
+          "Save All Changes"
+        )}
+      </button>
+
+      <AppModal
+        open={saveModalOpen}
+        onClose={() => setSaveModalOpen(false)}
+        title="Changes saved"
+        description="Your chatbot settings and embed script have been updated."
+        size="sm"
+        footer={
+          <button
+            type="button"
+            onClick={() => setSaveModalOpen(false)}
+            className="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700"
+          >
+            Done
+          </button>
+        }
+      >
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-700">
+          {saveSuccess || "Saved successfully."}
+        </div>
+      </AppModal>
     </div>
   );
 };

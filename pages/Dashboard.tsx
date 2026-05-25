@@ -791,8 +791,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       )}
 
-      <div className="overflow-x-auto pb-2">
-        <div className="grid min-w-[88rem] grid-cols-8 gap-3 xl:min-w-0">
+      <div className="overflow-x-auto pb-2 custom-scrollbar">
+        <div className="flex min-w-max gap-3">
           <StatCard
             label="Total calls"
             value={String(selectedStats.totalCalls)}
@@ -830,18 +830,6 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
             value={String(live.totalLeadsCaptured)}
             icon="🧲"
             sub={`${live.chatbotLeadsCaptured} bot · ${live.callLeadsCaptured} call`}
-          />
-          <StatCard
-            label="Converted"
-            value={String(live.convertedLeads)}
-            icon="📈"
-            sub={`${live.conversionRate}% rate`}
-          />
-          <StatCard
-            label="Knowledge"
-            value={live.estimatedStorageLabel}
-            icon="🗂️"
-            sub={`${live.knowledgeChunks} chunks`}
           />
         </div>
       </div>

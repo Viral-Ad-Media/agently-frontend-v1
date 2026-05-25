@@ -115,6 +115,49 @@ const emptyWindow = (): LeadOutreachWindow => ({
 });
 const iCls =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition-all focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40";
+const normalizeCallablePhone = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const hasPlus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return raw;
+  if (hasPlus) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return digits.length >= 8 ? `+${digits}` : raw;
+};
+
+const csvEscape = (value: unknown) => {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const downloadLeadsCsv = (rows: Lead[], filename = "agently-leads.csv") => {
+  const header = ["name", "phone", "email", "status", "reason", "tags"];
+  const csv = [
+    header.join(","),
+    ...rows.map((lead) =>
+      [
+        lead.name,
+        normalizeCallablePhone(lead.phone || ""),
+        lead.email || "",
+        lead.status || "",
+        lead.reason || "",
+        (lead.tags || []).join("|"),
+      ]
+        .map(csvEscape)
+        .join(","),
+    ),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 const normTags = (v: string) =>
   v
     .split(",")
@@ -360,6 +403,8 @@ const Leads: React.FC<LeadsProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportTags, setExportTags] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<{
     ids: string[];
     label: string;
@@ -611,6 +656,10 @@ const Leads: React.FC<LeadsProps> = ({
 
   useEffect(() => {
     void refreshLeadsFromBackend();
+    const interval = window.setInterval(() => {
+      void refreshLeadsFromBackend();
+    }, 30000);
+    return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -691,12 +740,32 @@ const Leads: React.FC<LeadsProps> = ({
     }
   };
 
+  const exportLeadsByTags = () => {
+    const rows = exportTags.length
+      ? localLeads.filter((lead) =>
+          (lead.tags || []).some((tag) => exportTags.includes(tag)),
+        )
+      : localLeads;
+    if (!rows.length) {
+      showMsg("No leads match the selected export tags.", false);
+      return;
+    }
+    downloadLeadsCsv(
+      rows,
+      exportTags.length
+        ? `agently-leads-${exportTags.join("-")}.csv`
+        : "agently-leads.csv",
+    );
+    setShowExportModal(false);
+    showMsg(`Exported ${rows.length} lead${rows.length === 1 ? "" : "s"}.`);
+  };
+
   const createLead = async (e: React.FormEvent) => {
     e.preventDefault();
     await withBusy("create", async () => {
       await onCreateLead({
         name: leadForm.name,
-        phone: leadForm.phone,
+        phone: normalizeCallablePhone(leadForm.phone),
         email: leadForm.email,
         reason: leadForm.reason,
         tags: normTags(leadForm.tags),
@@ -1185,7 +1254,10 @@ const Leads: React.FC<LeadsProps> = ({
             Import CSV
           </button>
           <button
-            onClick={() => void onExport()}
+            onClick={() => {
+              setExportTags([]);
+              setShowExportModal(true);
+            }}
             className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300"
           >
             Export CSV
@@ -1219,11 +1291,6 @@ const Leads: React.FC<LeadsProps> = ({
               label: "Contacted",
               value: leadMetrics.contacted,
               hint: "Already reached",
-            },
-            {
-              label: "Converted",
-              value: leadMetrics.converted,
-              hint: `${leadMetrics.conversionRate}% conversion`,
             },
             {
               label: "Call leads",
@@ -1481,102 +1548,6 @@ const Leads: React.FC<LeadsProps> = ({
               </>
             )}
           </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 mb-0.5">
-              Outreach schedules
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Campaign windows with duration tracking.
-            </p>
-            {schedules.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center text-sm font-semibold text-slate-400">
-                No schedules yet.
-              </div>
-            ) : (
-              <>
-                {pagedSch.map((sch) => {
-                  const agent = agentById.get(sch.voiceAgentId);
-                  const m = getCampaignMetrics(sch);
-                  return (
-                    <div
-                      key={sch.id}
-                      className="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="min-w-0">
-                          <p className="font-black text-slate-900 text-sm truncate">
-                            {sch.name || `Tag · ${sch.tag}`}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {agent?.name || "—"} · #{sch.tag}
-                          </p>
-                          {(sch as any).startDate && (
-                            <p className="text-[10px] text-slate-400">
-                              {(sch as any).startDate} → {(sch as any).endDate}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-1.5 shrink-0">
-                          <button
-                            onClick={() => setEditingSchedule(sch)}
-                            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-amber-300 hover:text-amber-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() =>
-                              void withBusy(`del-${sch.id}`, async () => {
-                                await api.deleteOutreachSchedule(sch.id);
-                                setSchedules((current) =>
-                                  current.filter((item) => item.id !== sch.id),
-                                );
-                                void refreshSchedules();
-                                showMsg("Deleted.");
-                              })
-                            }
-                            disabled={busy === `del-${sch.id}`}
-                            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-red-200 hover:text-red-500 disabled:opacity-40"
-                          >
-                            Del
-                          </button>
-                        </div>
-                      </div>
-                      {m.total > 0 && (
-                        <>
-                          <div className="flex justify-between text-[10px] font-black mb-1">
-                            {m.isComplete ? (
-                              <span className="text-emerald-600">
-                                ✓ Complete — edit to restart
-                              </span>
-                            ) : (
-                              <span className="text-slate-500">
-                                {m.completed} of {m.total} reached
-                              </span>
-                            )}
-                            <span className="text-slate-400">
-                              {m.remaining} left
-                            </span>
-                          </div>
-                          <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-amber-500 transition-all"
-                              style={{ width: `${m.pct}%` }}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                <Pager
-                  cur={schPage}
-                  total={totalSchPages}
-                  onChange={setSchPage}
-                />
-              </>
-            )}
-          </div>
         </div>
       </div>
 
@@ -1639,7 +1610,9 @@ const Leads: React.FC<LeadsProps> = ({
                   Phone
                 </p>
                 <p className="text-sm font-black text-slate-900">
-                  {activeLead.phone || "—"}
+                  {activeLead.phone
+                    ? normalizeCallablePhone(activeLead.phone)
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
@@ -1987,6 +1960,77 @@ const Leads: React.FC<LeadsProps> = ({
           <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
             {selIds.length} leads affected.
           </p>
+        </div>
+      </AppModal>
+
+      {/* Export by tags */}
+      <AppModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export leads"
+        description="Export all leads or only leads with selected tags."
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowExportModal(false)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={exportLeadsByTags}
+              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
+            >
+              Export CSV
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+            {exportTags.length
+              ? `Exporting leads tagged ${exportTags.map((tag) => `#${tag}`).join(", ")}.`
+              : "No tag selected — all leads will be exported."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {allTags.length === 0 ? (
+              <span className="text-sm text-slate-400">
+                No tags available yet.
+              </span>
+            ) : (
+              allTags.map((tag) => {
+                const selected = exportTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setExportTags((current) =>
+                        selected
+                          ? current.filter((item) => item !== tag)
+                          : [...current, tag],
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${selected ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-amber-300 hover:text-amber-700"}`}
+                  >
+                    #{tag}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {exportTags.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExportTags([])}
+              className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-700"
+            >
+              Clear tag filter
+            </button>
+          )}
         </div>
       </AppModal>
 

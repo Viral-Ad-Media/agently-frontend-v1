@@ -461,8 +461,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         <div>
           <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
           <p className="mt-0.5 text-xs text-slate-400">
-            Buy and assign Twilio numbers. This page only shows numbers attached
-            to the current organization.
+            Search, reserve, and assign phone numbers attached to the current
+            organization.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
