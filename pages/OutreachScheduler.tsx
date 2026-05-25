@@ -23,7 +23,7 @@ type Toast = { message: string; ok: boolean } | null;
 type NoticeModal = {
   title: string;
   message: string;
-  tone?: "warning" | "error" | "success";
+  tone: "warning" | "error";
 } | null;
 
 type DirectRecipient = {
@@ -361,22 +361,35 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const isValidTime = (value: string) => TIME_PATTERN.test(value);
 
-const getLocalDateTime = (date: string, time: string) => {
+const toLocalDateTime = (date: string, time: string) => {
   if (!date || !isValidTime(time)) return null;
   const value = new Date(`${date}T${time}:00`);
   return Number.isNaN(value.getTime()) ? null : value;
 };
 
 const isPastLocalDateTime = (date: string, time: string) => {
-  const value = getLocalDateTime(date, time);
-  if (!value) return false;
-  return value.getTime() <= Date.now();
+  const value = toLocalDateTime(date, time);
+  return !!value && value.getTime() < Date.now();
 };
 
-const looksLikePastScheduleWarning = (message: string) =>
-  /\b(past|already passed|future time|future date|cannot schedule|must be in the future|start time)\b/i.test(
-    message,
-  );
+const yieldToBrowser = () =>
+  new Promise<void>((resolve) => {
+    if (typeof window === "undefined") {
+      resolve();
+      return;
+    }
+    window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+  });
+
+const deferUiAction = (callback: () => void | Promise<void>) => {
+  if (typeof window === "undefined") {
+    void callback();
+    return;
+  }
+  window.setTimeout(() => {
+    void callback();
+  }, 0);
+};
 
 const TimePicker = memo(
   ({
@@ -855,24 +868,16 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   );
 
   const showToast = (message: string, ok = true) => {
-    setToast({ message, ok });
-    window.setTimeout(() => setToast(null), 4200);
-  };
-
-  const showNoticeModal = (
-    title: string,
-    message: string,
-    tone: NonNullable<NoticeModal>["tone"] = "warning",
-  ) => {
-    setNoticeModal({ title, message, tone });
-  };
-
-  const showValidationMessage = (message: string) => {
-    if (looksLikePastScheduleWarning(message)) {
-      showNoticeModal("Schedule time needs attention", message, "warning");
+    if (!ok) {
+      setNoticeModal({
+        title: "Action needed",
+        message,
+        tone: message.toLowerCase().includes("failed") ? "error" : "warning",
+      });
       return;
     }
-    showToast(message, false);
+    setToast({ message, ok });
+    window.setTimeout(() => setToast(null), 4200);
   };
 
   const openDeleteModal = (target: {
@@ -933,8 +938,16 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   };
 
   useEffect(() => {
-    void loadNumbers();
-    void loadSchedules();
+    if (typeof window === "undefined") {
+      void loadNumbers();
+      void loadSchedules();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadNumbers();
+      void loadSchedules();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org.id]);
 
@@ -1049,42 +1062,31 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const getPastScheduleWarning = () => {
     if (callType === "call_now") return "";
-
     if (
       callType === "one_time" &&
       isPastLocalDateTime(startLocalDate, startTime)
     ) {
-      return "This one-time call is scheduled for a time that has already passed. Please choose a future date or time before previewing or creating the schedule.";
+      return "The selected one-time call is in the past. Choose a future date and time before previewing or scheduling.";
     }
-
-    if (callType === "one_time_batch") {
-      const pastTimes = startTimes.filter((time) =>
-        isPastLocalDateTime(startLocalDate, time),
-      );
-      if (pastTimes.length > 0) {
-        return "One or more batch call times have already passed. Please remove past times or choose future times before previewing or creating the schedule.";
-      }
+    if (
+      callType === "one_time_batch" &&
+      startTimes.some((time) => isPastLocalDateTime(startLocalDate, time))
+    ) {
+      return "One or more batch call times are already in the past. Remove past times or choose a future date before previewing.";
     }
-
-    if (callType === "custom_rule" && startLocalDate === todayIso()) {
-      const todayKey = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ][new Date().getDay()];
-      const includesToday = weekdayRules.includes(todayKey);
-      const pastTimes = startTimes.filter((time) =>
-        isPastLocalDateTime(startLocalDate, time),
-      );
-      if (includesToday && pastTimes.length > 0) {
-        return "One or more custom-rule call times for today have already passed. Please remove past times or choose future times before previewing or creating the schedule.";
-      }
+    if (
+      callType === "custom_rule" &&
+      startLocalDate === todayIso() &&
+      startTimes.some((time) => isPastLocalDateTime(startLocalDate, time))
+    ) {
+      return "One or more custom schedule times for today have already passed. Choose future times before previewing.";
     }
-
+    if (
+      callType === "recurring_monthly" &&
+      isPastLocalDateTime(startLocalDate, startTime)
+    ) {
+      return "The first monthly call time is already in the past. Choose a future first call time before previewing.";
+    }
     return "";
   };
 
@@ -1092,8 +1094,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     if (!voiceAgentId) return "Choose a voice agent.";
     if (!fromNumber) return "Choose a from number.";
     if (!callPurpose.trim()) return "Call purpose is required.";
-    const pastScheduleWarning = getPastScheduleWarning();
-    if (pastScheduleWarning) return pastScheduleWarning;
     const invalidRecipient = directRecipients.find(
       (recipient) => recipient.displayPhone && recipient.phoneError,
     );
@@ -1122,6 +1122,8 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       startTimes.some((time) => !isValidTime(time))
     )
       return "Choose valid call times.";
+    const pastScheduleWarning = getPastScheduleWarning();
+    if (pastScheduleWarning) return pastScheduleWarning;
     if (callType === "recurring_monthly") {
       if (repeatCount < 1)
         return "Monthly occurrence count must be at least 1.";
@@ -1211,15 +1213,17 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const handlePreview = async () => {
     const message = validate(true);
-    if (message) return showValidationMessage(message);
+    if (message) return showToast(message, false);
     if (callType === "call_now")
       return showToast("Call Now does not need preview. Use Place Call.");
     setBusy("preview");
+    await yieldToBrowser();
     try {
       const response =
         await voiceCallsApi.outreach.previewOutreachSchedule(buildPayload());
-      setPreview(response as SchedulePreview);
-      const total = getPreviewTotal(response as SchedulePreview);
+      const nextPreview = response as SchedulePreview;
+      setPreview(nextPreview);
+      const total = getPreviewTotal(nextPreview);
       showToast(
         total > 0
           ? `${total} call${total === 1 ? "" : "s"} generated for preview.`
@@ -1227,17 +1231,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       );
     } catch (error) {
       setPreview(null);
-      const errorMessage =
-        error instanceof Error ? error.message : "Preview failed.";
-      if (looksLikePastScheduleWarning(errorMessage)) {
-        showNoticeModal(
-          "Schedule time needs attention",
-          errorMessage,
-          "warning",
-        );
-      } else {
-        showToast(errorMessage, false);
-      }
+      showToast(
+        error instanceof Error ? error.message : "Preview failed.",
+        false,
+      );
     } finally {
       setBusy(null);
     }
@@ -1245,13 +1242,14 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const openReviewModal = async () => {
     const message = validate(true);
-    if (message) return showValidationMessage(message);
+    if (message) return showToast(message, false);
     if (callType === "call_now") {
       setPreview(null);
       setReviewOpen(true);
       return;
     }
     setBusy("preview");
+    await yieldToBrowser();
     try {
       const response =
         await voiceCallsApi.outreach.previewOutreachSchedule(buildPayload());
@@ -1259,17 +1257,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       setReviewOpen(true);
     } catch (error) {
       setPreview(null);
-      const errorMessage =
-        error instanceof Error ? error.message : "Preview failed.";
-      if (looksLikePastScheduleWarning(errorMessage)) {
-        showNoticeModal(
-          "Schedule time needs attention",
-          errorMessage,
-          "warning",
-        );
-      } else {
-        showToast(errorMessage, false);
-      }
+      showToast(
+        error instanceof Error ? error.message : "Preview failed.",
+        false,
+      );
     } finally {
       setBusy(null);
     }
@@ -1277,8 +1268,9 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const handleCreate = async () => {
     const message = validate(false);
-    if (message) return showValidationMessage(message);
+    if (message) return showToast(message, false);
     setBusy("create");
+    await yieldToBrowser();
     try {
       if (callType === "call_now") {
         await voiceCallsApi.calls.createOutboundCall(buildPayload());
@@ -1293,17 +1285,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       onChanged?.();
       if (callType !== "call_now") setActiveTab("scheduled");
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Create failed.";
-      if (looksLikePastScheduleWarning(errorMessage)) {
-        showNoticeModal(
-          "Schedule time needs attention",
-          errorMessage,
-          "warning",
-        );
-      } else {
-        showToast(errorMessage, false);
-      }
+      showToast(
+        error instanceof Error ? error.message : "Create failed.",
+        false,
+      );
     } finally {
       setBusy(null);
     }
@@ -1370,23 +1355,18 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   };
 
   const previewCalls = getPreviewCalls(preview);
-  const previewTotal = getPreviewTotal(preview);
-  const previewTitle =
-    previewTotal > 0
-      ? `${previewTotal} call${previewTotal === 1 ? "" : "s"} generated`
-      : "Call preview generated";
 
   return (
     <div className="animate-fade-up space-y-6">
       {toast && (
         <div
-          className={`fixed right-5 top-5 z-[200] rounded-2xl px-5 py-3 text-sm font-bold shadow-xl ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
+          className={`fixed bottom-5 right-5 z-[200] rounded-2xl px-5 py-3 text-sm font-bold shadow-xl ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
         >
           {toast.message}
         </div>
       )}
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between lg:max-w-full">
+      <div className="mx-auto flex w-full max-w-full flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-2xl font-black text-slate-950">
             Outreach & Scheduled Calls
@@ -1413,7 +1393,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       </div>
 
       {activeTab === "scheduled" ? (
-        <div className="mx-auto w-full max-w-6xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:max-w-full">
+        <div className="mx-auto w-full max-w-full rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="text-lg font-black text-slate-900">
@@ -1612,7 +1592,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           )}
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-6xl space-y-6 lg:max-w-full">
+        <div className="mx-auto w-full max-w-full space-y-6">
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
               Call type
@@ -2015,7 +1995,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void openReviewModal()}
+                  onClick={() => deferUiAction(openReviewModal)}
                   disabled={
                     busy === "preview" || busy === "create" || isPending
                   }
@@ -2032,6 +2012,33 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           </section>
         </div>
       )}
+
+      <AppModal
+        open={!!noticeModal}
+        onClose={() => setNoticeModal(null)}
+        title={noticeModal?.title || "Action needed"}
+        description={noticeModal?.message}
+        size="sm"
+        footer={
+          <button
+            type="button"
+            onClick={() => setNoticeModal(null)}
+            className="w-full rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
+          >
+            Got it
+          </button>
+        }
+      >
+        <div
+          className={`rounded-3xl border p-4 ${noticeModal?.tone === "error" ? "border-red-100 bg-red-50" : "border-amber-100 bg-amber-50"}`}
+        >
+          <p
+            className={`text-sm font-bold ${noticeModal?.tone === "error" ? "text-red-700" : "text-amber-800"}`}
+          >
+            {noticeModal?.message}
+          </p>
+        </div>
+      </AppModal>
 
       <AppModal
         open={leadPickerOpen}
@@ -2191,7 +2198,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => void handleCreate()}
+              onClick={() => deferUiAction(handleCreate)}
               disabled={busy === "create" || isPending}
               className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50"
             >
@@ -2325,13 +2332,14 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           {callType !== "call_now" ? (
             <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
               <p className="text-sm font-black text-emerald-800">
-                {previewTitle}
+                {getPreviewTotal(preview) > 0
+                  ? `${getPreviewTotal(preview)} call${getPreviewTotal(preview) === 1 ? "" : "s"} generated for preview`
+                  : "Call preview generated"}
               </p>
-              {previewTotal === 0 ? (
+              {getPreviewTotal(preview) === 0 ? (
                 <p className="mt-1 text-xs font-semibold text-emerald-700">
-                  The preview completed successfully. If the recipient and
-                  timing details look correct, you can proceed to create the
-                  schedule.
+                  The backend accepted the preview but did not return a call
+                  count. Review the schedule and continue.
                 </p>
               ) : null}
               {previewCalls.length > 0 ? (
@@ -2425,39 +2433,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
             </div>
           </div>
         )}
-      </AppModal>
-
-      <AppModal
-        open={!!noticeModal}
-        onClose={() => setNoticeModal(null)}
-        title={noticeModal?.title || "Action needed"}
-        description={
-          noticeModal?.tone === "error"
-            ? "Please review the issue below before continuing."
-            : "Please review this warning before continuing."
-        }
-        size="md"
-        footer={
-          <button
-            type="button"
-            onClick={() => setNoticeModal(null)}
-            className="w-full rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
-          >
-            Got it
-          </button>
-        }
-      >
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
-            noticeModal?.tone === "error"
-              ? "border-red-100 bg-red-50 text-red-700"
-              : noticeModal?.tone === "success"
-                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                : "border-amber-100 bg-amber-50 text-amber-800"
-          }`}
-        >
-          {noticeModal?.message}
-        </div>
       </AppModal>
 
       <AppModal
