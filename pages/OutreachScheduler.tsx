@@ -1,9 +1,7 @@
 import React, {
   memo,
-  useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useTransition,
 } from "react";
@@ -20,6 +18,7 @@ type CallType =
 type RecipientMode = "direct" | "leads";
 type BatchMode = "all_recipients_each_time" | "spread_recipients_across_times";
 type Toast = { message: string; ok: boolean } | null;
+type ValidationModal = { title: string; message: string } | null;
 
 type DirectRecipient = {
   id: string;
@@ -155,6 +154,33 @@ const timePlusMinutes = (minutes = 5) => {
   now.setMinutes(now.getMinutes() + minutes);
   return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 };
+
+const getNowPartsInTimezone = (timeZone: string) => {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const get = (type: string) =>
+      parts.find((part) => part.type === type)?.value || "";
+    return {
+      date: `${get("year")}-${get("month")}-${get("day")}`,
+      time: `${get("hour")}:${get("minute")}`,
+    };
+  } catch {
+    return { date: todayIso(), time: timePlusMinutes(0) };
+  }
+};
+
+const isPastScheduleWarning = (message: string) =>
+  /past|already passed|future time|future date|must be in the future/i.test(
+    message,
+  );
 
 const makeRecipient = (): DirectRecipient => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -538,114 +564,6 @@ const TimeListEditor = memo(
 );
 TimeListEditor.displayName = "TimeListEditor";
 
-const DirectRecipientRow = memo(
-  ({
-    recipient,
-    index,
-    canRemove,
-    onCommit,
-    onRemove,
-  }: {
-    recipient: DirectRecipient;
-    index: number;
-    canRemove: boolean;
-    onCommit: (id: string, patch: Partial<DirectRecipient>) => void;
-    onRemove: (id: string) => void;
-  }) => {
-    const [name, setName] = useState(recipient.name);
-    const [displayPhone, setDisplayPhone] = useState(recipient.displayPhone);
-    const debounceRef = useRef<number | null>(null);
-
-    useEffect(() => {
-      setName(recipient.name);
-    }, [recipient.name]);
-
-    useEffect(() => {
-      setDisplayPhone(recipient.displayPhone);
-    }, [recipient.displayPhone]);
-
-    useEffect(
-      () => () => {
-        if (debounceRef.current) window.clearTimeout(debounceRef.current);
-      },
-      [],
-    );
-
-    const commitName = useCallback(
-      (nextName: string) => {
-        onCommit(recipient.id, { name: nextName });
-      },
-      [onCommit, recipient.id],
-    );
-
-    const commitPhone = useCallback(
-      (nextPhone: string) => {
-        const normalized = normalizeNorthAmericaPhone(nextPhone);
-        onCommit(recipient.id, {
-          displayPhone: nextPhone,
-          phone: normalized.value,
-          phoneError: normalized.error,
-        });
-      },
-      [onCommit, recipient.id],
-    );
-
-    const queuePhoneCommit = (nextPhone: string) => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-      debounceRef.current = window.setTimeout(
-        () => commitPhone(nextPhone),
-        220,
-      );
-    };
-
-    return (
-      <div className="space-y-1">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onBlur={() => commitName(name)}
-            placeholder={`Recipient ${index + 1} name`}
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-          />
-          <input
-            value={displayPhone}
-            onChange={(event) => {
-              const nextPhone = event.target.value;
-              setDisplayPhone(nextPhone);
-              queuePhoneCommit(nextPhone);
-            }}
-            onBlur={() => commitPhone(displayPhone)}
-            placeholder="+1 (555) 123-4567"
-            inputMode="tel"
-            autoComplete="tel"
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-          />
-          <button
-            type="button"
-            onClick={() => onRemove(recipient.id)}
-            disabled={!canRemove}
-            className="rounded-2xl border border-red-100 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Remove
-          </button>
-        </div>
-        {recipient.phone && (
-          <p className="text-[11px] font-bold text-emerald-600">
-            Will call {recipient.phone}
-          </p>
-        )}
-        {recipient.phoneError && (
-          <p className="text-[11px] font-bold text-red-500">
-            {recipient.phoneError}
-          </p>
-        )}
-      </div>
-    );
-  },
-);
-DirectRecipientRow.displayName = "DirectRecipientRow";
-
 const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   org,
   leads,
@@ -655,6 +573,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<"create" | "scheduled">("create");
   const [toast, setToast] = useState<Toast>(null);
+  const [validationModal, setValidationModal] = useState<ValidationModal>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<TwilioNumberRecord[]>([]);
   const [schedules, setSchedules] = useState<OutreachSchedule[]>([]);
@@ -679,13 +598,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     makeRecipient(),
   ]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
-  const [leadPickerOpen, setLeadPickerOpen] = useState(false);
-  const [draftLeadIds, setDraftLeadIds] = useState<string[]>([]);
-  const [draftSelectedTags, setDraftSelectedTags] = useState<string[]>([]);
-  const [draftExcludedLeadIds, setDraftExcludedLeadIds] = useState<string[]>(
-    [],
-  );
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [callPurpose, setCallPurpose] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [scheduleName, setScheduleName] = useState("");
@@ -755,64 +667,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   }, [tenantNumbers, voiceAgentId]);
   const selectedAgent =
     agents.find((agent) => agent.id === voiceAgentId) || agents[0];
-  const selectedLeads = useMemo(
-    () => leads.filter((lead) => selectedLeadIds.includes(lead.id)),
-    [leads, selectedLeadIds],
-  );
-  const leadTagOptions = useMemo(() => {
-    const tagMap = new Map<string, number>();
-    leads.forEach((lead) => {
-      (lead.tags || []).forEach((tag) => {
-        const clean = tag.trim();
-        if (!clean) return;
-        tagMap.set(clean, (tagMap.get(clean) || 0) + 1);
-      });
-    });
-    return Array.from(tagMap.entries())
-      .map(([tag, count]) => ({ tag, count }))
-      .sort((a, b) => a.tag.localeCompare(b.tag));
-  }, [leads]);
-  const draftTagLeadIds = useMemo(() => {
-    if (!draftSelectedTags.length) return [];
-    const selectedTagSet = new Set(
-      draftSelectedTags.map((tag) => tag.toLowerCase()),
-    );
-    return leads
-      .filter((lead) =>
-        (lead.tags || []).some((tag) => selectedTagSet.has(tag.toLowerCase())),
-      )
-      .map((lead) => lead.id);
-  }, [draftSelectedTags, leads]);
-  const draftResolvedLeadIds = useMemo(() => {
-    const excluded = new Set(draftExcludedLeadIds);
-    return Array.from(new Set([...draftTagLeadIds, ...draftLeadIds])).filter(
-      (leadId) => !excluded.has(leadId),
-    );
-  }, [draftExcludedLeadIds, draftLeadIds, draftTagLeadIds]);
-  const modalSortedLeads = useMemo(() => {
-    const selectedTagSet = new Set(
-      draftSelectedTags.map((tag) => tag.toLowerCase()),
-    );
-    return [...leads].sort((a, b) => {
-      const aTagMatch = (a.tags || []).some((tag) =>
-        selectedTagSet.has(tag.toLowerCase()),
-      );
-      const bTagMatch = (b.tags || []).some((tag) =>
-        selectedTagSet.has(tag.toLowerCase()),
-      );
-      if (aTagMatch !== bTagMatch) return aTagMatch ? -1 : 1;
-      const aSelected = draftResolvedLeadIds.includes(a.id);
-      const bSelected = draftResolvedLeadIds.includes(b.id);
-      if (aSelected !== bSelected) return aSelected ? -1 : 1;
-      return String(a.name || a.phone || a.email || "").localeCompare(
-        String(b.name || b.phone || b.email || ""),
-      );
-    });
-  }, [draftResolvedLeadIds, draftSelectedTags, leads]);
-  const selectedRecipientCount =
-    recipientMode === "direct"
-      ? directRecipients.filter((recipient) => recipient.phone.trim()).length
-      : selectedLeadIds.length;
   const totalSchedulePages = Math.max(
     1,
     Math.ceil(schedules.length / PAGE_SIZE),
@@ -834,6 +688,17 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   const showToast = (message: string, ok = true) => {
     setToast({ message, ok });
     window.setTimeout(() => setToast(null), 4200);
+  };
+
+  const showValidationMessage = (message: string) => {
+    if (isPastScheduleWarning(message)) {
+      setValidationModal({
+        title: "Choose a future call time",
+        message,
+      });
+      return;
+    }
+    showToast(message, false);
   };
 
   const openDeleteModal = (target: {
@@ -908,26 +773,36 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     setPreview(null);
   }, [voiceAgentId, assignedNumbers]);
 
-  const commitRecipientPatch = useCallback(
-    (id: string, patch: Partial<DirectRecipient>) => {
-      setDirectRecipients((current) =>
-        current.map((recipient) =>
-          recipient.id === id ? { ...recipient, ...patch } : recipient,
-        ),
-      );
-      setPreview(null);
-    },
-    [],
-  );
+  const updateRecipient = (
+    id: string,
+    field: keyof DirectRecipient,
+    value: string,
+  ) => {
+    setDirectRecipients((current) =>
+      current.map((recipient) => {
+        if (recipient.id !== id) return recipient;
+        if (field !== "phone" && field !== "displayPhone")
+          return { ...recipient, [field]: value };
+        const normalized = normalizeNorthAmericaPhone(value);
+        return {
+          ...recipient,
+          displayPhone: value,
+          phone: normalized.value,
+          phoneError: normalized.error,
+        };
+      }),
+    );
+    setPreview(null);
+  };
 
-  const removeRecipient = useCallback((id: string) => {
+  const removeRecipient = (id: string) => {
     setDirectRecipients((current) =>
       current.length === 1
         ? current
         : current.filter((recipient) => recipient.id !== id),
     );
     setPreview(null);
-  }, []);
+  };
 
   const toggleLead = (leadId: string) => {
     setSelectedLeadIds((current) =>
@@ -935,50 +810,6 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
         ? current.filter((id) => id !== leadId)
         : [...current, leadId],
     );
-    setPreview(null);
-  };
-
-  const openLeadPicker = () => {
-    setDraftLeadIds(selectedLeadIds);
-    setDraftSelectedTags([]);
-    setDraftExcludedLeadIds([]);
-    setLeadPickerOpen(true);
-  };
-
-  const toggleDraftLead = (leadId: string) => {
-    const isSelected = draftResolvedLeadIds.includes(leadId);
-    const isFromSelectedTag = draftTagLeadIds.includes(leadId);
-    if (isSelected) {
-      setDraftLeadIds((current) => current.filter((id) => id !== leadId));
-      if (isFromSelectedTag) {
-        setDraftExcludedLeadIds((current) =>
-          Array.from(new Set([...current, leadId])),
-        );
-      }
-      return;
-    }
-    setDraftLeadIds((current) => Array.from(new Set([...current, leadId])));
-    setDraftExcludedLeadIds((current) => current.filter((id) => id !== leadId));
-  };
-
-  const toggleDraftTag = (tag: string) => {
-    setDraftSelectedTags((current) =>
-      current.includes(tag)
-        ? current.filter((selectedTag) => selectedTag !== tag)
-        : [...current, tag],
-    );
-  };
-
-  const applyLeadSelection = () => {
-    setSelectedLeadIds(draftResolvedLeadIds);
-    setRecipientMode("leads");
-    setPreview(null);
-    setLeadPickerOpen(false);
-  };
-
-  const removeSelectedLead = (leadId: string) => {
-    setSelectedLeadIds((current) => current.filter((id) => id !== leadId));
-    setDraftLeadIds((current) => current.filter((id) => id !== leadId));
     setPreview(null);
   };
 
@@ -1056,6 +887,24 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       if (startTimes.length === 0)
         return "Add at least one custom schedule time.";
     }
+    if (callType !== "call_now") {
+      const nowInScheduleZone = getNowPartsInTimezone(timezone);
+      if (startLocalDate < nowInScheduleZone.date) {
+        return `The selected start date has already passed in ${timezone}. Please choose today or a future date.`;
+      }
+      if (startLocalDate === nowInScheduleZone.date) {
+        const candidateTimes =
+          callType === "one_time_batch" || callType === "custom_rule"
+            ? startTimes
+            : [startTime];
+        const pastTimes = candidateTimes.filter(
+          (time) => isValidTime(time) && time <= nowInScheduleZone.time,
+        );
+        if (pastTimes.length > 0) {
+          return `The selected call time ${pastTimes[0]} has already passed in ${timezone}. Please choose a future time before previewing or creating this schedule.`;
+        }
+      }
+    }
     if (!forPreview && callType !== "call_now" && !preview)
       return "Preview the generated calls before creating the schedule.";
     return "";
@@ -1129,7 +978,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const handlePreview = async () => {
     const message = validate(true);
-    if (message) return showToast(message, false);
+    if (message) return showValidationMessage(message);
     if (callType === "call_now")
       return showToast("Call Now does not need preview. Use Place Call.");
     setBusy("preview");
@@ -1140,35 +989,10 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       showToast("Schedule preview generated.");
     } catch (error) {
       setPreview(null);
-      showToast(
-        error instanceof Error ? error.message : "Preview failed.",
-        false,
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const openReviewModal = async () => {
-    const message = validate(true);
-    if (message) return showToast(message, false);
-    if (callType === "call_now") {
-      setPreview(null);
-      setReviewOpen(true);
-      return;
-    }
-    setBusy("preview");
-    try {
-      const response =
-        await voiceCallsApi.outreach.previewOutreachSchedule(buildPayload());
-      setPreview(response as SchedulePreview);
-      setReviewOpen(true);
-    } catch (error) {
-      setPreview(null);
-      showToast(
-        error instanceof Error ? error.message : "Preview failed.",
-        false,
-      );
+      const message =
+        error instanceof Error ? error.message : "Preview failed.";
+      if (isPastScheduleWarning(message)) showValidationMessage(message);
+      else showToast(message, false);
     } finally {
       setBusy(null);
     }
@@ -1176,7 +1000,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const handleCreate = async () => {
     const message = validate(false);
-    if (message) return showToast(message, false);
+    if (message) return showValidationMessage(message);
     setBusy("create");
     try {
       if (callType === "call_now") {
@@ -1187,15 +1011,13 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
         showToast("Schedule created successfully.");
       }
       setPreview(null);
-      setReviewOpen(false);
       await loadSchedules();
       onChanged?.();
-      if (callType !== "call_now") setActiveTab("scheduled");
+      setActiveTab("scheduled");
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Create failed.",
-        false,
-      );
+      const message = error instanceof Error ? error.message : "Create failed.";
+      if (isPastScheduleWarning(message)) showValidationMessage(message);
+      else showToast(message, false);
     } finally {
       setBusy(null);
     }
@@ -1262,6 +1084,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
   };
 
   const previewCalls = getPreviewCalls(preview);
+  const previewTotal = getPreviewTotal(preview);
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -1273,7 +1096,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
         </div>
       )}
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between xl:max-w-[70%]">
+      <div className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-2xl font-black text-slate-950">
             Outreach & Scheduled Calls
@@ -1300,7 +1123,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
       </div>
 
       {activeTab === "scheduled" ? (
-        <div className="mx-auto w-full max-w-6xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm xl:max-w-[70%]">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="text-lg font-black text-slate-900">
@@ -1499,731 +1322,513 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           )}
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-6xl space-y-6 xl:max-w-[70%]">
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-              Call type
-            </p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-              {[
-                ["call_now", "Call Now"],
-                ["one_time", "One-time"],
-                ["one_time_batch", "Batch"],
-                ["recurring_monthly", "Monthly"],
-                ["custom_rule", "Custom"],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => {
-                    setCallType(value as CallType);
-                    setPreview(null);
-                  }}
-                  className={`rounded-2xl border px-4 py-3 text-left text-xs font-black uppercase tracking-widest transition-all ${callType === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-              Agent and number
-            </p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold text-slate-500">Agent</span>
-                <select
-                  value={voiceAgentId}
-                  onChange={(event) => setVoiceAgentId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
-                >
-                  {agents.map((agent: AgentConfig) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.direction})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold text-slate-500">
-                  From number
-                </span>
-                <select
-                  value={fromNumber}
-                  onChange={(event) => setFromNumber(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
-                >
-                  <option value="">Choose number</option>
-                  {assignedNumbers.map((number) => (
-                    <option key={getPhone(number)} value={getPhone(number)}>
-                      {getPhone(number)}
-                      {getAssignedAgentId(number) === voiceAgentId
-                        ? " · assigned"
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-              Recipients
-            </p>
-            <div className="mb-4 flex rounded-2xl bg-slate-100 p-1 text-xs font-black uppercase tracking-widest text-slate-500">
-              <button
-                onClick={() => {
-                  setRecipientMode("direct");
-                  setPreview(null);
-                }}
-                className={`flex-1 rounded-xl px-4 py-2 ${recipientMode === "direct" ? "bg-white text-slate-950 shadow-sm" : ""}`}
-              >
-                Direct
-              </button>
-              <button
-                onClick={() => {
-                  setRecipientMode("leads");
-                  setPreview(null);
-                }}
-                className={`flex-1 rounded-xl px-4 py-2 ${recipientMode === "leads" ? "bg-white text-slate-950 shadow-sm" : ""}`}
-              >
-                Leads
-              </button>
-            </div>
-            {recipientMode === "direct" ? (
-              <div className="space-y-3">
-                {directRecipients.map((recipient, index) => (
-                  <DirectRecipientRow
-                    key={recipient.id}
-                    recipient={recipient}
-                    index={index}
-                    canRemove={directRecipients.length > 1}
-                    onCommit={commitRecipientPatch}
-                    onRemove={removeRecipient}
-                  />
-                ))}
-                <button
-                  onClick={() =>
-                    setDirectRecipients((current) => [
-                      ...current,
-                      makeRecipient(),
-                    ])
-                  }
-                  className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 hover:border-slate-300"
-                >
-                  + Add recipient
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        {selectedLeadIds.length} lead
-                        {selectedLeadIds.length === 1 ? "" : "s"} selected
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Select individual leads, select all, or import leads by
-                        tag.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={openLeadPicker}
-                      className="rounded-2xl bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 shadow-sm ring-1 ring-slate-200 hover:ring-slate-300"
-                    >
-                      Select Leads
-                    </button>
-                  </div>
-                  {selectedLeads.length > 0 ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {selectedLeads.slice(0, 10).map((lead) => (
-                        <span
-                          key={lead.id}
-                          className="rounded-full bg-white px-3 py-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200"
-                        >
-                          {lead.name || lead.phone || lead.email || "Lead"}
-                        </span>
-                      ))}
-                      {selectedLeads.length > 10 ? (
-                        <span className="rounded-full bg-slate-900 px-3 py-2 text-xs font-black text-white">
-                          +{selectedLeads.length - 10} more
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-slate-400">
-                      No leads selected yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-              Purpose and timing
-            </p>
-            <div className="space-y-4">
-              <input
-                value={scheduleName}
-                onChange={(event) => setScheduleName(event.target.value)}
-                placeholder="Schedule name, e.g. Renewal follow-up"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-              />
-              <textarea
-                value={callPurpose}
-                onChange={(event) => {
-                  setCallPurpose(event.target.value);
-                  setPreview(null);
-                }}
-                placeholder="Required: why is the agent calling?"
-                rows={3}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-              />
-              <textarea
-                value={customInstructions}
-                onChange={(event) => {
-                  setCustomInstructions(event.target.value);
-                  setPreview(null);
-                }}
-                placeholder="Optional: call-specific guidance"
-                rows={3}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
-              />
-              {callType !== "call_now" && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <label className="space-y-1.5">
-                    <span className="text-xs font-bold text-slate-500">
-                      Start date
-                    </span>
-                    <input
-                      type="date"
-                      min={todayIso()}
-                      max={sixMonthsFromToday()}
-                      value={startLocalDate}
-                      onChange={(event) => {
-                        setStartLocalDate(event.target.value);
-                        setPreview(null);
-                      }}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                    />
-                  </label>
-                  <TimezonePicker
-                    value={timezone}
-                    onChange={(value) => {
-                      setTimezone(value);
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+          <div className="space-y-5">
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                Call type
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {[
+                  ["call_now", "Call Now"],
+                  ["one_time", "One-time"],
+                  ["one_time_batch", "Batch"],
+                  ["recurring_monthly", "Monthly"],
+                  ["custom_rule", "Custom"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      setCallType(value as CallType);
                       setPreview(null);
                     }}
-                  />
-                  {callType !== "one_time_batch" &&
-                  callType !== "custom_rule" ? (
-                    <TimePicker
-                      label="Time"
-                      value={startTime}
+                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-black uppercase tracking-widest transition-all ${callType === value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                Agent and number
+              </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500">
+                    Agent
+                  </span>
+                  <select
+                    value={voiceAgentId}
+                    onChange={(event) => setVoiceAgentId(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+                  >
+                    {agents.map((agent: AgentConfig) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name} ({agent.direction})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500">
+                    From number
+                  </span>
+                  <select
+                    value={fromNumber}
+                    onChange={(event) => setFromNumber(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+                  >
+                    <option value="">Choose number</option>
+                    {assignedNumbers.map((number) => (
+                      <option key={getPhone(number)} value={getPhone(number)}>
+                        {getPhone(number)}
+                        {getAssignedAgentId(number) === voiceAgentId
+                          ? " · assigned"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                Recipients
+              </p>
+              <div className="mb-4 flex rounded-2xl bg-slate-100 p-1 text-xs font-black uppercase tracking-widest text-slate-500">
+                <button
+                  onClick={() => {
+                    setRecipientMode("direct");
+                    setPreview(null);
+                  }}
+                  className={`flex-1 rounded-xl px-4 py-2 ${recipientMode === "direct" ? "bg-white text-slate-950 shadow-sm" : ""}`}
+                >
+                  Direct
+                </button>
+                <button
+                  onClick={() => {
+                    setRecipientMode("leads");
+                    setPreview(null);
+                  }}
+                  className={`flex-1 rounded-xl px-4 py-2 ${recipientMode === "leads" ? "bg-white text-slate-950 shadow-sm" : ""}`}
+                >
+                  Leads
+                </button>
+              </div>
+              {recipientMode === "direct" ? (
+                <div className="space-y-3">
+                  {directRecipients.map((recipient, index) => (
+                    <div key={recipient.id} className="space-y-1">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+                        <input
+                          value={recipient.name}
+                          onChange={(event) =>
+                            updateRecipient(
+                              recipient.id,
+                              "name",
+                              event.target.value,
+                            )
+                          }
+                          placeholder={`Recipient ${index + 1} name`}
+                          className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+                        />
+                        <input
+                          value={recipient.displayPhone}
+                          onChange={(event) =>
+                            updateRecipient(
+                              recipient.id,
+                              "phone",
+                              event.target.value,
+                            )
+                          }
+                          placeholder="+1 (555) 123-4567"
+                          className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+                        />
+                        <button
+                          onClick={() => removeRecipient(recipient.id)}
+                          className="rounded-2xl border border-red-100 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {recipient.phone && (
+                        <p className="text-[11px] font-bold text-emerald-600">
+                          Will call {recipient.phone}
+                        </p>
+                      )}
+                      {recipient.phoneError && (
+                        <p className="text-[11px] font-bold text-red-500">
+                          {recipient.phoneError}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setDirectRecipients((current) => [
+                        ...current,
+                        makeRecipient(),
+                      ])
+                    }
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 hover:border-slate-300"
+                  >
+                    + Add recipient
+                  </button>
+                </div>
+              ) : (
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {leads.length === 0 ? (
+                    <p className="text-sm text-slate-400">
+                      No leads available yet.
+                    </p>
+                  ) : (
+                    leads.map((lead) => (
+                      <label
+                        key={lead.id}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-black text-slate-900">
+                            {lead.name}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {lead.phone || lead.email || "No contact"}
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.includes(lead.id)}
+                          onChange={() => toggleLead(lead.id)}
+                        />
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                Purpose and timing
+              </p>
+              <div className="space-y-4">
+                <input
+                  value={scheduleName}
+                  onChange={(event) => setScheduleName(event.target.value)}
+                  placeholder="Schedule name, e.g. Renewal follow-up"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+                />
+                <textarea
+                  value={callPurpose}
+                  onChange={(event) => {
+                    setCallPurpose(event.target.value);
+                    setPreview(null);
+                  }}
+                  placeholder="Required: why is the agent calling?"
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+                />
+                <textarea
+                  value={customInstructions}
+                  onChange={(event) => {
+                    setCustomInstructions(event.target.value);
+                    setPreview(null);
+                  }}
+                  placeholder="Optional: call-specific guidance"
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
+                />
+                {callType !== "call_now" && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-bold text-slate-500">
+                        Start date
+                      </span>
+                      <input
+                        type="date"
+                        min={todayIso()}
+                        max={sixMonthsFromToday()}
+                        value={startLocalDate}
+                        onChange={(event) => {
+                          setStartLocalDate(event.target.value);
+                          setPreview(null);
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      />
+                    </label>
+                    <TimezonePicker
+                      value={timezone}
                       onChange={(value) => {
-                        setStartTime(value);
+                        setTimezone(value);
                         setPreview(null);
                       }}
                     />
-                  ) : (
-                    <div className="md:col-span-3">
-                      <TimeListEditor
-                        values={startTimes}
-                        onChange={(values) => {
-                          setStartTimes(values);
+                    {callType !== "one_time_batch" &&
+                    callType !== "custom_rule" ? (
+                      <TimePicker
+                        label="Time"
+                        value={startTime}
+                        onChange={(value) => {
+                          setStartTime(value);
                           setPreview(null);
                         }}
                       />
-                    </div>
-                  )}
-                </div>
-              )}
-              {(callType === "one_time_batch" ||
-                callType === "custom_rule") && (
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500">
-                    Batch mode
-                  </span>
-                  <select
-                    value={batchMode}
-                    onChange={(event) =>
-                      setBatchMode(event.target.value as BatchMode)
-                    }
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                  >
-                    <option value="spread_recipients_across_times">
-                      Spread recipients across times
-                    </option>
-                    <option value="all_recipients_each_time">
-                      All recipients each time
-                    </option>
-                  </select>
-                </label>
-              )}
-              {callType === "recurring_monthly" && (
-                <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
+                    ) : (
+                      <div className="md:col-span-3">
+                        <TimeListEditor
+                          values={startTimes}
+                          onChange={(values) => {
+                            setStartTimes(values);
+                            setPreview(null);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(callType === "one_time_batch" ||
+                  callType === "custom_rule") && (
                   <label className="block space-y-1.5">
                     <span className="text-xs font-bold text-slate-500">
-                      Number of months
+                      Batch mode
+                    </span>
+                    <select
+                      value={batchMode}
+                      onChange={(event) =>
+                        setBatchMode(event.target.value as BatchMode)
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                    >
+                      <option value="spread_recipients_across_times">
+                        Spread recipients across times
+                      </option>
+                      <option value="all_recipients_each_time">
+                        All recipients each time
+                      </option>
+                    </select>
+                  </label>
+                )}
+                {callType === "recurring_monthly" && (
+                  <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-500">
+                        Number of months
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={6}
+                        value={repeatCount}
+                        onChange={(event) => {
+                          setRepeatCount(Number(event.target.value));
+                          setPreview(null);
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      />
+                    </label>
+                    <div>
+                      <p className="mb-2 text-xs font-bold text-slate-500">
+                        Days of the month
+                      </p>
+                      <div className="grid grid-cols-7 gap-2">
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(
+                          (day) => (
+                            <button
+                              key={day}
+                              onClick={() => toggleMonthlyDay(day)}
+                              className={`rounded-xl px-2 py-2 text-xs font-black ${monthlyDays.includes(day) ? "bg-slate-900 text-white" : "bg-white text-slate-500"}`}
+                            >
+                              {day}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {callType === "custom_rule" && (
+                  <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-500">
+                        End date
+                      </span>
+                      <input
+                        type="date"
+                        min={startLocalDate}
+                        max={sixMonthsFromToday()}
+                        value={customEndDate}
+                        onChange={(event) => {
+                          setCustomEndDate(event.target.value);
+                          setPreview(null);
+                        }}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      />
+                    </label>
+                    <div>
+                      <p className="mb-2 text-xs font-bold text-slate-500">
+                        Call days
+                      </p>
+                      <div className="grid grid-cols-7 gap-2">
+                        {DAYS.map((day) => (
+                          <button
+                            key={day.key}
+                            onClick={() => toggleWeekday(day.key)}
+                            className={`rounded-xl px-3 py-3 text-[10px] font-black uppercase tracking-widest ${weekdayRules.includes(day.key) ? "bg-slate-900 text-white" : "bg-white text-slate-500"}`}
+                          >
+                            {day.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold text-slate-500">
+                      Max attempts
                     </span>
                     <input
                       type="number"
                       min={1}
-                      max={6}
-                      value={repeatCount}
-                      onChange={(event) => {
-                        setRepeatCount(Number(event.target.value));
-                        setPreview(null);
-                      }}
+                      max={5}
+                      value={maxAttemptsPerLead}
+                      onChange={(event) =>
+                        setMaxAttemptsPerLead(Number(event.target.value))
+                      }
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
                     />
                   </label>
-                  <div>
-                    <p className="mb-2 text-xs font-bold text-slate-500">
-                      Days of the month
-                    </p>
-                    <div className="grid grid-cols-7 gap-2">
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(
-                        (day) => (
-                          <button
-                            key={day}
-                            onClick={() => toggleMonthlyDay(day)}
-                            className={`rounded-xl px-2 py-2 text-xs font-black ${monthlyDays.includes(day) ? "bg-slate-900 text-white" : "bg-white text-slate-500"}`}
-                          >
-                            {day}
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {callType === "custom_rule" && (
-                <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
-                  <label className="block space-y-1.5">
+                  <label className="space-y-1.5">
                     <span className="text-xs font-bold text-slate-500">
-                      End date
+                      Retry delay
                     </span>
-                    <input
-                      type="date"
-                      min={startLocalDate}
-                      max={sixMonthsFromToday()}
-                      value={customEndDate}
-                      onChange={(event) => {
-                        setCustomEndDate(event.target.value);
-                        setPreview(null);
-                      }}
+                    <select
+                      value={retryDelayMinutes}
+                      onChange={(event) =>
+                        setRetryDelayMinutes(Number(event.target.value))
+                      }
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                    />
+                    >
+                      <option value={30}>30 minutes</option>
+                      <option value={60}>1 hour</option>
+                      <option value={180}>3 hours</option>
+                      <option value={1440}>Next day</option>
+                    </select>
                   </label>
-                  <div>
-                    <p className="mb-2 text-xs font-bold text-slate-500">
-                      Call days
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold text-slate-500">
+                      Voicemail
+                    </span>
+                    <select
+                      value={voicemailBehavior}
+                      onChange={(event) =>
+                        setVoicemailBehavior(event.target.value)
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                    >
+                      <option value="hangup">Hang up</option>
+                      <option value="leave_message">Leave message</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside className="space-y-5">
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                Preview and create
+              </p>
+              <div className="mt-4 space-y-3 rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
+                <p>
+                  <span className="font-black text-slate-900">Type:</span>{" "}
+                  {formatScheduleType(callType)}
+                </p>
+                <p>
+                  <span className="font-black text-slate-900">Agent:</span>{" "}
+                  {selectedAgent?.name || "None"}
+                </p>
+                <p>
+                  <span className="font-black text-slate-900">From:</span>{" "}
+                  {fromNumber || "Choose number"}
+                </p>
+                <p>
+                  <span className="font-black text-slate-900">Recipients:</span>{" "}
+                  {recipientMode === "direct"
+                    ? getValidDirectRecipients().length
+                    : selectedLeadIds.length}
+                </p>
+              </div>
+              {callType !== "call_now" && (
+                <button
+                  onClick={() => void handlePreview()}
+                  disabled={busy === "preview"}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                >
+                  {busy === "preview" ? "Previewing..." : "Preview calls"}
+                </button>
+              )}
+              <button
+                onClick={() => void handleCreate()}
+                disabled={busy === "create" || isPending}
+                className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {busy === "create"
+                  ? "Working..."
+                  : callType === "call_now"
+                    ? "Place Call"
+                    : "Create Schedule"}
+              </button>
+              {preview && (
+                <div className="mt-4 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+                  <p className="text-sm font-black text-emerald-800">
+                    {previewTotal > 0
+                      ? `${previewTotal} calls ready to schedule`
+                      : "No eligible calls were generated for this preview"}
+                  </p>
+                  {previewTotal === 0 && (
+                    <p className="mt-1 text-xs font-bold text-emerald-700/80">
+                      Adjust the recipients, date, time, or recurrence rules and
+                      preview again.
                     </p>
-                    <div className="grid grid-cols-7 gap-2">
-                      {DAYS.map((day) => (
-                        <button
-                          key={day.key}
-                          onClick={() => toggleWeekday(day.key)}
-                          className={`rounded-xl px-3 py-3 text-[10px] font-black uppercase tracking-widest ${weekdayRules.includes(day.key) ? "bg-slate-900 text-white" : "bg-white text-slate-500"}`}
-                        >
-                          {day.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  )}
+                  {previewCalls.length > 0 && (
+                    <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl bg-white p-3 text-[11px] text-slate-500">
+                      {JSON.stringify(previewCalls, null, 2)}
+                    </pre>
+                  )}
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <label className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500">
-                    Max attempts
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={maxAttemptsPerLead}
-                    onChange={(event) =>
-                      setMaxAttemptsPerLead(Number(event.target.value))
-                    }
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                  />
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500">
-                    Retry delay
-                  </span>
-                  <select
-                    value={retryDelayMinutes}
-                    onChange={(event) =>
-                      setRetryDelayMinutes(Number(event.target.value))
-                    }
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                  >
-                    <option value={30}>30 minutes</option>
-                    <option value={60}>1 hour</option>
-                    <option value={180}>3 hours</option>
-                    <option value={1440}>Next day</option>
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-xs font-bold text-slate-500">
-                    Voicemail
-                  </span>
-                  <select
-                    value={voicemailBehavior}
-                    onChange={(event) =>
-                      setVoicemailBehavior(event.target.value)
-                    }
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                  >
-                    <option value="hangup">Hang up</option>
-                    <option value="leave_message">Leave message</option>
-                  </select>
-                </label>
-              </div>
             </div>
-            <div className="mt-8 rounded-3xl border border-slate-100 bg-slate-50 p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Ready to review?
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Review the agent, recipients, purpose, and timing before the
-                    call is placed or scheduled.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void openReviewModal()}
-                  disabled={
-                    busy === "preview" || busy === "create" || isPending
-                  }
-                  className="rounded-2xl bg-slate-900 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-amber-600 disabled:opacity-50"
-                >
-                  {busy === "preview"
-                    ? "Preparing preview..."
-                    : callType === "call_now"
-                      ? "Place Call"
-                      : "Preview Schedule"}
-                </button>
-              </div>
-            </div>
-          </section>
+          </aside>
         </div>
       )}
 
       <AppModal
-        open={leadPickerOpen}
-        onClose={() => setLeadPickerOpen(false)}
-        title="Select outreach leads"
-        description="Choose individual leads, select all, or import contacts from one or more tags without duplicate calls."
-        size="xl"
+        open={!!validationModal}
+        onClose={() => setValidationModal(null)}
+        title={validationModal?.title || "Schedule warning"}
+        description="Please review this before continuing."
+        size="md"
         footer={
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => setLeadPickerOpen(false)}
-              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={applyLeadSelection}
-              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
-            >
-              Use {draftResolvedLeadIds.length} selected lead
-              {draftResolvedLeadIds.length === 1 ? "" : "s"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setValidationModal(null)}
+            className="w-full rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600"
+          >
+            Got it
+          </button>
         }
       >
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-          <div className="space-y-4">
-            <div className="rounded-3xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Bulk selection
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftLeadIds(leads.map((lead) => lead.id));
-                    setDraftSelectedTags([]);
-                    setDraftExcludedLeadIds([]);
-                  }}
-                  className="rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 ring-1 ring-slate-200"
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftLeadIds([]);
-                    setDraftSelectedTags([]);
-                    setDraftExcludedLeadIds([]);
-                  }}
-                  className="rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 ring-1 ring-red-100"
-                >
-                  Clear All
-                </button>
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Import by tag
-              </p>
-              {leadTagOptions.length ? (
-                <div className="mt-3 flex max-h-64 flex-wrap gap-2 overflow-y-auto pr-1">
-                  {leadTagOptions.map(({ tag, count }) => {
-                    const active = draftSelectedTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => toggleDraftTag(tag)}
-                        className={`rounded-full px-3 py-2 text-xs font-bold ring-1 transition-all ${
-                          active
-                            ? "bg-slate-900 text-white ring-slate-900"
-                            : "bg-white text-slate-600 ring-slate-200 hover:ring-amber-300"
-                        }`}
-                      >
-                        {tag} · {count}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-400">
-                  No tags found on your current leads.
-                </p>
-              )}
-            </div>
-            <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
-              <p className="text-sm font-black text-emerald-800">
-                {draftResolvedLeadIds.length} selected
-              </p>
-              <p className="mt-1 text-xs text-emerald-700">
-                Click Use selected leads to import them into this outreach.
-              </p>
-            </div>
-          </div>
-
-          <div className="min-h-0 rounded-3xl border border-slate-200 bg-white p-3">
-            {leads.length === 0 ? (
-              <p className="p-5 text-sm text-slate-400">
-                No leads available yet.
-              </p>
-            ) : (
-              <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-                {modalSortedLeads.map((lead) => (
-                  <label
-                    key={lead.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 px-4 py-3 hover:bg-slate-50"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">
-                        {lead.name || "Unnamed lead"}
-                      </p>
-                      <p className="truncate text-xs text-slate-400">
-                        {lead.phone || lead.email || "No contact"}
-                      </p>
-                      {(lead.tags || []).length ? (
-                        <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          {(lead.tags || []).join(", ")}
-                        </p>
-                      ) : null}
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={draftResolvedLeadIds.includes(lead.id)}
-                      onChange={() => toggleDraftLead(lead.id)}
-                      className="h-4 w-4"
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
+          {validationModal?.message}
         </div>
       </AppModal>
 
-      <AppModal
-        open={reviewOpen}
-        onClose={() => setReviewOpen(false)}
-        title={
-          callType === "call_now"
-            ? "Review and place call"
-            : "Review outreach schedule"
-        }
-        description="Confirm the agent, recipients, purpose, and timing before proceeding."
-        size="xl"
-        footer={
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => setReviewOpen(false)}
-              disabled={busy === "create"}
-              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCreate()}
-              disabled={busy === "create" || isPending}
-              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50"
-            >
-              {busy === "create"
-                ? "Working..."
-                : callType === "call_now"
-                  ? "Proceed to place call"
-                  : "Proceed to create schedule"}
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Type
-              </p>
-              <p className="mt-1 font-black text-slate-900">
-                {formatScheduleType(callType)}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Agent
-              </p>
-              <p className="mt-1 font-black text-slate-900">
-                {selectedAgent?.name || "None"}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                From
-              </p>
-              <p className="mt-1 font-black text-slate-900">
-                {fromNumber || "Choose number"}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Recipients
-              </p>
-              <p className="mt-1 font-black text-slate-900">
-                {selectedRecipientCount}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Purpose
-            </p>
-            <p className="mt-2 text-sm font-medium text-slate-700">
-              {callPurpose || "No purpose entered"}
-            </p>
-          </div>
-
-          {recipientMode === "leads" ? (
-            <div className="rounded-3xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Selected leads
-                </p>
-                <button
-                  type="button"
-                  onClick={openLeadPicker}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600"
-                >
-                  Edit leads
-                </button>
-              </div>
-              <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
-                {selectedLeads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        {lead.name || "Unnamed lead"}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {lead.phone || lead.email || "No contact"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeSelectedLead(lead.id)}
-                      className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-slate-200 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Direct recipients
-              </p>
-              <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
-                {directRecipients
-                  .filter((recipient) => recipient.phone)
-                  .map((recipient) => (
-                    <div
-                      key={recipient.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3"
-                    >
-                      <div>
-                        <p className="text-sm font-black text-slate-900">
-                          {recipient.name || "Unknown"}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {recipient.phone}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeRecipient(recipient.id)}
-                        className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {callType !== "call_now" ? (
-            <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
-              <p className="text-sm font-black text-emerald-800">
-                {getPreviewTotal(preview)} call
-                {getPreviewTotal(preview) === 1 ? "" : "s"} generated
-              </p>
-              {previewCalls.length > 0 ? (
-                <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl bg-white p-3 text-[11px] text-slate-500">
-                  {JSON.stringify(previewCalls, null, 2)}
-                </pre>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </AppModal>
       <AppModal
         open={!!selectedSchedule}
         onClose={() => setSelectedSchedule(null)}
