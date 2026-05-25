@@ -1,11 +1,4 @@
-import React, {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
@@ -239,7 +232,6 @@ const SidebarLink: React.FC<{
 }> = memo(({ to, icon, label, description, onNavigate }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [, startRouteTransition] = useTransition();
   const isActive = location.pathname === to;
 
   const handleNavigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
@@ -254,9 +246,9 @@ const SidebarLink: React.FC<{
     event.preventDefault();
     onNavigate?.();
     if (isActive) return;
-    startRouteTransition(() => {
+    window.setTimeout(() => {
       navigate(to);
-    });
+    }, 0);
   };
 
   return (

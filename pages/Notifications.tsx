@@ -35,6 +35,28 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
 };
 
 const PAGE_SIZE = 12;
+const HIDDEN_NOTIFICATION_TYPES = new Set([
+  "call_completed",
+  "schedule_completed",
+  "recording_ready",
+  "transcript_ready",
+]);
+
+const shouldShowNotificationType = (type: string) =>
+  !HIDDEN_NOTIFICATION_TYPES.has(String(type || "").toLowerCase());
+
+const truncateText = (value: string, maxLength = 220) => {
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+};
+
+const yieldToBrowser = () =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
 
 const getString = (value: unknown, fallback = "") =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -72,11 +94,14 @@ const normalizeNotification = (value: unknown): NotificationRecord | null => {
       ? (raw.metadata as Record<string, unknown>)
       : {};
 
+  const type = getString(raw.type, "notification");
+  if (!shouldShowNotificationType(type)) return null;
+
   return {
     id,
-    type: getString(raw.type, "notification"),
+    type,
     title: getString(raw.title, "Notification"),
-    body: getString(raw.body),
+    body: truncateText(getString(raw.body), 220),
     entityType: getString(raw.entity_type || raw.entityType),
     entityId: getString(raw.entity_id || raw.entityId),
     voiceAgentId:
@@ -188,6 +213,7 @@ const Notifications: React.FC = () => {
   const loadNotifications = async () => {
     setLoading(true);
     try {
+      await yieldToBrowser();
       const [listPayload, countPayload] = await Promise.all([
         voiceCallsApi.notifications.getNotifications({ limit: 100 }),
         voiceCallsApi.notifications.getUnreadNotificationCount(),
@@ -212,7 +238,8 @@ const Notifications: React.FC = () => {
   };
 
   useEffect(() => {
-    void loadNotifications();
+    const timer = window.setTimeout(() => void loadNotifications(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -453,8 +480,8 @@ const Notifications: React.FC = () => {
           <div>
             <h2 className="text-xl font-black text-slate-900">Notifications</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Workspace alerts for calls, follow-ups, unanswered questions, and
-              schedules.
+              Actionable alerts for follow-ups, messages, unanswered questions,
+              and schedules.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -581,7 +608,7 @@ const Notifications: React.FC = () => {
                               {notification.title}
                             </p>
                             {notification.body ? (
-                              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                              <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-slate-500">
                                 {notification.body}
                               </p>
                             ) : null}
@@ -641,8 +668,9 @@ const Notifications: React.FC = () => {
               No notifications found
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              Workspace alerts will appear here when calls, leads, recordings,
-              transcripts, or schedules need attention.
+              Actionable alerts will appear here when leads request follow-up,
+              leave messages, ask unanswered questions, or schedules need
+              attention.
             </p>
           </div>
         )}
