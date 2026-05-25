@@ -798,11 +798,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             </header>
 
-            <main
-              className={`mx-auto mt-6 w-full ${
-                location.pathname === "/outreach" ? "max-w-[88vw]" : "max-w-7xl"
-              }`}
-            >
+            <main className="mx-auto mt-6 w-full max-w-full lg:max-w-[85%] 2xl:max-w-[85%]">
               {user.role === "Viewer" &&
               [
                 "/agent",
