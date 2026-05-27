@@ -28,6 +28,7 @@ const CallLogs = lazy(() => import("./pages/CallLogs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
+const TestAgent = lazy(() => import("./pages/TestAgent"));
 const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Billing = lazy(() => import("./pages/Billing"));
@@ -698,6 +699,21 @@ const App: React.FC = () => {
                   <PhoneNumbers
                     org={org}
                     onAgentUpdated={() => void refreshWorkspace()}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/test-agent"
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <TestAgent
+                    org={org}
+                    onChanged={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>
               ) : (

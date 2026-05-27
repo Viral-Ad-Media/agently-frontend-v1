@@ -164,9 +164,18 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       const response = await voiceCallsApi.phoneNumbers.getTwilioNumbers({
         organizationId: orgId,
       });
-      const tenantNumbers = (response.numbers || []).filter(
-        (number) => getOrgId(number) === orgId,
-      );
+      const tenantNumbers = (response.numbers || []).filter((number) => {
+        const row = number as any;
+        return (
+          getOrgId(number) === orgId &&
+          row.is_platform_test_number !== true &&
+          row.isPlatformTestNumber !== true &&
+          row.source !== "platform_test" &&
+          row.number_type !== "platform_test" &&
+          row.numberType !== "platform_test" &&
+          row.purchase_origin !== "platform_beta_test_pool"
+        );
+      });
       setNumbers(tenantNumbers);
       setHasLoaded(true);
     } catch (error: any) {

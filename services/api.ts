@@ -363,6 +363,35 @@ export const api = {
     });
   },
 
+  async getTestAgentStatus() {
+    return request<any>('/api/test-agent/status');
+  },
+
+  async updateTestAgentConfig(payload: Record<string, unknown>) {
+    return request<any>('/api/test-agent/config', {
+      method: 'PATCH',
+      body: payload,
+    });
+  },
+
+  async callNowWithTestAgent(payload: Record<string, unknown>) {
+    return request<any>('/api/test-agent/call-now', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async scheduleTestAgentCall(payload: Record<string, unknown>) {
+    return request<any>('/api/test-agent/schedule', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async listTestAgentEvents() {
+    return request<any>('/api/test-agent/events');
+  },
+
   async updateLead(id: string, updates: Partial<Lead>) {
     return request<Lead>(`/api/leads/${id}`, {
       method: 'PATCH',
