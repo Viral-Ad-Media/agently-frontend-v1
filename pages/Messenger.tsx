@@ -439,12 +439,12 @@ const Messenger: React.FC<MessengerProps> = ({
   const previewColor = draft.accentColor || "#4f46e5";
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="min-w-0 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:space-y-8">
       {/* Chatbot selector */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-black text-slate-900">
+            <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
               Chatbot Agent Studio
             </h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -455,12 +455,12 @@ const Messenger: React.FC<MessengerProps> = ({
           <button
             onClick={() => void runAction("create", onCreateChatbot)}
             disabled={busyAction === "create"}
-            className="rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
           >
             {busyAction === "create" ? "Creating…" : "+ New Chatbot"}
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {org.chatbots.map((bot) => {
             const isActive = bot.id === org.activeChatbotId;
             const agent = org.voiceAgents.find(
@@ -471,16 +471,16 @@ const Messenger: React.FC<MessengerProps> = ({
                 key={bot.id}
                 className={`rounded-3xl border p-5 transition-all ${isActive ? "border-indigo-200 bg-indigo-50/60 shadow-sm" : "border-slate-200 bg-slate-50"}`}
               >
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <p className="font-black text-slate-900 text-sm">
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-900">
                       {bot.name}
                     </p>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
                       {agent?.name ?? "Voice Agent"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <div
                       className="w-4 h-4 rounded-full border-2 border-white shadow"
                       style={{ background: bot.accentColor }}
@@ -492,7 +492,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {!isActive && (
                     <button
                       onClick={() =>
@@ -524,9 +524,9 @@ const Messenger: React.FC<MessengerProps> = ({
       </div>
 
       {/* Studio grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] gap-8 items-stretch">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)] xl:gap-8">
         {/* LEFT: config */}
-        <div className="space-y-6 h-full flex flex-col">
+        <div className="flex h-full min-w-0 flex-col space-y-5 sm:space-y-6">
           {error && (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               {error}
@@ -534,7 +534,7 @@ const Messenger: React.FC<MessengerProps> = ({
           )}
 
           {/* Appearance */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7 space-y-4">
+          <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <h3 className="text-lg font-black text-slate-900">Appearance</h3>
 
             <div>
@@ -566,7 +566,7 @@ const Messenger: React.FC<MessengerProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
                   Header Title
@@ -652,7 +652,7 @@ const Messenger: React.FC<MessengerProps> = ({
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                 Widget Position
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {(["right", "left"] as const).map((pos) => (
                   <button
                     key={pos}
@@ -704,8 +704,8 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
 
             {/* Knowledge Base */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
-              <div className="flex items-center justify-between mb-5">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
                     Knowledge Base
@@ -760,7 +760,7 @@ const Messenger: React.FC<MessengerProps> = ({
 
             {/* ── Widget Voice Selection (no provider badge) ── */}
             <div className="pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Widget Voice
@@ -770,7 +770,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {OPENAI_VOICES.map((v) => (
                   <button
                     key={v.id}
@@ -778,7 +778,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     onClick={() => patch({ chatVoice: v.id } as any)}
                     className={`relative flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all group ${(draft as any).chatVoice === v.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 bg-white"}`}
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p
                         className={`text-xs font-black ${(draft as any).chatVoice === v.id ? "text-indigo-700" : "text-slate-800"}`}
                       >
@@ -855,10 +855,10 @@ const Messenger: React.FC<MessengerProps> = ({
         </div>
 
         {/* RIGHT: live preview + embed */}
-        <div className="space-y-6 sticky top-6">
+        <div className="min-w-0 space-y-5 sm:space-y-6 xl:sticky xl:top-6">
           {/* Preview */}
-          <div className="bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
-            <div className="px-7 py-5 border-b border-white/10 flex items-center justify-between">
+          <div className="overflow-hidden rounded-3xl bg-slate-900 shadow-2xl">
+            <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
                   Live Preview
@@ -867,7 +867,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   {draft.headerTitle || "Chat Preview"}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={() => void onResetConversation(activeChatbot.id)}
@@ -882,13 +882,10 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            <div
-              className="m-6 rounded-2xl overflow-hidden border border-white/10 flex flex-col"
-              style={{ height: "480px" }}
-            >
+            <div className="m-3 flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 sm:m-6 sm:h-[480px]">
               {/* Header */}
               <div
-                className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
+                className="flex flex-shrink-0 items-center gap-3 px-4 py-4 sm:px-5"
                 style={{ background: previewColor }}
               >
                 <div
@@ -981,7 +978,7 @@ const Messenger: React.FC<MessengerProps> = ({
               {/* Input area with voice toggle */}
               <form
                 onSubmit={handleSend}
-                className="flex gap-2 p-3 bg-slate-800 border-t border-white/10 flex-shrink-0 items-center"
+                className="flex flex-shrink-0 items-center gap-2 border-t border-white/10 bg-slate-800 p-2.5 sm:p-3"
               >
                 {/* Voice toggle button */}
                 <button
@@ -1030,7 +1027,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={draft.placeholder || "Type your message…"}
-                    className="flex-1 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 px-4 py-2.5 text-sm outline-none focus:border-white/30"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/30 sm:px-4"
                   />
                 )}
 
@@ -1061,8 +1058,8 @@ const Messenger: React.FC<MessengerProps> = ({
           </div>
 
           {/* Embed script */}
-          <div className="bg-slate-900 rounded-3xl shadow-2xl p-7 text-white">
-            <div className="flex items-center justify-between mb-3">
+          <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-2xl sm:p-7">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
                   Embed Script
@@ -1090,8 +1087,8 @@ const Messenger: React.FC<MessengerProps> = ({
       </div>
 
       {/* FAQ section - full width */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-7">
-        <div className="flex items-center justify-between mb-5">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-black text-slate-900">FAQs</h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -1125,7 +1122,7 @@ const Messenger: React.FC<MessengerProps> = ({
               {draft.faqs.map((faq) => (
                 <div
                   key={faq.id}
-                  className="w-[380px] flex-shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
+                  className="flex w-[min(380px,calc(100vw-4rem))] flex-shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:w-[380px]"
                 >
                   <div className="flex justify-between items-start">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">

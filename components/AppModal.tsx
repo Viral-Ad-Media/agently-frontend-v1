@@ -53,7 +53,7 @@ const AppModal: React.FC<AppModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[400] bg-slate-950/65 p-4 sm:p-6"
+      className="fixed inset-0 z-[400] bg-slate-950/65 p-0 sm:p-6"
       onClick={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
           onClose();
@@ -63,25 +63,27 @@ const AppModal: React.FC<AppModalProps> = ({
       role="dialog"
       aria-label={title}
     >
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-end justify-center sm:items-center">
         <div
-          className={`relative flex max-h-[calc(100vh-2rem)] w-full flex-col ${SIZE_CLASS[size]} rounded-[2rem] border border-white/70 bg-white shadow-xl ${className}`}
+          className={`relative flex max-h-[92dvh] w-full flex-col ${SIZE_CLASS[size]} rounded-t-[2rem] border border-white/70 bg-white shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-[2rem] ${className}`}
           onClick={(event) => event.stopPropagation()}
         >
           {!hideHeader ? (
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 sm:px-8">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:gap-4 sm:px-8 sm:py-5">
               <div>
-                <h3 className="text-xl font-black tracking-tight text-slate-900">
+                <h3 className="text-lg font-black tracking-tight text-slate-900 sm:text-xl">
                   {title}
                 </h3>
                 {description ? (
-                  <p className="mt-1 text-sm text-slate-500">{description}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                    {description}
+                  </p>
                 ) : null}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-2xl p-2.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
+                className="shrink-0 rounded-2xl p-2.5 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600"
                 aria-label="Close modal"
               >
                 <i className="fa-sharp fa-solid fa-xmark text-lg" />
@@ -90,13 +92,13 @@ const AppModal: React.FC<AppModalProps> = ({
           ) : null}
 
           <div
-            className={`min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8 ${hideHeader ? "p-0 sm:p-0 " : ""}${bodyClassName}`}
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-6 ${hideHeader ? "p-0 sm:p-0 " : ""}${bodyClassName}`}
           >
             {children}
           </div>
 
           {footer ? (
-            <div className="border-t border-slate-100 px-6 py-5 sm:px-8">
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-8 sm:py-5">
               {footer}
             </div>
           ) : null}

@@ -923,9 +923,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
       {/* ═══════════════════════════════════════════════ PERSONA TAB */}
       {tab === "persona" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {/* Voice agents fleet — clickable cards */}
-          <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-card p-6">
+          <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <div>
                 <h3 className="text-base font-black text-slate-900">
@@ -1070,7 +1070,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           </div>
 
           {/* Left: identity fields */}
-          <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
+          <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
             <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
               <svg
                 width="16"

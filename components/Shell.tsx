@@ -118,7 +118,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
     },
     "/test-agent": {
       eyebrow: "Beta Trial Line",
-      title: "Test an Agent",
+      title: "Test Your Agent",
       description:
         "Run limited trial calls on the platform-owned number before buying a dedicated line.",
     },
@@ -209,16 +209,16 @@ const MenuButtonIcon: React.FC<{ open?: boolean }> = ({ open = false }) => (
 );
 
 const AppLoading: React.FC = () => (
-  <div className="min-h-screen bg-transparent px-6 py-10">
-    <div className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center">
-      <div className="w-full rounded-[2rem] border border-white/70 bg-white/85 p-8 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
+  <div className="min-h-screen bg-transparent px-3 py-6 sm:px-6 sm:py-10">
+    <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center">
+      <div className="w-full rounded-[1.5rem] border border-white/70 bg-white/85 p-5 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8">
+        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)] sm:h-14 sm:w-14">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
         </div>
-        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-indigo-500">
+        <p className="text-[9px] font-black uppercase tracking-[0.24em] text-indigo-500 sm:text-[10px] sm:tracking-[0.35em]">
           Launching Workspace
         </p>
-        <h1 className="font-display mt-3 text-2xl text-slate-900">
+        <h1 className="font-display mt-3 text-xl text-slate-900 sm:text-2xl">
           Loading Agently
         </h1>
         <p className="mt-2 text-sm font-medium text-slate-500">
@@ -633,11 +633,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         />
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[18.75rem] transform transition-transform duration-300 md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[18.75rem] md:translate-x-0 ${
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="m-4 flex h-[calc(100vh-2rem)] flex-col rounded-[2rem] border border-white/70 bg-white/88 p-5 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+          <div className="m-2 flex h-[calc(100vh-1rem)] flex-col rounded-[1.5rem] border border-white/70 bg-white/88 p-4 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl sm:m-4 sm:h-[calc(100vh-2rem)] sm:rounded-[2rem] sm:p-5">
             <div className="flex items-center justify-between">
               <Link to="/dashboard" className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
@@ -705,7 +705,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onClick={() => setMobileNavOpen(false)}
               >
                 <i className="fa-solid fa-phone-volume text-sm" />
-                Test An Agent
+                Test Your Agent
               </Link>
 
               <button
@@ -734,9 +734,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         </aside>
 
         <div className="flex-1 md:ml-[18.75rem] md:min-w-0">
-          <div className="px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+          <div className="px-3 pb-8 pt-3 sm:px-5 sm:pb-10 sm:pt-4 lg:px-6 xl:px-8">
             <header className="sticky top-4 z-20">
-              <div className="rounded-[1.6rem] border border-white/70 bg-white/84 px-4 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:px-5">
+              <div className="rounded-[1.35rem] border border-white/70 bg-white/84 px-3 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:rounded-[1.6rem] sm:px-5 sm:py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
                     <button
@@ -747,7 +747,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     >
                       <MenuButtonIcon />
                     </button>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-indigo-600">
                           {pageMeta.eyebrow}
@@ -756,16 +756,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                           {org.profile.name}
                         </span>
                       </div>
-                      <h1 className="font-display mt-2 text-2xl tracking-tight text-slate-900 sm:text-[2rem]">
+                      <h1 className="font-display mt-2 truncate text-xl tracking-tight text-slate-900 sm:text-[2rem]">
                         {pageMeta.title}
                       </h1>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                     <NotificationBell />
-                    <div className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-                      <span className="font-black text-slate-900">
+                    <div className="max-w-full rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 sm:max-w-[16rem]">
+                      <span className="inline-block max-w-[9rem] truncate align-bottom font-black text-slate-900 sm:max-w-[12rem]">
                         {activeVoiceAgent.name}
                       </span>
                       <span className="ml-1.5 text-slate-400">active</span>
@@ -802,7 +802,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             </header>
 
-            <main className="mx-auto mt-6 w-full max-w-full lg:max-w-[85%] 2xl:max-w-[85%]">
+            <main className="mx-auto mt-5 w-full min-w-0 max-w-full md:mt-6 xl:max-w-[88%] 2xl:max-w-[88%]">
               {user.role === "Viewer" &&
               [
                 "/agent",
@@ -814,7 +814,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               ].includes(location.pathname) ? (
                 <div className="relative">
                   <div className="absolute inset-0 z-10 rounded-3xl bg-white/70 backdrop-blur-[2px] flex items-start justify-center pt-24 pointer-events-auto">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl px-8 py-6 text-center max-w-sm">
+                    <div className="mx-4 max-w-sm rounded-2xl border border-slate-200 bg-white px-5 py-5 text-center shadow-xl sm:px-8 sm:py-6">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
                         <svg
                           width="20"

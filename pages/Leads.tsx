@@ -1073,7 +1073,7 @@ const Leads: React.FC<LeadsProps> = ({
     onRemove: (i: number) => void;
   }) => (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-black text-slate-900">Call windows</p>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -1106,7 +1106,7 @@ const Leads: React.FC<LeadsProps> = ({
               </button>
             ))}
           </div>
-          <div className="flex items-end gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
                 Call time{" "}
@@ -1125,7 +1125,7 @@ const Leads: React.FC<LeadsProps> = ({
               <button
                 type="button"
                 onClick={() => onRemove(i)}
-                className="rounded-xl border border-red-100 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:border-red-200 mb-0.5"
+                className="mb-0.5 w-full rounded-xl border border-red-100 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:border-red-200 sm:w-auto"
               >
                 Remove
               </button>
@@ -1196,7 +1196,7 @@ const Leads: React.FC<LeadsProps> = ({
     <div className="space-y-6 animate-fade-up">
       {toast && (
         <div
-          className={`fixed top-5 right-5 z-[300] rounded-2xl px-5 py-3 text-sm font-bold shadow-xl
+          className={`fixed left-3 right-3 top-4 z-[300] rounded-2xl px-4 py-3 text-sm font-bold shadow-xl sm:left-auto sm:right-5 sm:max-w-md sm:px-5
           ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
         >
           {toast.msg}
@@ -1212,7 +1212,7 @@ const Leads: React.FC<LeadsProps> = ({
             outreach
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:w-auto sm:flex sm:flex-wrap">
           {selIds.length > 0 && (
             <>
               <button
@@ -1271,63 +1271,61 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-2 custom-scrollbar">
-        <div className="flex min-w-max gap-3">
-          {[
-            {
-              label: "Total leads",
-              value: leadMetrics.total,
-              hint:
-                backendTotal != null
-                  ? `${backendTotal} total`
-                  : "Live lead count",
-            },
-            {
-              label: "New",
-              value: leadMetrics.new,
-              hint: "Needs first contact",
-            },
-            {
-              label: "Contacted",
-              value: leadMetrics.contacted,
-              hint: "Already reached",
-            },
-            {
-              label: "Call leads",
-              value: leadMetrics.callLeads,
-              hint: "Captured from calls",
-            },
-            {
-              label: "Chatbot leads",
-              value: leadMetrics.chatbotLeads,
-              hint: "Captured from chat",
-            },
-            {
-              label: "Manual leads",
-              value: leadMetrics.manualLeads,
-              hint: "Added by team",
-            },
-          ].map((metric) => (
-            <div
-              key={metric.label}
-              className="w-40 shrink-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                {metric.label}
-              </p>
-              <p className="mt-2 text-2xl font-black text-slate-900">
-                {metric.value}
-              </p>
-              <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
-                {metric.hint}
-              </p>
-            </div>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        {[
+          {
+            label: "Total leads",
+            value: leadMetrics.total,
+            hint:
+              backendTotal != null
+                ? `${backendTotal} total`
+                : "Live lead count",
+          },
+          {
+            label: "New",
+            value: leadMetrics.new,
+            hint: "Needs first contact",
+          },
+          {
+            label: "Contacted",
+            value: leadMetrics.contacted,
+            hint: "Already reached",
+          },
+          {
+            label: "Call leads",
+            value: leadMetrics.callLeads,
+            hint: "Captured from calls",
+          },
+          {
+            label: "Chatbot leads",
+            value: leadMetrics.chatbotLeads,
+            hint: "Captured from chat",
+          },
+          {
+            label: "Manual leads",
+            value: leadMetrics.manualLeads,
+            hint: "Added by team",
+          },
+        ].map((metric) => (
+          <div
+            key={metric.label}
+            className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {metric.label}
+            </p>
+            <p className="mt-2 text-2xl font-black text-slate-900">
+              {metric.value}
+            </p>
+            <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
+              {metric.hint}
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* Main grid */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.9fr)]">
         {/* LEFT */}
         <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1355,7 +1353,7 @@ const Leads: React.FC<LeadsProps> = ({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 outline-none focus:border-amber-300"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 outline-none focus:border-amber-300 sm:w-auto"
               >
                 <option value="all">All</option>
                 <option value="new">New</option>
@@ -1364,7 +1362,7 @@ const Leads: React.FC<LeadsProps> = ({
               </select>
               <button
                 onClick={toggleAll}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 whitespace-nowrap"
+                className="w-full whitespace-nowrap rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 sm:w-auto"
               >
                 {selectedIds.size === pagedLeads.length && pagedLeads.length > 0
                   ? "Clear"
@@ -1392,7 +1390,7 @@ const Leads: React.FC<LeadsProps> = ({
                 pagedLeads.map((lead) => (
                   <div
                     key={lead.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                    className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center"
                   >
                     <button
                       onClick={() => toggleSel(lead.id)}
@@ -1412,7 +1410,7 @@ const Leads: React.FC<LeadsProps> = ({
                     </button>
                     <button
                       onClick={() => setActiveLead(lead)}
-                      className="flex flex-1 flex-col items-start gap-1 text-left min-w-0"
+                      className="flex w-full min-w-0 flex-1 flex-col items-start gap-1 text-left sm:w-auto"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-black text-slate-900">
@@ -1441,7 +1439,7 @@ const Leads: React.FC<LeadsProps> = ({
                       onClick={() =>
                         setDeleteTarget({ ids: [lead.id], label: lead.name })
                       }
-                      className="rounded-xl border border-red-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 shrink-0"
+                      className="w-full shrink-0 rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 sm:w-auto sm:py-1.5"
                     >
                       Delete
                     </button>
@@ -1450,11 +1448,11 @@ const Leads: React.FC<LeadsProps> = ({
               )}
             </div>
             {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+              <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <p className="text-xs text-slate-400">
                   Page {page} of {totalPages}
                 </p>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap justify-center gap-1 sm:justify-end">
                   <button
                     onClick={() => setPage(1)}
                     disabled={page === 1}
@@ -1522,7 +1520,7 @@ const Leads: React.FC<LeadsProps> = ({
                     key={tag}
                     className="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="font-black text-slate-900 text-sm">
                           #{tag}
@@ -1533,7 +1531,7 @@ const Leads: React.FC<LeadsProps> = ({
                       </div>
                       <button
                         onClick={() => openTagSchedule(tag)}
-                        className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700 sm:w-auto sm:py-1.5"
                       >
                         Schedule in Outreach
                       </button>
@@ -1562,7 +1560,7 @@ const Leads: React.FC<LeadsProps> = ({
           description={`Added ${new Date(activeLead.createdAt).toLocaleDateString()}`}
           size="lg"
           footer={
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() => setActiveLead(null)}
                 className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
@@ -1604,7 +1602,7 @@ const Leads: React.FC<LeadsProps> = ({
                   </span>
                 )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                   Phone
@@ -1701,7 +1699,7 @@ const Leads: React.FC<LeadsProps> = ({
         description="Create a lead manually."
         size="lg"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
@@ -1799,7 +1797,7 @@ const Leads: React.FC<LeadsProps> = ({
         description="name, phone, email, reason, tags columns."
         size="xl"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowImportModal(false)}
@@ -1861,7 +1859,7 @@ const Leads: React.FC<LeadsProps> = ({
         description={`${selIds.length} lead${selIds.length !== 1 ? "s" : ""} selected.`}
         size="md"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowTagModal(false)}
@@ -1971,7 +1969,7 @@ const Leads: React.FC<LeadsProps> = ({
         description="Export all leads or only leads with selected tags."
         size="md"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowExportModal(false)}
@@ -2042,7 +2040,7 @@ const Leads: React.FC<LeadsProps> = ({
         description="This cannot be undone."
         size="md"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setDeleteTarget(null)}
@@ -2100,7 +2098,7 @@ const Leads: React.FC<LeadsProps> = ({
                 {schedValidErr}
               </div>
             )}
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => setScheduleTarget(null)}
@@ -2326,7 +2324,7 @@ const Leads: React.FC<LeadsProps> = ({
           description={editingSchedule.name || ""}
           size="xl"
           footer={
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => setEditingSchedule(null)}

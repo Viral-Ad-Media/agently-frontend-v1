@@ -176,7 +176,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
             Manage workspace access and permissions.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:w-auto sm:flex sm:flex-wrap">
           <button
             type="button"
             onClick={loadMembers}
@@ -210,7 +210,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
         {[
           ["Total", metrics.total],
           ["Owners", metrics.owners],
@@ -229,7 +229,68 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="space-y-3 md:hidden">
+        {sortedMembers.map((user) => (
+          <div
+            key={user.id}
+            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
+                {user.name?.[0]?.toUpperCase() || "U"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-slate-900">
+                  {user.name}
+                </p>
+                <p className="truncate text-xs text-slate-500">{user.email}</p>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {ROLE_PERMISSIONS[user.role]?.label || user.role}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+              {user.role === "Owner" ? (
+                <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">
+                  Owner
+                </span>
+              ) : (
+                <select
+                  value={user.role}
+                  disabled={saving}
+                  onChange={(e) =>
+                    void updateRole(
+                      user.id,
+                      e.target.value as Extract<UserRole, "Admin" | "Viewer">,
+                    )
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none focus:border-amber-300 min-[420px]:w-auto"
+                >
+                  <option value="Admin">Admin</option>
+                  <option value="Viewer">Viewer</option>
+                </select>
+              )}
+              {user.role !== "Owner" && (
+                <button
+                  type="button"
+                  onClick={() => setRemoveTarget(user)}
+                  disabled={saving}
+                  className="w-full rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50 min-[420px]:w-auto"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {!sortedMembers.length && (
+          <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-400 shadow-sm">
+            No team members found.
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left">
             <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -322,7 +383,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         description="Send workspace access to a teammate."
         size="md"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowInvite(false)}
@@ -396,7 +457,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         description="This will remove their workspace access."
         size="sm"
         footer={
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => setRemoveTarget(null)}
@@ -427,7 +488,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         description="How each workspace role behaves."
         size="lg"
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(ROLE_PERMISSIONS).map(([role, details]) => (
             <div key={role} className="rounded-2xl border border-slate-200 p-4">
               <p className="font-black text-slate-900">{role}</p>
