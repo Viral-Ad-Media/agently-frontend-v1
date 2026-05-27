@@ -267,7 +267,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         customInstructions: scheduleInstructions,
       });
       setNotice(
-        "Trial schedule created. The selected recipients now count toward the 3-call beta limit.",
+        "Trial schedule created. The selected recipients now count toward your 3 free trial calls.",
       );
       setRecipients([{ name: "", phone: "" }]);
       await load();
@@ -311,7 +311,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center rounded-[2rem] border border-white/80 bg-white/80 text-sm font-bold text-slate-500 shadow-sm">
-        Loading your beta test line…
+        Loading your test line…
       </div>
     );
   }
@@ -322,16 +322,16 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_0.65fr] lg:p-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.36em] text-amber-300">
-              Platform-owned trial number
+              Test Your Agent
             </p>
             <h1 className="mt-3 font-display text-4xl leading-tight lg:text-5xl">
-              Let beta testers try Agently before buying a number.
+              Test Your Agent Before Going Live
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-              This test area uses your company-owned line, keeps the test agent
-              hidden from the normal phone-number workflow, limits each tenant
-              to {maxCalls} total trial calls, and caps every trial conversation
-              at {maxMinutes} minutes.
+              Use this test area to experience how your agent handles real calls
+              before setting up your own business number. You can make up to{" "}
+              {maxCalls} free trial calls to check your agent’s voice, greeting,
+              call purpose, and overall conversation flow.
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.22em]">
               <span className="rounded-full bg-white/10 px-4 py-2 text-white">
@@ -362,8 +362,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               />
             </div>
             <p className="mt-4 text-xs leading-6 text-slate-300">
-              After the third trial call, users must purchase or assign their
-              own dedicated Twilio number.
+              Each test call can last up to {maxMinutes} minutes. After your
+              free trials are used, you’ll need to connect a dedicated business
+              number to continue making live calls.
             </p>
           </div>
         </div>
@@ -381,11 +382,8 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       ) : null}
       {!configured ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
-          Platform test number is not configured yet. Add{" "}
-          <code className="rounded bg-white px-1.5 py-0.5">
-            PLATFORM_TEST_PHONE_NUMBER
-          </code>{" "}
-          to the backend environment before beta testers can place calls.
+          The shared test line is not ready yet. Please contact support before
+          placing a test call.
         </div>
       ) : null}
 
@@ -655,7 +653,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         </SectionCard>
       </div>
 
-      <SectionCard title="Recent beta test activity" eyebrow="Audit trail">
+      <SectionCard title="Recent test activity" eyebrow="Audit trail">
         {events.length ? (
           <div className="divide-y divide-slate-100">
             {events.map((event) => (
@@ -690,7 +688,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm font-semibold text-slate-500">
-            No beta test calls have been created yet.
+            No test calls have been created yet.
           </div>
         )}
       </SectionCard>
