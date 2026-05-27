@@ -29,12 +29,6 @@ const NAV_ITEMS: Array<{
     description: "Search, purchase, and assign numbers",
   },
   {
-    to: "/test-agent",
-    icon: "fa-solid fa-vial-circle-check",
-    label: "Test Agent",
-    description: "Trial calls on the platform line",
-  },
-  {
     to: "/messenger",
     icon: "fa-solid fa-robot",
     label: "Chatbot Agent",
@@ -623,6 +617,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     org.voiceAgents.find((agent) => agent.id === org.activeVoiceAgentId) ||
     org.agent;
   const pageMeta = getPageMeta(location.pathname, org);
+  const isTestAgentPage = location.pathname === "/test-agent";
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -702,7 +697,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <Link
                 to="/test-agent"
-                className="flex w-full items-center justify-center gap-2 rounded-[1.35rem] bg-indigo-600 px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition hover:bg-indigo-700"
+                className={`flex w-full items-center justify-center gap-2 rounded-[1.35rem] px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition ${
+                  isTestAgentPage
+                    ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white ring-2 ring-amber-200/70"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                }`}
+                onClick={() => setMobileNavOpen(false)}
               >
                 <i className="fa-solid fa-phone-volume text-sm" />
                 Test Your Agent

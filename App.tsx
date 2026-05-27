@@ -21,6 +21,7 @@ import {
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
+import TestAgent from "./pages/TestAgent";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -28,7 +29,7 @@ const CallLogs = lazy(() => import("./pages/CallLogs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
-const TestAgent = lazy(() => import("./pages/TestAgent"));
+// const TestAgent = lazy(() => import("./pages/TestAgent"));
 const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Billing = lazy(() => import("./pages/Billing"));

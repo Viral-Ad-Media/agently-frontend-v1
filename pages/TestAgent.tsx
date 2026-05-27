@@ -133,14 +133,22 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   const maxCalls = Number(limit?.maxCalls ?? 3);
   const usedCalls = Number(limit?.usedCalls ?? 0);
   const maxRecipients = Number(limit?.maxRecipientsPerRequest ?? 3);
-  const maxMinutes = Math.max(1, Math.ceil(Number(limit?.maxCallSeconds ?? 300) / 60));
+  const maxMinutes = Math.max(
+    1,
+    Math.ceil(Number(limit?.maxCallSeconds ?? 300) / 60),
+  );
   const usagePercent = Math.min(100, (usedCalls / Math.max(1, maxCalls)) * 100);
   const configured = Boolean(status?.configured);
   const canUse = configured && remainingCalls > 0;
-  const timezone = org.profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+  const timezone =
+    org.profile?.timezone ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "America/New_York";
 
   const defaultPurposeText = useMemo(
-    () => defaultPurpose || "Test how this Agently voice agent handles a realistic lead conversation.",
+    () =>
+      defaultPurpose ||
+      "Test how this Agently voice agent handles a realistic lead conversation.",
     [defaultPurpose],
   );
 
@@ -155,15 +163,25 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       setStatus(statusResponse);
       setEvents(eventsResponse?.events || []);
       setAgentName(statusResponse?.testAgent?.name || "Test Agent");
-      setVoiceId(statusResponse?.testAgent?.voiceId || statusResponse?.testAgent?.voice || "alloy");
+      setVoiceId(
+        statusResponse?.testAgent?.voiceId ||
+          statusResponse?.testAgent?.voice ||
+          "alloy",
+      );
       setGreeting(
         statusResponse?.testAgent?.greeting ||
           "Hello, this is your Agently test agent. How can I help you today?",
       );
       setDefaultPurpose(statusResponse?.defaults?.defaultCallPurpose || "");
-      setDefaultInstructions(statusResponse?.defaults?.defaultCustomInstructions || "");
+      setDefaultInstructions(
+        statusResponse?.defaults?.defaultCustomInstructions || "",
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load test agent status.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load test agent status.",
+      );
     } finally {
       setLoading(false);
     }
@@ -189,7 +207,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       await load();
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the test agent.");
+      setError(
+        err instanceof Error ? err.message : "Could not save the test agent.",
+      );
     } finally {
       setSaving(false);
     }
@@ -205,12 +225,19 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         callPurpose: callPurpose || defaultPurposeText,
         customInstructions,
       });
-      setNotice("Trial call started. It will appear in your activity list shortly.");
+      setNotice(
+        "Trial call started. It will appear in your activity list shortly.",
+      );
       setCallRecipient({ name: "", phone: "" });
       await load();
       onChanged?.();
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Could not start the trial call.";
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not start the trial call.";
       setError(message);
     } finally {
       setSubmitting(false);
@@ -219,7 +246,10 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
 
   const submitSchedule = async () => {
     const validRecipients = recipients
-      .map((recipient) => ({ name: recipient.name || "Test Recipient", phone: recipient.phone.trim() }))
+      .map((recipient) => ({
+        name: recipient.name || "Test Recipient",
+        phone: recipient.phone.trim(),
+      }))
       .filter((recipient) => recipient.phone);
     setSubmitting(true);
     setNotice(null);
@@ -236,12 +266,19 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         callPurpose: schedulePurpose || defaultPurposeText,
         customInstructions: scheduleInstructions,
       });
-      setNotice("Trial schedule created. The selected recipients now count toward the 3-call beta limit.");
+      setNotice(
+        "Trial schedule created. The selected recipients now count toward the 3-call beta limit.",
+      );
       setRecipients([{ name: "", phone: "" }]);
       await load();
       onChanged?.();
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Could not create the test schedule.";
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not create the test schedule.";
       setError(message);
     } finally {
       setSubmitting(false);
@@ -257,12 +294,18 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   };
 
   const addRecipient = () => {
-    if (recipients.length >= Math.min(maxRecipients, Math.max(1, remainingCalls || maxRecipients))) return;
+    if (
+      recipients.length >=
+      Math.min(maxRecipients, Math.max(1, remainingCalls || maxRecipients))
+    )
+      return;
     setRecipients((current) => [...current, { name: "", phone: "" }]);
   };
 
   const removeRecipient = (index: number) => {
-    setRecipients((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    setRecipients((current) =>
+      current.filter((_, rowIndex) => rowIndex !== index),
+    );
   };
 
   if (loading) {
@@ -285,35 +328,64 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               Let beta testers try Agently before buying a number.
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-              This test area uses your company-owned line, keeps the test agent hidden from the normal phone-number workflow, limits each tenant to {maxCalls} total trial calls, and caps every trial conversation at {maxMinutes} minutes.
+              This test area uses your company-owned line, keeps the test agent
+              hidden from the normal phone-number workflow, limits each tenant
+              to {maxCalls} total trial calls, and caps every trial conversation
+              at {maxMinutes} minutes.
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.22em]">
-              <span className="rounded-full bg-white/10 px-4 py-2 text-white">{status?.platformNumber || "No number set"}</span>
-              <span className="rounded-full bg-amber-300 px-4 py-2 text-slate-950">{remainingCalls} calls left</span>
-              <span className="rounded-full bg-white/10 px-4 py-2 text-white">5 voice choices</span>
+              <span className="rounded-full bg-white/10 px-4 py-2 text-white">
+                {status?.platformNumber || "No number set"}
+              </span>
+              <span className="rounded-full bg-amber-300 px-4 py-2 text-slate-950">
+                {remainingCalls} calls left
+              </span>
+              <span className="rounded-full bg-white/10 px-4 py-2 text-white">
+                5 voice choices
+              </span>
             </div>
           </div>
           <div className="rounded-[1.75rem] border border-white/15 bg-white/10 p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-300">Trial usage</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-300">
+              Trial usage
+            </p>
             <div className="mt-4 flex items-end gap-2">
               <span className="font-display text-6xl">{usedCalls}</span>
-              <span className="pb-2 text-sm font-bold text-slate-300">/ {maxCalls} used</span>
+              <span className="pb-2 text-sm font-bold text-slate-300">
+                / {maxCalls} used
+              </span>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-emerald-300" style={{ width: `${usagePercent}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-300 to-emerald-300"
+                style={{ width: `${usagePercent}%` }}
+              />
             </div>
             <p className="mt-4 text-xs leading-6 text-slate-300">
-              After the third trial call, users must purchase or assign their own dedicated Twilio number.
+              After the third trial call, users must purchase or assign their
+              own dedicated Twilio number.
             </p>
           </div>
         </div>
       </div>
 
-      {notice ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
-      {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div> : null}
+      {notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          {notice}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      ) : null}
       {!configured ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
-          Platform test number is not configured yet. Add <code className="rounded bg-white px-1.5 py-0.5">PLATFORM_TEST_PHONE_NUMBER</code> to the backend environment before beta testers can place calls.
+          Platform test number is not configured yet. Add{" "}
+          <code className="rounded bg-white px-1.5 py-0.5">
+            PLATFORM_TEST_PHONE_NUMBER
+          </code>{" "}
+          to the backend environment before beta testers can place calls.
         </div>
       ) : null}
 
@@ -322,27 +394,61 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           <div className="space-y-4">
             <label className="block text-sm font-bold text-slate-700">
               Agent name
-              <input value={agentName} onChange={(event) => setAgentName(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300" />
+              <input
+                value={agentName}
+                onChange={(event) => setAgentName(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
+              />
             </label>
             <label className="block text-sm font-bold text-slate-700">
               Voice
-              <select value={voiceId} onChange={(event) => setVoiceId(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300">
-                {allowedVoices.map((voice) => <option key={voice.id} value={voice.id}>{voice.name} — {voice.tone}</option>)}
+              <select
+                value={voiceId}
+                onChange={(event) => setVoiceId(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
+              >
+                {allowedVoices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name} — {voice.tone}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="block text-sm font-bold text-slate-700">
               Opening greeting
-              <textarea value={greeting} onChange={(event) => setGreeting(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300" />
+              <textarea
+                value={greeting}
+                onChange={(event) => setGreeting(event.target.value)}
+                rows={3}
+                className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
+              />
             </label>
             <label className="block text-sm font-bold text-slate-700">
               Default call purpose
-              <textarea value={defaultPurpose} onChange={(event) => setDefaultPurpose(event.target.value)} rows={3} placeholder="Example: qualify the lead and confirm their interest in the product." className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300" />
+              <textarea
+                value={defaultPurpose}
+                onChange={(event) => setDefaultPurpose(event.target.value)}
+                rows={3}
+                placeholder="Example: qualify the lead and confirm their interest in the product."
+                className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
+              />
             </label>
             <label className="block text-sm font-bold text-slate-700">
               Default custom instructions
-              <textarea value={defaultInstructions} onChange={(event) => setDefaultInstructions(event.target.value)} rows={3} placeholder="Optional guardrails for the trial agent." className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300" />
+              <textarea
+                value={defaultInstructions}
+                onChange={(event) => setDefaultInstructions(event.target.value)}
+                rows={3}
+                placeholder="Optional guardrails for the trial agent."
+                className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
+              />
             </label>
-            <button type="button" disabled={saving} onClick={() => void saveConfig()} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveConfig()}
+              className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               {saving ? "Saving…" : "Save test agent"}
             </button>
           </div>
@@ -353,43 +459,197 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           eyebrow="Call now or schedule"
           actions={
             <div className="rounded-full border border-slate-200 bg-slate-50 p-1 text-xs font-black uppercase tracking-[0.18em]">
-              <button type="button" onClick={() => setActiveTab("now")} className={`rounded-full px-3 py-2 ${activeTab === "now" ? "bg-slate-950 text-white" : "text-slate-500"}`}>Call now</button>
-              <button type="button" onClick={() => setActiveTab("schedule")} className={`rounded-full px-3 py-2 ${activeTab === "schedule" ? "bg-slate-950 text-white" : "text-slate-500"}`}>Schedule</button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("now")}
+                className={`rounded-full px-3 py-2 ${activeTab === "now" ? "bg-slate-950 text-white" : "text-slate-500"}`}
+              >
+                Call now
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("schedule")}
+                className={`rounded-full px-3 py-2 ${activeTab === "schedule" ? "bg-slate-950 text-white" : "text-slate-500"}`}
+              >
+                Schedule
+              </button>
             </div>
           }
         >
           {activeTab === "now" ? (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm font-bold text-slate-700">Recipient name<input value={callRecipient.name} onChange={(event) => setCallRecipient((current) => ({ ...current, name: event.target.value }))} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-                <label className="block text-sm font-bold text-slate-700">Recipient phone<input value={callRecipient.phone} onChange={(event) => setCallRecipient((current) => ({ ...current, phone: event.target.value }))} placeholder="+14155551234" className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
+                <label className="block text-sm font-bold text-slate-700">
+                  Recipient name
+                  <input
+                    value={callRecipient.name}
+                    onChange={(event) =>
+                      setCallRecipient((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-700">
+                  Recipient phone
+                  <input
+                    value={callRecipient.phone}
+                    onChange={(event) =>
+                      setCallRecipient((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                    placeholder="+14155551234"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                  />
+                </label>
               </div>
               <p className="text-xs font-semibold text-slate-400">{e164Hint}</p>
-              <label className="block text-sm font-bold text-slate-700">Call purpose<textarea value={callPurpose} onChange={(event) => setCallPurpose(event.target.value)} rows={4} placeholder={defaultPurposeText} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-              <label className="block text-sm font-bold text-slate-700">Extra instructions<textarea value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-              <button type="button" disabled={!canUse || submitting} onClick={() => void submitCallNow()} className="w-full rounded-2xl bg-indigo-600 px-5 py-3.5 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{submitting ? "Starting…" : "Start trial call"}</button>
+              <label className="block text-sm font-bold text-slate-700">
+                Call purpose
+                <textarea
+                  value={callPurpose}
+                  onChange={(event) => setCallPurpose(event.target.value)}
+                  rows={4}
+                  placeholder={defaultPurposeText}
+                  className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                />
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                Extra instructions
+                <textarea
+                  value={customInstructions}
+                  onChange={(event) =>
+                    setCustomInstructions(event.target.value)
+                  }
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!canUse || submitting}
+                onClick={() => void submitCallNow()}
+                className="w-full rounded-2xl bg-indigo-600 px-5 py-3.5 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? "Starting…" : "Start trial call"}
+              </button>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-3">
-                <label className="block text-sm font-bold text-slate-700 sm:col-span-1">Name<input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-                <label className="block text-sm font-bold text-slate-700">Date<input type="date" min={todayIso()} value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-                <label className="block text-sm font-bold text-slate-700">Time<input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
+                <label className="block text-sm font-bold text-slate-700 sm:col-span-1">
+                  Name
+                  <input
+                    value={scheduleName}
+                    onChange={(event) => setScheduleName(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-700">
+                  Date
+                  <input
+                    type="date"
+                    min={todayIso()}
+                    value={scheduleDate}
+                    onChange={(event) => setScheduleDate(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-700">
+                  Time
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(event) => setScheduleTime(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                  />
+                </label>
               </div>
-              <p className="text-xs font-semibold text-slate-400">Timezone: {timezone}. You can add up to {Math.min(maxRecipients, remainingCalls || maxRecipients)} test recipients based on remaining trial calls.</p>
+              <p className="text-xs font-semibold text-slate-400">
+                Timezone: {timezone}. You can add up to{" "}
+                {Math.min(maxRecipients, remainingCalls || maxRecipients)} test
+                recipients based on remaining trial calls.
+              </p>
               <div className="space-y-3">
                 {recipients.map((recipient, index) => (
-                  <div key={index} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-[1fr_1fr_auto]">
-                    <input value={recipient.name} onChange={(event) => updateRecipient(index, { name: event.target.value })} placeholder="Recipient name" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300" />
-                    <input value={recipient.phone} onChange={(event) => updateRecipient(index, { phone: event.target.value })} placeholder="+14155551234" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300" />
-                    <button type="button" onClick={() => removeRecipient(index)} disabled={recipients.length === 1} className="rounded-xl border border-slate-200 px-3 text-xs font-black uppercase tracking-widest text-slate-500 disabled:opacity-40">Remove</button>
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:grid-cols-[1fr_1fr_auto]"
+                  >
+                    <input
+                      value={recipient.name}
+                      onChange={(event) =>
+                        updateRecipient(index, { name: event.target.value })
+                      }
+                      placeholder="Recipient name"
+                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300"
+                    />
+                    <input
+                      value={recipient.phone}
+                      onChange={(event) =>
+                        updateRecipient(index, { phone: event.target.value })
+                      }
+                      placeholder="+14155551234"
+                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeRecipient(index)}
+                      disabled={recipients.length === 1}
+                      className="rounded-xl border border-slate-200 px-3 text-xs font-black uppercase tracking-widest text-slate-500 disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
-                <button type="button" onClick={addRecipient} disabled={recipients.length >= Math.min(maxRecipients, Math.max(1, remainingCalls || maxRecipients))} className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40">Add recipient</button>
+                <button
+                  type="button"
+                  onClick={addRecipient}
+                  disabled={
+                    recipients.length >=
+                    Math.min(
+                      maxRecipients,
+                      Math.max(1, remainingCalls || maxRecipients),
+                    )
+                  }
+                  className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Add recipient
+                </button>
               </div>
-              <label className="block text-sm font-bold text-slate-700">Call purpose<textarea value={schedulePurpose} onChange={(event) => setSchedulePurpose(event.target.value)} rows={3} placeholder={defaultPurposeText} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-              <label className="block text-sm font-bold text-slate-700">Extra instructions<textarea value={scheduleInstructions} onChange={(event) => setScheduleInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300" /></label>
-              <button type="button" disabled={!canUse || submitting} onClick={() => void submitSchedule()} className="w-full rounded-2xl bg-indigo-600 px-5 py-3.5 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{submitting ? "Scheduling…" : "Schedule trial call"}</button>
+              <label className="block text-sm font-bold text-slate-700">
+                Call purpose
+                <textarea
+                  value={schedulePurpose}
+                  onChange={(event) => setSchedulePurpose(event.target.value)}
+                  rows={3}
+                  placeholder={defaultPurposeText}
+                  className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                />
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                Extra instructions
+                <textarea
+                  value={scheduleInstructions}
+                  onChange={(event) =>
+                    setScheduleInstructions(event.target.value)
+                  }
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!canUse || submitting}
+                onClick={() => void submitSchedule()}
+                className="w-full rounded-2xl bg-indigo-600 px-5 py-3.5 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? "Scheduling…" : "Schedule trial call"}
+              </button>
             </div>
           )}
         </SectionCard>
@@ -399,21 +659,39 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         {events.length ? (
           <div className="divide-y divide-slate-100">
             {events.map((event) => (
-              <div key={event.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                key={event.id}
+                className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
-                  <p className="text-sm font-black text-slate-900">{event.recipient_name || "Test recipient"} <span className="font-semibold text-slate-400">{event.recipient_phone}</span></p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">{event.call_purpose || "No purpose captured"}</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {event.recipient_name || "Test recipient"}{" "}
+                    <span className="font-semibold text-slate-400">
+                      {event.recipient_phone}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {event.call_purpose || "No purpose captured"}
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
-                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">{event.type || "call"}</span>
-                  <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-600">{event.status || "queued"}</span>
-                  <span className="text-slate-400">{formatDate(event.created_at)}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">
+                    {event.type || "call"}
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-600">
+                    {event.status || "queued"}
+                  </span>
+                  <span className="text-slate-400">
+                    {formatDate(event.created_at)}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm font-semibold text-slate-500">No beta test calls have been created yet.</div>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm font-semibold text-slate-500">
+            No beta test calls have been created yet.
+          </div>
         )}
       </SectionCard>
     </div>
