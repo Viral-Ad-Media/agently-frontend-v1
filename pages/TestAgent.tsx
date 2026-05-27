@@ -322,10 +322,10 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_0.65fr] lg:p-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.36em] text-amber-300">
-              Test Your Agent
+              Test An Agent
             </p>
             <h1 className="mt-3 font-display text-4xl leading-tight lg:text-5xl">
-              Test Your Agent Before Going Live
+              Run a Limited Trial On Our Agent Before Going Live
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
               Use this test area to experience how your agent handles real calls

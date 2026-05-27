@@ -118,7 +118,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
     },
     "/test-agent": {
       eyebrow: "Beta Trial Line",
-      title: "Test Your Agent",
+      title: "Test an Agent",
       description:
         "Run limited trial calls on the platform-owned number before buying a dedicated line.",
     },
@@ -705,7 +705,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onClick={() => setMobileNavOpen(false)}
               >
                 <i className="fa-solid fa-phone-volume text-sm" />
-                Test Your Agent
+                Test An Agent
               </Link>
 
               <button
