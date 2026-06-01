@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import AppModal from "../components/AppModal";
 import { Organization } from "../types";
 import { api, ApiError } from "../services/api";
 
@@ -123,43 +124,57 @@ const FeedbackModal: React.FC<{
 }> = ({ feedback, onClose }) => {
   if (!feedback) return null;
 
-  const accentClass =
+  const iconClass =
     feedback.type === "success"
-      ? "bg-emerald-500"
+      ? "fa-solid fa-check text-emerald-600"
       : feedback.type === "warning"
-        ? "bg-amber-400"
-        : "bg-red-500";
+        ? "fa-solid fa-triangle-exclamation text-amber-600"
+        : "fa-solid fa-circle-exclamation text-red-600";
+
+  const iconWrapClass =
+    feedback.type === "success"
+      ? "bg-emerald-50 ring-emerald-100"
+      : feedback.type === "warning"
+        ? "bg-amber-50 ring-amber-100"
+        : "bg-red-50 ring-red-100";
+
+  const buttonClass =
+    feedback.type === "success"
+      ? "bg-slate-950 hover:bg-emerald-700"
+      : feedback.type === "warning"
+        ? "bg-slate-950 hover:bg-amber-600"
+        : "bg-slate-950 hover:bg-red-700";
 
   const label = feedback.actionLabel || "Okay";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
-        <div className={`h-1.5 ${accentClass}`} />
-        <div className="p-6 sm:p-7">
-          <div className="flex items-start gap-4">
-            <div
-              className={`mt-1 h-3 w-3 shrink-0 rounded-full ${accentClass}`}
-            />
-            <div className="min-w-0">
-              <h3 className="font-display text-2xl leading-tight text-slate-950">
-                {feedback.title}
-              </h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
-                {feedback.message}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-6 w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700"
-          >
-            {label}
-          </button>
+    <AppModal
+      open={Boolean(feedback)}
+      onClose={onClose}
+      title={feedback.title}
+      description={feedback.message}
+      size="sm"
+      className="max-w-[calc(100%-2rem)] sm:max-w-md"
+      bodyClassName="pt-5 sm:pt-6"
+      footer={
+        <button
+          type="button"
+          onClick={onClose}
+          className={`w-full rounded-xl px-5 py-3 text-sm font-black text-white transition ${buttonClass}`}
+        >
+          {label}
+        </button>
+      }
+    >
+      <div className="flex justify-center">
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-2xl ring-8 ${iconWrapClass}`}
+          aria-hidden="true"
+        >
+          <i className={iconClass} />
         </div>
       </div>
-    </div>
+    </AppModal>
   );
 };
 
