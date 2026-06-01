@@ -72,7 +72,7 @@ const formatDate = (value?: string) => {
 };
 
 const phoneHint =
-  "You can enter a US number like (832) 509-0881 or +1 832 509 0881.";
+  "You can enter a US number like (123) 456-7890 or +1 123 456 7890.";
 
 const normalizeCallablePhone = (value = "") => {
   const raw = String(value || "").trim();
@@ -92,7 +92,7 @@ const phoneValidationMessage = (value = "") => {
   if (!String(value || "").trim())
     return "Add a recipient phone number before starting the test call.";
   if (isCallablePhone(value)) return "";
-  return "Enter a valid callable number. For US numbers, you can use formats like (832) 509-0881, 832-509-0881, or +1 832 509 0881.";
+  return "Enter a valid callable number. For US numbers, you can use formats like (123) 456-7890, 123-456-7890, or +1 123 456 7890.";
 };
 
 const SectionCard: React.FC<{
@@ -408,7 +408,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       setFeedback({
         type: "warning",
         title: "Check recipient number",
-        message: `${invalidRecipient.name || "One recipient"} has an invalid phone number. You can enter US numbers like (832) 509-0881 or +1 832 509 0881.`,
+        message: `${invalidRecipient.name || "One recipient"} has an invalid phone number. You can enter US numbers like (123) 456-7890 or +1 123 456 7890.`,
       });
       return;
     }
@@ -679,7 +679,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
                         phone: event.target.value,
                       }))
                     }
-                    placeholder="(832) 509-0881"
+                    placeholder="(123) 456-7890"
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
                   />
                 </label>
@@ -775,7 +775,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
                       onChange={(event) =>
                         updateRecipient(index, { phone: event.target.value })
                       }
-                      placeholder="(832) 509-0881"
+                      placeholder="(123) 456-7890"
                       className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300"
                     />
                     <button
