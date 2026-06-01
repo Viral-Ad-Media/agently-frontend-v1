@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Organization } from "../types";
 import { api, ApiError } from "../services/api";
 
@@ -108,19 +108,28 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   );
   const [defaultPurpose, setDefaultPurpose] = useState("");
   const [defaultInstructions, setDefaultInstructions] = useState("");
+  const [textareaVersion, setTextareaVersion] = useState(0);
+
+  const greetingRef = useRef<HTMLTextAreaElement | null>(null);
+  const defaultPurposeRef = useRef<HTMLTextAreaElement | null>(null);
+  const defaultInstructionsRef = useRef<HTMLTextAreaElement | null>(null);
+  const callPurposeRef = useRef<HTMLTextAreaElement | null>(null);
+  const customInstructionsRef = useRef<HTMLTextAreaElement | null>(null);
+  const schedulePurposeRef = useRef<HTMLTextAreaElement | null>(null);
+  const scheduleInstructionsRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [callRecipient, setCallRecipient] = useState<Recipient>({
     name: "",
     phone: "",
   });
-  const [callPurpose, setCallPurpose] = useState("");
-  const [customInstructions, setCustomInstructions] = useState("");
+  const [callPurpose] = useState("");
+  const [customInstructions] = useState("");
 
-  const [scheduleName, setScheduleName] = useState("Platform test schedule");
+  const [scheduleName, setScheduleName] = useState("Test schedule");
   const [scheduleDate, setScheduleDate] = useState(todayIso());
   const [scheduleTime, setScheduleTime] = useState(nextHour());
-  const [schedulePurpose, setSchedulePurpose] = useState("");
-  const [scheduleInstructions, setScheduleInstructions] = useState("");
+  const [schedulePurpose] = useState("");
+  const [scheduleInstructions] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>([
     { name: "", phone: "" },
   ]);
@@ -152,6 +161,15 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
     [defaultPurpose],
   );
 
+  const readTextarea = (
+    ref: React.RefObject<HTMLTextAreaElement | null>,
+    fallback = "",
+  ) => ref.current?.value ?? fallback;
+
+  const clearTextarea = (ref: React.RefObject<HTMLTextAreaElement | null>) => {
+    if (ref.current) ref.current.value = "";
+  };
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -168,14 +186,17 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           statusResponse?.testAgent?.voice ||
           "alloy",
       );
-      setGreeting(
+      const loadedGreeting =
         statusResponse?.testAgent?.greeting ||
-          "Hello, this is your Agently test agent. How can I help you today?",
-      );
-      setDefaultPurpose(statusResponse?.defaults?.defaultCallPurpose || "");
-      setDefaultInstructions(
-        statusResponse?.defaults?.defaultCustomInstructions || "",
-      );
+        "Hello, this is your Agently test agent. How can I help you today?";
+      const loadedDefaultPurpose =
+        statusResponse?.defaults?.defaultCallPurpose || "";
+      const loadedDefaultInstructions =
+        statusResponse?.defaults?.defaultCustomInstructions || "";
+      setGreeting(loadedGreeting);
+      setDefaultPurpose(loadedDefaultPurpose);
+      setDefaultInstructions(loadedDefaultInstructions);
+      setTextareaVersion((version) => version + 1);
     } catch (err) {
       setError(
         err instanceof Error
@@ -196,13 +217,25 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
     setNotice(null);
     setError(null);
     try {
+      const nextGreeting = readTextarea(greetingRef, greeting);
+      const nextDefaultPurpose = readTextarea(
+        defaultPurposeRef,
+        defaultPurpose,
+      );
+      const nextDefaultInstructions = readTextarea(
+        defaultInstructionsRef,
+        defaultInstructions,
+      );
       await api.updateTestAgentConfig({
         agentName,
         voiceId,
-        greeting,
-        defaultCallPurpose: defaultPurpose,
-        defaultCustomInstructions: defaultInstructions,
+        greeting: nextGreeting,
+        defaultCallPurpose: nextDefaultPurpose,
+        defaultCustomInstructions: nextDefaultInstructions,
       });
+      setGreeting(nextGreeting);
+      setDefaultPurpose(nextDefaultPurpose);
+      setDefaultInstructions(nextDefaultInstructions);
       setNotice("Test agent saved. You can place a trial call now.");
       await load();
       onChanged?.();
@@ -222,13 +255,19 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
     try {
       await api.callNowWithTestAgent({
         recipient: callRecipient,
-        callPurpose: callPurpose || defaultPurposeText,
-        customInstructions,
+        callPurpose:
+          readTextarea(callPurposeRef, callPurpose) || defaultPurposeText,
+        customInstructions: readTextarea(
+          customInstructionsRef,
+          customInstructions,
+        ),
       });
       setNotice(
         "Trial call started. It will appear in your activity list shortly.",
       );
       setCallRecipient({ name: "", phone: "" });
+      clearTextarea(callPurposeRef);
+      clearTextarea(customInstructionsRef);
       await load();
       onChanged?.();
     } catch (err) {
@@ -263,8 +302,13 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         timezone,
         recipients: validRecipients,
         directRecipients: validRecipients,
-        callPurpose: schedulePurpose || defaultPurposeText,
-        customInstructions: scheduleInstructions,
+        callPurpose:
+          readTextarea(schedulePurposeRef, schedulePurpose) ||
+          defaultPurposeText,
+        customInstructions: readTextarea(
+          scheduleInstructionsRef,
+          scheduleInstructions,
+        ),
       });
       setNotice(
         "Trial schedule created. The selected recipients now count toward your 3 free trial calls.",
@@ -322,10 +366,10 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_0.65fr] lg:p-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.36em] text-amber-300">
-              Test An Agent
+              Test Your Agent
             </p>
             <h1 className="mt-3 font-display text-4xl leading-tight lg:text-5xl">
-              Run a Limited Trial On Our Agent Before Going Live
+              Test Your Agent Before Going Live
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
               Use this test area to experience how your agent handles real calls
@@ -415,8 +459,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
             <label className="block text-sm font-bold text-slate-700">
               Opening greeting
               <textarea
-                value={greeting}
-                onChange={(event) => setGreeting(event.target.value)}
+                key={`greeting-${textareaVersion}`}
+                ref={greetingRef}
+                defaultValue={greeting}
                 rows={3}
                 className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
               />
@@ -424,8 +469,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
             <label className="block text-sm font-bold text-slate-700">
               Default call purpose
               <textarea
-                value={defaultPurpose}
-                onChange={(event) => setDefaultPurpose(event.target.value)}
+                key={`default-purpose-${textareaVersion}`}
+                ref={defaultPurposeRef}
+                defaultValue={defaultPurpose}
                 rows={3}
                 placeholder="Example: qualify the lead and confirm their interest in the product."
                 className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
@@ -434,8 +480,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
             <label className="block text-sm font-bold text-slate-700">
               Default custom instructions
               <textarea
-                value={defaultInstructions}
-                onChange={(event) => setDefaultInstructions(event.target.value)}
+                key={`default-instructions-${textareaVersion}`}
+                ref={defaultInstructionsRef}
+                defaultValue={defaultInstructions}
                 rows={3}
                 placeholder="Optional guardrails for the trial agent."
                 className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-300"
@@ -509,8 +556,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               <label className="block text-sm font-bold text-slate-700">
                 Call purpose
                 <textarea
-                  value={callPurpose}
-                  onChange={(event) => setCallPurpose(event.target.value)}
+                  ref={callPurposeRef}
                   rows={4}
                   placeholder={defaultPurposeText}
                   className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
@@ -519,10 +565,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               <label className="block text-sm font-bold text-slate-700">
                 Extra instructions
                 <textarea
-                  value={customInstructions}
-                  onChange={(event) =>
-                    setCustomInstructions(event.target.value)
-                  }
+                  ref={customInstructionsRef}
                   rows={3}
                   className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
                 />
@@ -622,8 +665,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               <label className="block text-sm font-bold text-slate-700">
                 Call purpose
                 <textarea
-                  value={schedulePurpose}
-                  onChange={(event) => setSchedulePurpose(event.target.value)}
+                  ref={schedulePurposeRef}
                   rows={3}
                   placeholder={defaultPurposeText}
                   className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
@@ -632,10 +674,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               <label className="block text-sm font-bold text-slate-700">
                 Extra instructions
                 <textarea
-                  value={scheduleInstructions}
-                  onChange={(event) =>
-                    setScheduleInstructions(event.target.value)
-                  }
+                  ref={scheduleInstructionsRef}
                   rows={3}
                   className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
                 />
