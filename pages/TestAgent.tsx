@@ -34,6 +34,13 @@ type TestEvent = {
 
 type Recipient = { name: string; phone: string };
 
+type FeedbackModalState = {
+  type: "success" | "error" | "warning";
+  title: string;
+  message: string;
+  actionLabel?: string;
+} | null;
+
 const defaultVoices: VoiceOption[] = [
   { id: "alloy", name: "Alloy", tone: "Balanced and neutral" },
   { id: "ash", name: "Ash", tone: "Calm and steady" },
@@ -64,7 +71,29 @@ const formatDate = (value?: string) => {
   }
 };
 
-const e164Hint = "Use E.164 format, for example +14155551234.";
+const phoneHint =
+  "You can enter a US number like (832) 509-0881 or +1 832 509 0881.";
+
+const normalizeCallablePhone = (value = "") => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (raw.startsWith("+")) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return `+${digits}`;
+};
+
+const isCallablePhone = (value = "") =>
+  /^\+[1-9]\d{7,14}$/.test(normalizeCallablePhone(value));
+
+const phoneValidationMessage = (value = "") => {
+  if (!String(value || "").trim())
+    return "Add a recipient phone number before starting the test call.";
+  if (isCallablePhone(value)) return "";
+  return "Enter a valid callable number. For US numbers, you can use formats like (832) 509-0881, 832-509-0881, or +1 832 509 0881.";
+};
 
 const SectionCard: React.FC<{
   title: string;
@@ -88,9 +117,54 @@ const SectionCard: React.FC<{
   </section>
 );
 
+const FeedbackModal: React.FC<{
+  feedback: FeedbackModalState;
+  onClose: () => void;
+}> = ({ feedback, onClose }) => {
+  if (!feedback) return null;
+
+  const accentClass =
+    feedback.type === "success"
+      ? "bg-emerald-500"
+      : feedback.type === "warning"
+        ? "bg-amber-400"
+        : "bg-red-500";
+
+  const label = feedback.actionLabel || "Okay";
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+        <div className={`h-1.5 ${accentClass}`} />
+        <div className="p-6 sm:p-7">
+          <div className="flex items-start gap-4">
+            <div
+              className={`mt-1 h-3 w-3 shrink-0 rounded-full ${accentClass}`}
+            />
+            <div className="min-w-0">
+              <h3 className="font-display text-2xl leading-tight text-slate-950">
+                {feedback.title}
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                {feedback.message}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-6 w-full rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-[0.24em] text-white transition hover:bg-indigo-700"
+          >
+            {label}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   org,
-  onChanged,
 }) => {
   const [status, setStatus] = useState<TestStatus | null>(null);
   const [events, setEvents] = useState<TestEvent[]>([]);
@@ -98,8 +172,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackModalState>(null);
 
   const [agentName, setAgentName] = useState("Test Agent");
   const [voiceId, setVoiceId] = useState("alloy");
@@ -170,9 +243,12 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
     if (ref.current) ref.current.value = "";
   };
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
+  const load = async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+      setFeedback(null);
+    }
     try {
       const [statusResponse, eventsResponse] = await Promise.all([
         api.getTestAgentStatus(),
@@ -198,13 +274,16 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       setDefaultInstructions(loadedDefaultInstructions);
       setTextareaVersion((version) => version + 1);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not load test agent status.",
-      );
+      setFeedback({
+        type: "error",
+        title: "Could not load test agent",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Could not load test agent status.",
+      });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -214,8 +293,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
 
   const saveConfig = async () => {
     setSaving(true);
-    setNotice(null);
-    setError(null);
+    setFeedback(null);
     try {
       const nextGreeting = readTextarea(greetingRef, greeting);
       const nextDefaultPurpose = readTextarea(
@@ -236,25 +314,45 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       setGreeting(nextGreeting);
       setDefaultPurpose(nextDefaultPurpose);
       setDefaultInstructions(nextDefaultInstructions);
-      setNotice("Test agent saved. You can place a trial call now.");
-      await load();
-      onChanged?.();
+      await load({ silent: true });
+      setFeedback({
+        type: "success",
+        title: "Test agent saved",
+        message:
+          "Your test agent has been saved. You can now place a trial call without leaving this page.",
+      });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not save the test agent.",
-      );
+      setFeedback({
+        type: "error",
+        title: "Could not save test agent",
+        message:
+          err instanceof Error ? err.message : "Could not save the test agent.",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const submitCallNow = async () => {
+    const normalizedPhone = normalizeCallablePhone(callRecipient.phone);
+    const validation = phoneValidationMessage(callRecipient.phone);
+    if (validation) {
+      setFeedback({
+        type: "warning",
+        title: "Check recipient number",
+        message: validation,
+      });
+      return;
+    }
+
     setSubmitting(true);
-    setNotice(null);
-    setError(null);
+    setFeedback(null);
     try {
       await api.callNowWithTestAgent({
-        recipient: callRecipient,
+        recipient: {
+          name: callRecipient.name || "Test Recipient",
+          phone: normalizedPhone,
+        },
         callPurpose:
           readTextarea(callPurposeRef, callPurpose) || defaultPurposeText,
         customInstructions: readTextarea(
@@ -262,14 +360,16 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           customInstructions,
         ),
       });
-      setNotice(
-        "Trial call started. It will appear in your activity list shortly.",
-      );
+      setFeedback({
+        type: "success",
+        title: "Trial call started",
+        message:
+          "Your trial call has started. It will appear in your activity list shortly.",
+      });
       setCallRecipient({ name: "", phone: "" });
       clearTextarea(callPurposeRef);
       clearTextarea(customInstructionsRef);
-      await load();
-      onChanged?.();
+      await load({ silent: true });
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -277,22 +377,49 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           : err instanceof Error
             ? err.message
             : "Could not start the trial call.";
-      setError(message);
+      setFeedback({
+        type: "error",
+        title: "Could not start trial call",
+        message,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
   const submitSchedule = async () => {
-    const validRecipients = recipients
-      .map((recipient) => ({
-        name: recipient.name || "Test Recipient",
-        phone: recipient.phone.trim(),
-      }))
-      .filter((recipient) => recipient.phone);
+    const filledRecipients = recipients.filter((recipient) =>
+      recipient.phone.trim(),
+    );
+    if (!filledRecipients.length) {
+      setFeedback({
+        type: "warning",
+        title: "Add a recipient",
+        message:
+          "Add at least one recipient phone number before scheduling a test call.",
+      });
+      return;
+    }
+
+    const invalidRecipient = filledRecipients.find((recipient) =>
+      phoneValidationMessage(recipient.phone),
+    );
+    if (invalidRecipient) {
+      setFeedback({
+        type: "warning",
+        title: "Check recipient number",
+        message: `${invalidRecipient.name || "One recipient"} has an invalid phone number. You can enter US numbers like (832) 509-0881 or +1 832 509 0881.`,
+      });
+      return;
+    }
+
+    const validRecipients = filledRecipients.map((recipient) => ({
+      name: recipient.name || "Test Recipient",
+      phone: normalizeCallablePhone(recipient.phone),
+    }));
+
     setSubmitting(true);
-    setNotice(null);
-    setError(null);
+    setFeedback(null);
     try {
       await api.scheduleTestAgentCall({
         name: scheduleName,
@@ -310,12 +437,14 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           scheduleInstructions,
         ),
       });
-      setNotice(
-        "Trial schedule created. The selected recipients now count toward your 3 free trial calls.",
-      );
+      setFeedback({
+        type: "success",
+        title: "Trial schedule created",
+        message:
+          "Your test schedule has been created. The selected recipients now count toward your free trial calls.",
+      });
       setRecipients([{ name: "", phone: "" }]);
-      await load();
-      onChanged?.();
+      await load({ silent: true });
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -323,7 +452,11 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
           : err instanceof Error
             ? err.message
             : "Could not create the test schedule.";
-      setError(message);
+      setFeedback({
+        type: "error",
+        title: "Could not schedule trial call",
+        message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -414,16 +547,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         </div>
       </div>
 
-      {notice ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-          {notice}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      ) : null}
+      <FeedbackModal feedback={feedback} onClose={() => setFeedback(null)} />
       {!configured ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
           The shared test line is not ready yet. Please contact support before
@@ -541,18 +665,28 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
                   Recipient phone
                   <input
                     value={callRecipient.phone}
+                    onBlur={(event) =>
+                      setCallRecipient((current) => ({
+                        ...current,
+                        phone:
+                          normalizeCallablePhone(event.target.value) ||
+                          event.target.value,
+                      }))
+                    }
                     onChange={(event) =>
                       setCallRecipient((current) => ({
                         ...current,
                         phone: event.target.value,
                       }))
                     }
-                    placeholder="+14155551234"
+                    placeholder="(832) 509-0881"
                     className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-300"
                   />
                 </label>
               </div>
-              <p className="text-xs font-semibold text-slate-400">{e164Hint}</p>
+              <p className="text-xs font-semibold text-slate-400">
+                {phoneHint}
+              </p>
               <label className="block text-sm font-bold text-slate-700">
                 Call purpose
                 <textarea
@@ -631,10 +765,17 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
                     />
                     <input
                       value={recipient.phone}
+                      onBlur={(event) =>
+                        updateRecipient(index, {
+                          phone:
+                            normalizeCallablePhone(event.target.value) ||
+                            event.target.value,
+                        })
+                      }
                       onChange={(event) =>
                         updateRecipient(index, { phone: event.target.value })
                       }
-                      placeholder="+14155551234"
+                      placeholder="(832) 509-0881"
                       className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-300"
                     />
                     <button
