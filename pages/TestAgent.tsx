@@ -124,26 +124,17 @@ const FeedbackModal: React.FC<{
 }> = ({ feedback, onClose }) => {
   if (!feedback) return null;
 
-  const iconClass =
+  const toneClass =
     feedback.type === "success"
-      ? "fa-solid fa-check text-emerald-600"
+      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
       : feedback.type === "warning"
-        ? "fa-solid fa-triangle-exclamation text-amber-600"
-        : "fa-solid fa-circle-exclamation text-red-600";
-
-  const iconWrapClass =
-    feedback.type === "success"
-      ? "bg-emerald-50 ring-emerald-100"
-      : feedback.type === "warning"
-        ? "bg-amber-50 ring-amber-100"
-        : "bg-red-50 ring-red-100";
+        ? "border-amber-100 bg-amber-50 text-amber-700"
+        : "border-red-100 bg-red-50 text-red-700";
 
   const buttonClass =
-    feedback.type === "success"
-      ? "bg-slate-950 hover:bg-emerald-700"
-      : feedback.type === "warning"
-        ? "bg-slate-950 hover:bg-amber-600"
-        : "bg-slate-950 hover:bg-red-700";
+    feedback.type === "error"
+      ? "bg-red-600 hover:bg-red-700"
+      : "bg-slate-950 hover:bg-slate-800";
 
   const label = feedback.actionLabel || "Okay";
 
@@ -152,27 +143,24 @@ const FeedbackModal: React.FC<{
       open={Boolean(feedback)}
       onClose={onClose}
       title={feedback.title}
-      description={feedback.message}
-      size="sm"
-      className="max-w-[calc(100%-2rem)] sm:max-w-md"
-      bodyClassName="pt-5 sm:pt-6"
+      description={
+        feedback.type === "success" ? "Action completed." : "Action required."
+      }
+      size="md"
       footer={
-        <button
-          type="button"
-          onClick={onClose}
-          className={`w-full rounded-xl px-5 py-3 text-sm font-black text-white transition ${buttonClass}`}
-        >
-          {label}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className={`flex-1 rounded-xl py-3 text-sm font-black text-white transition ${buttonClass}`}
+          >
+            {label}
+          </button>
+        </div>
       }
     >
-      <div className="flex justify-center">
-        <div
-          className={`flex h-14 w-14 items-center justify-center rounded-2xl ring-8 ${iconWrapClass}`}
-          aria-hidden="true"
-        >
-          <i className={iconClass} />
-        </div>
+      <div className={`rounded-2xl border px-4 py-3 text-sm ${toneClass}`}>
+        {feedback.message}
       </div>
     </AppModal>
   );
