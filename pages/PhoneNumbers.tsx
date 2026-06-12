@@ -128,9 +128,46 @@ const getAssignedAgent = (
   return agents.find((candidate) => candidate.twilioPhoneNumber === phone);
 };
 
-const agentLabel = (agent?: AgentConfig | null) => {
-  if (!agent) return "Unassigned";
-  return `${agent.name} (${agent.direction})`;
+type AssignedNumberAgent = {
+  id?: string;
+  name?: string;
+  direction?: string;
+  assignmentId?: string;
+  isDefaultForAgent?: boolean;
+};
+
+const getOutboundAssignedAgents = (
+  number: TwilioNumberRecord,
+  agents: AgentConfig[] = [],
+): AssignedNumberAgent[] => {
+  const raw =
+    (number.outboundAssignedAgents as AssignedNumberAgent[] | undefined) ||
+    (number.assignedAgents as AssignedNumberAgent[] | undefined) ||
+    [];
+  const byId = new Map<string, AssignedNumberAgent>();
+
+  raw.forEach((agent) => {
+    const id = String(agent?.id || "").trim();
+    if (!id) return;
+    const full = agents.find((candidate) => candidate.id === id);
+    byId.set(id, {
+      ...agent,
+      name: agent.name || full?.name || "Unnamed agent",
+      direction: agent.direction || full?.direction || "outbound",
+    });
+  });
+
+  const legacy = getAssignedAgent(number, agents);
+  if (legacy?.id && !byId.has(legacy.id)) {
+    byId.set(legacy.id, {
+      id: legacy.id,
+      name: legacy.name,
+      direction: legacy.direction,
+      isDefaultForAgent: true,
+    });
+  }
+
+  return [...byId.values()];
 };
 
 const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
@@ -253,32 +290,50 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       await voiceCallsApi.phoneNumbers.assignTwilioNumberToAgent(numberId, {
         agentId,
         voiceAgentId: agentId,
+        direction: "outbound",
+        isDefaultForAgent: true,
       });
       const assignedAgent = agents.find((agent) => agent.id === agentId);
       showToast(
-        `${phoneNumber || "Number"} assigned to ${assignedAgent?.name || "agent"}.`,
+        `${phoneNumber || "Number"} can now be used by ${assignedAgent?.name || "agent"}.`,
       );
       setAssignmentDrafts((current) => ({ ...current, [numberId]: "" }));
       setNumbers((current) =>
-        current.map((item) =>
-          getNumberId(item) === numberId
-            ? {
-                ...item,
-                assigned_voice_agent_id: agentId,
-                assignedVoiceAgentId: agentId,
-                voiceAgentId: agentId,
-                agentId,
-                assigned_agent_status: "ready",
-                assignedAgentStatus: "ready",
-                overall_status: "ready",
-                overallStatus: "ready",
-                inbound_voice_status: "ready",
-                inboundVoiceStatus: "ready",
-                outbound_voice_status: "ready",
-                outboundVoiceStatus: "ready",
-              }
-            : item,
-        ),
+        current.map((item) => {
+          if (getNumberId(item) !== numberId) return item;
+          const existingAgents = getOutboundAssignedAgents(item, agents);
+          const nextAgents = existingAgents.some(
+            (agent) => agent.id === agentId,
+          )
+            ? existingAgents
+            : [
+                ...existingAgents,
+                {
+                  id: agentId,
+                  name: assignedAgent?.name || "Agent",
+                  direction: assignedAgent?.direction || "outbound",
+                  isDefaultForAgent: existingAgents.length === 0,
+                },
+              ];
+          return {
+            ...item,
+            outboundAssignedAgents: nextAgents,
+            assignedAgents: nextAgents,
+            assignmentCount: nextAgents.length,
+            assigned_voice_agent_id: item.assigned_voice_agent_id || agentId,
+            assignedVoiceAgentId: item.assignedVoiceAgentId || agentId,
+            voiceAgentId: item.voiceAgentId || agentId,
+            agentId: item.agentId || agentId,
+            assigned_agent_status: "ready",
+            assignedAgentStatus: "ready",
+            overall_status: "ready",
+            overallStatus: "ready",
+            inbound_voice_status: "ready",
+            inboundVoiceStatus: "ready",
+            outbound_voice_status: "ready",
+            outboundVoiceStatus: "ready",
+          };
+        }),
       );
       void loadNumbers();
       window.setTimeout(() => onAgentUpdated?.(), 0);
@@ -289,7 +344,50 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
     }
   };
 
-  const handleUnassign = async (number: TwilioNumberRecord) => {
+  const handleRemoveAgentAssignment = async (
+    number: TwilioNumberRecord,
+    agent: AssignedNumberAgent,
+  ) => {
+    const numberId = getNumberId(number);
+    const phoneNumber = getPhoneNumber(number);
+    const agentId = String(agent?.id || "").trim();
+    if (!numberId || !agentId) return;
+    setBusy(`unassign-${numberId}-${agentId}`);
+    try {
+      await voiceCallsApi.phoneNumbers.removeTwilioNumberAgentAssignment(
+        numberId,
+        agentId,
+      );
+      showToast(
+        `${agent.name || "Agent"} can no longer use ${phoneNumber || "this number"} for outbound calls.`,
+      );
+      setNumbers((current) =>
+        current.map((item) => {
+          if (getNumberId(item) !== numberId) return item;
+          const remaining = getOutboundAssignedAgents(item, agents).filter(
+            (assigned) => assigned.id !== agentId,
+          );
+          return {
+            ...item,
+            outboundAssignedAgents: remaining,
+            assignedAgents: remaining,
+            assignmentCount: remaining.length,
+          };
+        }),
+      );
+      void loadNumbers();
+      window.setTimeout(() => onAgentUpdated?.(), 0);
+    } catch (error: any) {
+      showToast(
+        error?.message || "Could not remove this agent from the number.",
+        false,
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUnassignAll = async (number: TwilioNumberRecord) => {
     const numberId = getNumberId(number);
     const phoneNumber = getPhoneNumber(number);
     if (!numberId) return;
@@ -301,7 +399,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         voiceAgentId: null,
         unassign: true,
       });
-      showToast(`${phoneNumber || "Number"} unassigned.`);
+      showToast(`${phoneNumber || "Number"} removed from all outbound agents.`);
       setAssignmentDrafts((current) => ({ ...current, [numberId]: "" }));
       setNumbers((current) =>
         current.map((item) =>
@@ -312,6 +410,9 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
                 assignedVoiceAgentId: null,
                 voiceAgentId: null,
                 agentId: null,
+                outboundAssignedAgents: [],
+                assignedAgents: [],
+                assignmentCount: 0,
                 assigned_agent_status: "needs_assignment",
                 assignedAgentStatus: "needs_assignment",
               }
@@ -330,7 +431,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   const renderNumberCard = (number: TwilioNumberRecord) => {
     const phoneNumber = getPhoneNumber(number) || "Unknown number";
     const numberId = getNumberId(number) || phoneNumber;
-    const assigned = getAssignedAgent(number, agents);
+    const outboundAgents = getOutboundAssignedAgents(number, agents);
+    const assignedAgentIds = new Set(
+      outboundAgents.map((agent) => agent.id).filter(Boolean),
+    );
     const capabilities = number.capabilities || {};
     const canVoice = capabilities.voice !== false;
     const canSms = capabilities.sms === true;
@@ -393,63 +497,93 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4">
-          <Label>Assigned agent</Label>
-          {assigned ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-black text-slate-900">
-                  {assigned.name}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  This number is already assigned and available for inbound +
-                  outbound calls.
-                </p>
-              </div>
-              <button
-                onClick={() => void handleUnassign(number)}
-                disabled={!!busy}
-                className="rounded-xl border border-amber-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:bg-amber-50 disabled:opacity-50"
-              >
-                {busy === `unassign-${numberId}` ? "Unassigning…" : "Unassign"}
-              </button>
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label>Outbound agents using this number</Label>
+              <p className="text-xs text-slate-500">
+                One number can support multiple outbound agents. Choose which
+                agent should be allowed to call from this number.
+              </p>
             </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Select
-                value={assignmentDrafts[numberId] || ""}
-                onChange={(event) =>
-                  setAssignmentDrafts((current) => ({
-                    ...current,
-                    [numberId]: event.target.value,
-                  }))
-                }
-                disabled={!!busy}
-              >
-                <option value="">Choose an agent</option>
-                {agents
-                  .filter(
-                    (agent) =>
-                      !numbers.some(
-                        (candidate) =>
-                          getAssignedAgentId(candidate) === agent.id,
-                      ),
-                  )
-                  .map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name} ({agent.direction})
-                    </option>
-                  ))}
-              </Select>
-              <button
-                onClick={() =>
-                  void handleAssign(number, assignmentDrafts[numberId] || "")
-                }
-                disabled={!!busy || !assignmentDrafts[numberId]}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
-              >
-                {busy === `assign-${numberId}` ? "Assigning…" : "Assign"}
-              </button>
+            <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500 shadow-sm">
+              {outboundAgents.length} assigned
+            </span>
+          </div>
+
+          {outboundAgents.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {outboundAgents.map((agent) => (
+                <div
+                  key={agent.id || agent.name}
+                  className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      {agent.name || "Unnamed agent"}
+                    </p>
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      {agent.isDefaultForAgent
+                        ? "Default outbound number"
+                        : "Outbound access"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      void handleRemoveAgentAssignment(number, agent)
+                    }
+                    disabled={!!busy}
+                    className="rounded-xl border border-amber-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    {busy === `unassign-${numberId}-${agent.id}`
+                      ? "Removing…"
+                      : "Remove"}
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Select
+              value={assignmentDrafts[numberId] || ""}
+              onChange={(event) =>
+                setAssignmentDrafts((current) => ({
+                  ...current,
+                  [numberId]: event.target.value,
+                }))
+              }
+              disabled={!!busy}
+            >
+              <option value="">Add another outbound agent</option>
+              {agents
+                .filter((agent) => !assignedAgentIds.has(agent.id))
+                .map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name} ({agent.direction})
+                  </option>
+                ))}
+            </Select>
+            <button
+              onClick={() =>
+                void handleAssign(number, assignmentDrafts[numberId] || "")
+              }
+              disabled={!!busy || !assignmentDrafts[numberId]}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
+            >
+              {busy === `assign-${numberId}` ? "Adding…" : "Add agent"}
+            </button>
+          </div>
+
+          {outboundAgents.length > 1 && (
+            <button
+              onClick={() => void handleUnassignAll(number)}
+              disabled={!!busy}
+              className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:text-red-600 disabled:opacity-50"
+            >
+              {busy === `unassign-${numberId}`
+                ? "Removing all…"
+                : "Remove all outbound agents"}
+            </button>
           )}
         </div>
       </div>
@@ -470,8 +604,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         <div>
           <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
           <p className="mt-0.5 text-xs text-slate-400">
-            Search, reserve, and assign phone numbers attached to the current
-            organization.
+            Search, reserve, and share business numbers across outbound agents
+            in this organization.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -506,12 +640,13 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               Manage calling numbers
             </p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Assign each available number to one voice agent. Assigned numbers
-              can be used for both inbound and outbound calls.
+              Assign one business number to multiple outbound agents. Inbound
+              routing stays controlled separately, while outbound campaigns can
+              share the same number.
             </p>
           </div>
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-            One number per agent
+            Multi-agent outbound
           </span>
         </div>
       </div>

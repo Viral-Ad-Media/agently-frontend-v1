@@ -350,7 +350,11 @@ export type TwilioNumberRecord = {
   assigned_voice_agent_id?: string | null;
   assignedVoiceAgentId?: string | null;
   voiceAgentId?: string | null;
-  assignedAgent?: { id?: string; name?: string } | null;
+  assignedAgent?: { id?: string; name?: string; direction?: string; [key: string]: unknown } | null;
+  assignedAgents?: Array<{ id?: string; name?: string; direction?: string; assignmentId?: string; isDefaultForAgent?: boolean; [key: string]: unknown }>;
+  outboundAssignedAgents?: Array<{ id?: string; name?: string; direction?: string; assignmentId?: string; isDefaultForAgent?: boolean; [key: string]: unknown }>;
+  inboundAgent?: { id?: string; name?: string; direction?: string; [key: string]: unknown } | null;
+  assignmentCount?: number;
   agentId?: string | null;
   assigned_agent_status?: string | null;
   assignedAgentStatus?: string | null;
@@ -419,8 +423,14 @@ const normalizeTwilioNumber = (value: unknown): TwilioNumberRecord | null => {
   if (!id && !phoneNumber) return null;
   const phoneSid = String(raw.phone_sid || raw.phoneSid || raw.sid || '').trim() || undefined;
   const organizationId = String(raw.organization_id || raw.organizationId || raw.orgId || '').trim() || undefined;
-  const assigned = raw.assignedAgent && typeof raw.assignedAgent === 'object' ? raw.assignedAgent as { id?: string; name?: string } : null;
-  const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || assigned?.id || '').trim() || null;
+  const assigned = raw.assignedAgent && typeof raw.assignedAgent === 'object' ? raw.assignedAgent as { id?: string; name?: string; direction?: string; [key: string]: unknown } : null;
+  const inboundAgent = raw.inboundAgent && typeof raw.inboundAgent === 'object' ? raw.inboundAgent as { id?: string; name?: string; direction?: string; [key: string]: unknown } : assigned;
+  const normalizeAgentList = (value: unknown) => Array.isArray(value)
+    ? value.filter((agent): agent is { id?: string; name?: string; direction?: string; assignmentId?: string; isDefaultForAgent?: boolean; [key: string]: unknown } => Boolean(agent && typeof agent === 'object'))
+    : [];
+  const assignedAgents = normalizeAgentList(raw.assignedAgents || raw.outboundAssignedAgents);
+  const outboundAssignedAgents = normalizeAgentList(raw.outboundAssignedAgents || raw.assignedAgents);
+  const assignedAgentId = String(raw.assigned_voice_agent_id || raw.assignedVoiceAgentId || raw.voiceAgentId || raw.agentId || assigned?.id || inboundAgent?.id || '').trim() || null;
   return {
     ...(raw as Partial<TwilioNumberRecord>),
     id: typeof raw.id === 'string' ? raw.id : id,
@@ -445,6 +455,10 @@ const normalizeTwilioNumber = (value: unknown): TwilioNumberRecord | null => {
     voiceAgentId: assignedAgentId,
     agentId: assignedAgentId,
     assignedAgent: assigned,
+    inboundAgent,
+    assignedAgents,
+    outboundAssignedAgents,
+    assignmentCount: Number(raw.assignmentCount || raw.assignment_count || outboundAssignedAgents.length || assignedAgents.length || 0),
     configuration_status: String(raw.configuration_status || raw.configurationStatus || '').trim() || null,
     configurationStatus: String(raw.configurationStatus || raw.configuration_status || '').trim() || null,
     overall_status: String(raw.overall_status || raw.overallStatus || raw.status || '').trim() || null,
@@ -654,6 +668,9 @@ export const voiceCallsApi = {
     },
     async updateTwilioNumber(numberId: string, payload: unknown) {
       return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}`, { method: 'PATCH', body: payload });
+    },
+    async removeTwilioNumberAgentAssignment(numberId: string, agentId: string) {
+      return request(`/api/twilio/numbers/${encodeURIComponent(numberId)}/assignments/${encodeURIComponent(agentId)}`, { method: 'DELETE' });
     },
     // Backend DELETE /numbers/:sid uses phone_sid — caller must pass the SID
     async deleteTwilioNumber(sid: string) {

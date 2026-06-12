@@ -64,9 +64,23 @@ const WEEKDAYS = [
   { code: "sat", label: "Sat" },
   { code: "sun", label: "Sun" },
 ];
+const DEFAULT_US_TIMEZONE = "America/Chicago";
+
+const TIMEZONE_LABELS: Record<string, string> = {
+  "America/Chicago": "Central Time (US)",
+  "America/New_York": "Eastern Time (US)",
+  "America/Denver": "Mountain Time (US)",
+  "America/Los_Angeles": "Pacific Time (US)",
+  "America/Phoenix": "Arizona Time (US)",
+  "America/Anchorage": "Alaska Time (US)",
+};
+
+const formatTimezoneLabel = (timezone: string) =>
+  TIMEZONE_LABELS[timezone] ? `${TIMEZONE_LABELS[timezone]} — ${timezone}` : timezone;
+
 const TIMEZONES = [
-  "America/New_York",
   "America/Chicago",
+  "America/New_York",
   "America/Denver",
   "America/Los_Angeles",
   "America/Toronto",
@@ -310,7 +324,7 @@ const normalizeSchedule = (value: unknown): Schedule => {
       raw.callPurpose ||
       raw.call_purpose ||
       firstRecipient.name ||
-      (tag ? `#${tag}` : "Outreach schedule"),
+      (tag ? `#${tag}` : "Call campaign"),
   );
   const startDate = String(
     raw.startDate ||
@@ -338,7 +352,7 @@ const normalizeSchedule = (value: unknown): Schedule => {
     tag,
     voiceAgentId: String(raw.voiceAgentId || raw.voice_agent_id || ""),
     windows: normalizeWindows(raw.windows || value),
-    timezone: String(raw.timezone || "America/New_York"),
+    timezone: String(raw.timezone || DEFAULT_US_TIMEZONE),
     extraContext: String(
       raw.extraContext ||
         raw.extra_context ||
@@ -430,7 +444,7 @@ const Leads: React.FC<LeadsProps> = ({
   const defaultTz =
     (org as any)?.profile?.timezone ||
     (org as any)?.settings?.timezone ||
-    "America/New_York";
+    DEFAULT_US_TIMEZONE;
 
   const allTags = useMemo(() => {
     const s = new Set<string>();
@@ -673,7 +687,7 @@ const Leads: React.FC<LeadsProps> = ({
       );
     } catch (error) {
       showMsg(
-        friendlyError(error, "Could not load outreach schedules."),
+        friendlyError(error, "Could not load call campaigns."),
         false,
       );
     }
@@ -969,7 +983,7 @@ const Leads: React.FC<LeadsProps> = ({
       setScheduleTarget(null); // auto-close
       setSelectedIds(new Set());
       await refreshSchedules();
-      showMsg("Schedule saved.");
+      showMsg("Call campaign saved.");
     });
   };
 
@@ -1003,7 +1017,7 @@ const Leads: React.FC<LeadsProps> = ({
       } as Record<string, unknown>);
       setEditingSchedule(null); // auto-close
       await refreshSchedules();
-      showMsg("Schedule updated.");
+      showMsg("Call campaign updated.");
     });
   };
 
@@ -1272,56 +1286,56 @@ const Leads: React.FC<LeadsProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        {[
-          {
-            label: "Total leads",
-            value: leadMetrics.total,
-            hint:
-              backendTotal != null
-                ? `${backendTotal} total`
-                : "Live lead count",
-          },
-          {
-            label: "New",
-            value: leadMetrics.new,
-            hint: "Needs first contact",
-          },
-          {
-            label: "Contacted",
-            value: leadMetrics.contacted,
-            hint: "Already reached",
-          },
-          {
-            label: "Call leads",
-            value: leadMetrics.callLeads,
-            hint: "Captured from calls",
-          },
-          {
-            label: "Chatbot leads",
-            value: leadMetrics.chatbotLeads,
-            hint: "Captured from chat",
-          },
-          {
-            label: "Manual leads",
-            value: leadMetrics.manualLeads,
-            hint: "Added by team",
-          },
-        ].map((metric) => (
-          <div
-            key={metric.label}
-            className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              {metric.label}
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {metric.value}
-            </p>
-            <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
-              {metric.hint}
-            </p>
-          </div>
-        ))}
+          {[
+            {
+              label: "Total leads",
+              value: leadMetrics.total,
+              hint:
+                backendTotal != null
+                  ? `${backendTotal} total`
+                  : "Live lead count",
+            },
+            {
+              label: "New",
+              value: leadMetrics.new,
+              hint: "Needs first contact",
+            },
+            {
+              label: "Contacted",
+              value: leadMetrics.contacted,
+              hint: "Already reached",
+            },
+            {
+              label: "Call leads",
+              value: leadMetrics.callLeads,
+              hint: "Captured from calls",
+            },
+            {
+              label: "Chatbot leads",
+              value: leadMetrics.chatbotLeads,
+              hint: "Captured from chat",
+            },
+            {
+              label: "Manual leads",
+              value: leadMetrics.manualLeads,
+              hint: "Added by team",
+            },
+          ].map((metric) => (
+            <div
+              key={metric.label}
+              className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {metric.label}
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {metric.value}
+              </p>
+              <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
+                {metric.hint}
+              </p>
+            </div>
+          ))}
       </div>
 
       {/* Main grid */}
@@ -1507,7 +1521,7 @@ const Leads: React.FC<LeadsProps> = ({
               Tag collections
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Create outreach campaigns by tag.
+              Create call campaigns by tag.
             </p>
             {tagStats.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center text-sm font-semibold text-slate-400">
@@ -1533,7 +1547,7 @@ const Leads: React.FC<LeadsProps> = ({
                         onClick={() => openTagSchedule(tag)}
                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700 sm:w-auto sm:py-1.5"
                       >
-                        Schedule in Outreach
+                        Create Campaign
                       </button>
                     </div>
                   </div>
@@ -2069,7 +2083,7 @@ const Leads: React.FC<LeadsProps> = ({
       <AppModal
         open={!!scheduleTarget}
         onClose={() => setScheduleTarget(null)}
-        title="Create outreach schedule"
+        title="Create call campaign"
         description={scheduleTarget?.label || ""}
         size="xl"
         footer={
@@ -2278,7 +2292,7 @@ const Leads: React.FC<LeadsProps> = ({
                 ...TIMEZONES.filter((t) => t !== scheduleForm.timezone),
               ].map((tz) => (
                 <option key={tz} value={tz}>
-                  {tz}
+                  {formatTimezoneLabel(tz)}
                 </option>
               ))}
             </select>
@@ -2452,7 +2466,7 @@ const Leads: React.FC<LeadsProps> = ({
                   ...TIMEZONES.filter((t) => t !== editingSchedule.timezone),
                 ].map((tz) => (
                   <option key={tz} value={tz}>
-                    {tz}
+                    {formatTimezoneLabel(tz)}
                   </option>
                 ))}
               </select>

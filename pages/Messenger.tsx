@@ -758,99 +758,6 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            {/* ── Widget Voice Selection (no provider badge) ── */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Widget Voice
-                  </label>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Voice used when widget responds aloud
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {OPENAI_VOICES.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => patch({ chatVoice: v.id } as any)}
-                    className={`relative flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all group ${(draft as any).chatVoice === v.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 bg-white"}`}
-                  >
-                    <div className="min-w-0">
-                      <p
-                        className={`text-xs font-black ${(draft as any).chatVoice === v.id ? "text-indigo-700" : "text-slate-800"}`}
-                      >
-                        {v.name}
-                      </p>
-                      <p className="text-[10px] text-slate-400">{v.desc}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void previewVoice(v.id);
-                      }}
-                      title="Preview voice"
-                      className={`ml-2 w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${previewingVoice === v.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600"}`}
-                    >
-                      {previewingVoice === v.id ? (
-                        <i className="fa-sharp fa-solid fa-stop text-[10px]" />
-                      ) : (
-                        <i className="fa-sharp fa-solid fa-play text-[10px]" />
-                      )}
-                    </button>
-                  </button>
-                ))}
-              </div>
-              {previewingVoice && (
-                <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest mt-2 flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse inline-block" />
-                  Playing preview…
-                </p>
-              )}
-            </div>
-
-            {/* ── Widget Languages ── */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="mb-3">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Widget Languages
-                </label>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Users can switch between selected languages in the widget
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SUPPORTED_LANGUAGES.map((lang) => {
-                  const selected = (draft.chatLanguages || ["en"]).includes(
-                    lang.code,
-                  );
-                  return (
-                    <button
-                      key={lang.code}
-                      type="button"
-                      onClick={() => toggleLanguage(lang.code)}
-                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"}`}
-                    >
-                      <span>{lang.flag}</span>
-                      {lang.name}
-                      {selected && (
-                        <i className="fa-sharp fa-solid fa-check text-[10px] text-indigo-500" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {(draft.chatLanguages || []).length > 0 && (
-                <p className="text-[10px] text-slate-400 mt-2">
-                  {(draft.chatLanguages || ["en"]).length} language
-                  {(draft.chatLanguages || ["en"]).length > 1 ? "s" : ""}{" "}
-                  selected · these are embedded in the widget script
-                </p>
-              )}
-            </div>
           </div>
         </div>
 
@@ -882,7 +789,9 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            <div className="m-3 flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 sm:m-6 sm:h-[480px]">
+            <div
+              className="m-3 flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 sm:m-6 sm:h-[480px]"
+            >
               {/* Header */}
               <div
                 className="flex flex-shrink-0 items-center gap-3 px-4 py-4 sm:px-5"
@@ -1082,6 +991,107 @@ const Messenger: React.FC<MessengerProps> = ({
             <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
               {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
+          </div>
+
+          {/* Widget voice and language controls */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Widget Voice
+                </label>
+                <p className="mt-1 text-xs text-slate-400">
+                  Voice used when the widget responds aloud.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {OPENAI_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => patch({ chatVoice: v.id } as any)}
+                    className={`relative flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all group ${(draft as any).chatVoice === v.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 bg-white"}`}
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className={`text-xs font-black ${(draft as any).chatVoice === v.id ? "text-indigo-700" : "text-slate-800"}`}
+                      >
+                        {v.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{v.desc}</p>
+                    </div>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void previewVoice(v.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void previewVoice(v.id);
+                        }
+                      }}
+                      title="Preview voice"
+                      className={`ml-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${previewingVoice === v.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600"}`}
+                    >
+                      {previewingVoice === v.id ? (
+                        <i className="fa-sharp fa-solid fa-stop text-[10px]" />
+                      ) : (
+                        <i className="fa-sharp fa-solid fa-play text-[10px]" />
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {previewingVoice && (
+                <p className="mt-3 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-500">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                  Playing preview…
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Widget Languages
+                </label>
+                <p className="mt-1 text-xs text-slate-400">
+                  Let visitors switch between selected languages in the widget.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SUPPORTED_LANGUAGES.map((lang) => {
+                  const selected = (draft.chatLanguages || ["en"]).includes(
+                    lang.code,
+                  );
+                  return (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => toggleLanguage(lang.code)}
+                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"}`}
+                    >
+                      <span>{lang.flag}</span>
+                      {lang.name}
+                      {selected && (
+                        <i className="fa-sharp fa-solid fa-check text-[10px] text-indigo-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {(draft.chatLanguages || []).length > 0 && (
+                <p className="mt-3 text-xs text-slate-400">
+                  {(draft.chatLanguages || ["en"]).length} language
+                  {(draft.chatLanguages || ["en"]).length > 1 ? "s" : ""}{" "}
+                  selected · embedded automatically in the widget script.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

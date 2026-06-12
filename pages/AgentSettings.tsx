@@ -134,8 +134,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 }) => {
   const [tab, setTab] = useState<Tab>("persona");
   const [draft, setDraft] = useState(org.agent);
+  const [savedAgentBaseline, setSavedAgentBaseline] = useState(org.agent);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [saveModal, setSaveModal] = useState<{
+    title: string;
+    message: string;
+    ok: boolean;
+  } | null>(null);
 
   // Agent detail modal
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
@@ -180,6 +186,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
   useEffect(() => {
     setDraft(org.agent);
+    setSavedAgentBaseline(org.agent);
   }, [org.agent.id]);
 
   useEffect(() => {
@@ -694,12 +701,132 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     }
   };
 
-  const saveDraftField = <K extends keyof AgentConfig>(
+  const updateDraftField = <K extends keyof AgentConfig>(
     key: K,
     val: AgentConfig[K],
   ) => {
     setDraft((d) => ({ ...d, [key]: val }));
-    void run(key as string, () => onUpdateAgent({ [key]: val }));
+  };
+
+  const normalizeComparable = (value: unknown) =>
+    value === undefined || value === null ? "" : value;
+
+  const buildAgentUpdates = () => {
+    const updates: Partial<AgentConfig> = {};
+    const fields = [
+      "name",
+      "direction",
+      "language",
+      "greeting",
+      "tone",
+      "escalationPhone",
+      "businessHours",
+    ] as const;
+
+    fields.forEach((field) => {
+      if (
+        normalizeComparable(draft[field]) !==
+        normalizeComparable(savedAgentBaseline[field])
+      ) {
+        updates[field] = draft[field] as never;
+      }
+    });
+
+    const draftFields = draft.dataCaptureFields || [];
+    const savedFields = savedAgentBaseline.dataCaptureFields || [];
+    if (JSON.stringify(draftFields) !== JSON.stringify(savedFields)) {
+      updates.dataCaptureFields = draftFields;
+    }
+
+    return updates;
+  };
+
+  const buildRuleUpdates = () => {
+    const updates: Partial<AgentConfig["rules"]> = {};
+    const draftRules = draft.rules || {};
+    const savedRules = savedAgentBaseline.rules || {};
+    (Object.keys(draftRules) as (keyof AgentConfig["rules"])[]).forEach(
+      (key) => {
+        if (draftRules[key] !== savedRules[key]) {
+          updates[key] = draftRules[key] as never;
+        }
+      },
+    );
+    return updates;
+  };
+
+  const getChangedFaqs = () => {
+    const savedFaqs = savedAgentBaseline.faqs || [];
+    return (draft.faqs || []).filter((faq) => {
+      const original = savedFaqs.find((item) => item.id === faq.id);
+      if (!original) return false;
+      return (
+        faq.question !== original.question || faq.answer !== original.answer
+      );
+    });
+  };
+
+  const hasObjectKeys = (value: Record<string, unknown>) =>
+    Object.keys(value).length > 0;
+
+  const pendingAgentUpdates = buildAgentUpdates();
+  const pendingRuleUpdates = buildRuleUpdates();
+  const pendingFaqUpdates = getChangedFaqs();
+  const hasUnsavedChanges =
+    hasObjectKeys(pendingAgentUpdates as Record<string, unknown>) ||
+    hasObjectKeys(pendingRuleUpdates as Record<string, unknown>) ||
+    pendingFaqUpdates.length > 0;
+
+  const discardUnsavedChanges = () => {
+    setDraft(savedAgentBaseline);
+    showToast("Unsaved changes discarded.");
+  };
+
+  const saveAllAgentChanges = async () => {
+    if (!hasUnsavedChanges) {
+      setSaveModal({
+        title: "No changes to save",
+        message: "Everything on this agent is already up to date.",
+        ok: true,
+      });
+      return;
+    }
+
+    setBusy("save-agent-settings");
+    try {
+      if (hasObjectKeys(pendingAgentUpdates as Record<string, unknown>)) {
+        await onUpdateAgent(pendingAgentUpdates);
+      }
+
+      if (hasObjectKeys(pendingRuleUpdates as Record<string, unknown>)) {
+        await onUpdateRules(pendingRuleUpdates);
+      }
+
+      for (const faq of pendingFaqUpdates) {
+        await onUpdateFaq(faq.id, {
+          question: faq.question,
+          answer: faq.answer,
+        });
+      }
+
+      setSavedAgentBaseline(draft);
+      setSaveModal({
+        title: "Changes saved",
+        message: "Your agent settings have been saved successfully.",
+        ok: true,
+      });
+    } catch (e) {
+      setSaveModal({
+        title: "Save failed",
+        message:
+          e instanceof Error
+            ? e.message
+            : "Could not save your changes. Please try again.",
+        ok: false,
+      });
+    } finally {
+      setBusy(null);
+    }
   };
 
   // Open agent detail modal and load its schedules
@@ -921,6 +1048,45 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         </div>
       </div>
 
+      <div className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-card backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <div>
+          <p className="text-sm font-black text-slate-900">
+            Agent changes are saved manually
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Edit the fields below, then click Save Changes. The page will not
+            reload while you are editing.
+          </p>
+        </div>
+        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row sm:items-center">
+          {hasUnsavedChanges ? (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-amber-100">
+              Unsaved changes
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 ring-1 ring-emerald-100">
+              Saved
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={discardUnsavedChanges}
+            disabled={!hasUnsavedChanges || busy === "save-agent-settings"}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveAllAgentChanges()}
+            disabled={!hasUnsavedChanges || busy === "save-agent-settings"}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+
       {/* ═══════════════════════════════════════════════ PERSONA TAB */}
       {tab === "persona" && (
         <div className="space-y-6">
@@ -1093,13 +1259,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <Label>Agent Name</Label>
                 <Inp
                   value={draft.name}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, name: e.target.value }))
-                  }
-                  onBlur={() => {
-                    if (draft.name !== org.agent.name)
-                      saveDraftField("name", draft.name);
-                  }}
+                  onChange={(e) => updateDraftField("name", e.target.value)}
                 />
               </div>
               <div>
@@ -1107,7 +1267,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <Sel
                   value={draft.direction}
                   onChange={(e) =>
-                    saveDraftField(
+                    updateDraftField(
                       "direction",
                       e.target.value as AgentConfig["direction"],
                     )
@@ -1184,7 +1344,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <Sel
                   value={draft.language}
                   onChange={(e) =>
-                    saveDraftField(
+                    updateDraftField(
                       "language",
                       e.target.value as AgentConfig["language"],
                     )
@@ -1387,13 +1547,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 rows={2}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all resize-none"
                 value={draft.greeting}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, greeting: e.target.value }))
-                }
-                onBlur={() => {
-                  if (draft.greeting !== org.agent.greeting)
-                    saveDraftField("greeting", draft.greeting);
-                }}
+                onChange={(e) => updateDraftField("greeting", e.target.value)}
               />
             </div>
 
@@ -1403,7 +1557,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 {TONES.map((t) => (
                   <button
                     key={t}
-                    onClick={() => saveDraftField("tone", t)}
+                    onClick={() => updateDraftField("tone", t)}
                     className={`py-2.5 rounded-xl border-2 text-xs font-black transition-all ${draft.tone === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-100 text-slate-500 bg-slate-50 hover:border-slate-200"}`}
                   >
                     {t}
@@ -1539,7 +1693,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     style={{ minWidth: "max-content" }}
                   >
                     {draft.faqs.map((faq, i) => {
-                      const orig = org.agent.faqs.find((f) => f.id === faq.id);
                       return (
                         <div
                           key={faq.id}
@@ -1587,14 +1740,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                                 ),
                               }))
                             }
-                            onBlur={() => {
-                              if (faq.question !== (orig?.question || ""))
-                                void run(`q-${faq.id}`, () =>
-                                  onUpdateFaq(faq.id, {
-                                    question: faq.question,
-                                  }),
-                                );
-                            }}
                             placeholder="Question"
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400 transition-all"
                           />
@@ -1611,12 +1756,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                                 ),
                               }))
                             }
-                            onBlur={() => {
-                              if (faq.answer !== (orig?.answer || ""))
-                                void run(`a-${faq.id}`, () =>
-                                  onUpdateFaq(faq.id, { answer: faq.answer }),
-                                );
-                            }}
                             placeholder="Answer"
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs resize-none outline-none focus:ring-2 focus:ring-amber-400 transition-all"
                           />
@@ -1674,14 +1813,18 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </div>
                 <button
                   onClick={() =>
-                    void run(r.key, () =>
-                      onUpdateRules({ [r.key]: !org.agent.rules[r.key] }),
-                    )
+                    setDraft((current) => ({
+                      ...current,
+                      rules: {
+                        ...current.rules,
+                        [r.key]: !current.rules[r.key],
+                      },
+                    }))
                   }
-                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${org.agent.rules[r.key] ? "bg-amber-500" : "bg-slate-200"}`}
+                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${draft.rules[r.key] ? "bg-amber-500" : "bg-slate-200"}`}
                 >
                   <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${org.agent.rules[r.key] ? "translate-x-5" : "translate-x-0"}`}
+                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${draft.rules[r.key] ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </button>
               </div>
@@ -1693,12 +1836,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 placeholder="+1 (555) 000-0000"
                 value={draft.escalationPhone}
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, escalationPhone: e.target.value }))
+                  updateDraftField("escalationPhone", e.target.value)
                 }
-                onBlur={() => {
-                  if (draft.escalationPhone !== org.agent.escalationPhone)
-                    saveDraftField("escalationPhone", draft.escalationPhone);
-                }}
               />
             </div>
             <div>
@@ -1707,10 +1846,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 placeholder="Mon-Fri 9AM-6PM"
                 value={draft.businessHours ?? ""}
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, businessHours: e.target.value }))
-                }
-                onBlur={() =>
-                  saveDraftField("businessHours", draft.businessHours ?? "")
+                  updateDraftField("businessHours", e.target.value)
                 }
               />
             </div>
@@ -1736,9 +1872,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                             )
                           : [...(draft.dataCaptureFields || []), field];
                         setDraft((d) => ({ ...d, dataCaptureFields: next }));
-                        void run(`dcf-${field}`, () =>
-                          onUpdateAgent({ dataCaptureFields: next }),
-                        );
                       }}
                       className={`rounded-full border-2 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all ${active ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-400 hover:border-slate-300"}`}
                     >
@@ -1754,6 +1887,35 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </p>
           </div>
         </div>
+      )}
+
+      {saveModal && (
+        <AppModal
+          open
+          onClose={() => setSaveModal(null)}
+          title={saveModal.title}
+          description={
+            saveModal.ok
+              ? "Your latest action completed successfully."
+              : "Please review the message below and try again."
+          }
+          size="sm"
+          footer={
+            <button
+              type="button"
+              onClick={() => setSaveModal(null)}
+              className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white hover:bg-amber-600"
+            >
+              Done
+            </button>
+          }
+        >
+          <div
+            className={`rounded-2xl border px-4 py-4 text-sm font-bold ${saveModal.ok ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-red-100 bg-red-50 text-red-700"}`}
+          >
+            {saveModal.message}
+          </div>
+        </AppModal>
       )}
 
       {/* ═══════════════════════════════════════════════ AGENT DETAIL MODAL */}
@@ -1857,7 +2019,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Outreach Schedules
+                  Call Campaigns
                 </p>
                 {!loadingSchedules && (
                   <span
@@ -1884,11 +2046,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center">
                   <p className="text-2xl mb-2">📅</p>
                   <p className="text-sm font-bold text-slate-400">
-                    No outreach schedules assigned
+                    No call campaigns assigned
                   </p>
                   <p className="text-xs text-slate-300 mt-1">
-                    Go to Lead CRM → Tag collections → Schedule to assign this
-                    agent.
+                    Go to Lead CRM → Tag collections → Create Campaign to assign
+                    this agent.
                   </p>
                 </div>
               ) : (
