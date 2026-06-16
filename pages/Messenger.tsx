@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChatMessage, ChatbotConfig, Organization } from "../types";
+import {
+  ChatMessage,
+  ChatbotConfig,
+  KnowledgeBase,
+  Organization,
+} from "../types";
 import { api } from "../services/api";
 import AppModal from "../components/AppModal";
 
@@ -16,6 +21,11 @@ interface MessengerProps {
   onImportChatbotFaqs: (chatbotId: string, website: string) => Promise<void>;
   onActivateChatbot: (chatbotId: string) => Promise<void>;
   onDeleteChatbot: (chatbotId: string) => Promise<void>;
+  knowledgeBases?: KnowledgeBase[];
+  onAssignKnowledgeBase?: (
+    knowledgeBaseId: string,
+    chatbotId: string,
+  ) => Promise<void>;
 }
 
 const COLOR_PRESETS = [
@@ -91,6 +101,8 @@ const Messenger: React.FC<MessengerProps> = ({
   onImportChatbotFaqs,
   onActivateChatbot,
   onDeleteChatbot,
+  knowledgeBases = [],
+  onAssignKnowledgeBase,
 }) => {
   const activeChatbot =
     org.chatbots.find((c) => c.id === org.activeChatbotId) ?? org.chatbots[0];
@@ -202,6 +214,7 @@ const Messenger: React.FC<MessengerProps> = ({
       await onUpdateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
+        knowledgeBaseId: draft.knowledgeBaseId,
         headerTitle: draft.headerTitle,
         welcomeMessage: draft.welcomeMessage,
         placeholder: draft.placeholder,
@@ -218,6 +231,25 @@ const Messenger: React.FC<MessengerProps> = ({
       } as any);
       setSaveSuccess("Saved! Embed script updated.");
       setSaveModalOpen(true);
+    });
+  };
+
+  const currentKnowledgeBase =
+    knowledgeBases.find((kb) => kb.id === draft.knowledgeBaseId) ||
+    knowledgeBases.find((kb) =>
+      kb.linkedChatbotIds?.includes(activeChatbot?.id || ""),
+    ) ||
+    knowledgeBases.find((kb) => kb.isPrimary) ||
+    knowledgeBases[0] ||
+    null;
+
+  const assignDraftKnowledgeBase = async (knowledgeBaseId: string) => {
+    if (!knowledgeBaseId || !activeChatbot?.id || !onAssignKnowledgeBase)
+      return;
+    await runAction("assign-knowledge-base", async () => {
+      await onAssignKnowledgeBase(knowledgeBaseId, activeChatbot.id);
+      patch({ knowledgeBaseId });
+      setSaveSuccess("Business knowledge base updated.");
     });
   };
 
@@ -777,6 +809,63 @@ const Messenger: React.FC<MessengerProps> = ({
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Business Knowledge Base
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      This chatbot only answers from the selected business.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select
+                      value={currentKnowledgeBase?.id || ""}
+                      onChange={(event) =>
+                        void assignDraftKnowledgeBase(event.target.value)
+                      }
+                      disabled={
+                        !knowledgeBases.length ||
+                        busyAction === "assign-knowledge-base" ||
+                        !onAssignKnowledgeBase
+                      }
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 sm:w-72"
+                    >
+                      {knowledgeBases.length === 0 ? (
+                        <option value="">
+                          No business knowledge bases yet
+                        </option>
+                      ) : (
+                        knowledgeBases.map((kb) => (
+                          <option key={kb.id} value={kb.id}>
+                            {kb.businessName || kb.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <a
+                      href="#/knowledge-bases"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700"
+                    >
+                      Manage
+                    </a>
+                  </div>
+                </div>
+                {currentKnowledgeBase && (
+                  <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs font-semibold text-slate-500">
+                    Current business:{" "}
+                    <span className="font-black text-slate-800">
+                      {currentKnowledgeBase.businessName ||
+                        currentKnowledgeBase.name}
+                    </span>
+                    {currentKnowledgeBase.domain
+                      ? ` • ${currentKnowledgeBase.domain}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                   Import from Website URL
                 </label>
@@ -1048,75 +1137,13 @@ const Messenger: React.FC<MessengerProps> = ({
             <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
               {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
-          </div>
-
-          {/* Widget voice and language controls */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            {/* Widget Languages */}
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="mb-4">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Widget Voice
-                </label>
-                <p className="mt-1 text-xs text-slate-400">
-                  Voice used when the widget responds aloud.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {OPENAI_VOICES.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => patch({ chatVoice: v.id } as any)}
-                    className={`relative flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all group ${(draft as any).chatVoice === v.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200 bg-white"}`}
-                  >
-                    <div className="min-w-0">
-                      <p
-                        className={`text-xs font-black ${(draft as any).chatVoice === v.id ? "text-indigo-700" : "text-slate-800"}`}
-                      >
-                        {v.name}
-                      </p>
-                      <p className="text-[10px] text-slate-400">{v.desc}</p>
-                    </div>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void previewVoice(v.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void previewVoice(v.id);
-                        }
-                      }}
-                      title="Preview voice"
-                      className={`ml-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${previewingVoice === v.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600"}`}
-                    >
-                      {previewingVoice === v.id ? (
-                        <i className="fa-sharp fa-solid fa-stop text-[10px]" />
-                      ) : (
-                        <i className="fa-sharp fa-solid fa-play text-[10px]" />
-                      )}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {previewingVoice && (
-                <p className="mt-3 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-500">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-                  Playing preview…
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-4">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-indigo-200">
                   Widget Languages
                 </label>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-indigo-100/60">
                   Let visitors switch between selected languages in the widget.
                 </p>
               </div>
@@ -1130,7 +1157,7 @@ const Messenger: React.FC<MessengerProps> = ({
                       key={lang.code}
                       type="button"
                       onClick={() => toggleLanguage(lang.code)}
-                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"}`}
+                      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-indigo-300 bg-white text-indigo-700" : "border-white/10 text-indigo-100/70 hover:border-indigo-200 hover:text-white"}`}
                     >
                       <span>{lang.flag}</span>
                       {lang.name}
@@ -1142,7 +1169,7 @@ const Messenger: React.FC<MessengerProps> = ({
                 })}
               </div>
               {(draft.chatLanguages || []).length > 0 && (
-                <p className="mt-3 text-xs text-slate-400">
+                <p className="mt-3 text-xs text-indigo-100/60">
                   {(draft.chatLanguages || ["en"]).length} language
                   {(draft.chatLanguages || ["en"]).length > 1 ? "s" : ""}{" "}
                   selected · embedded automatically in the widget script.

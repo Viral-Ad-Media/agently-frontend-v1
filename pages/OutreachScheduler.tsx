@@ -133,22 +133,7 @@ const addMonths = (date: Date, months: number) => {
 
 const maxScheduleDateStr = () =>
   addMonths(new Date(), 6).toISOString().slice(0, 10);
-const SELECTED_AGENT_STORAGE_KEY = "agently:lastSelectedAgentId";
-const LEGACY_SELECTED_AGENT_STORAGE_KEYS = [
-  "agently:selected-agent-id",
-  "agently:selected-voice-agent-id",
-];
-
-const readRememberedAgentId = () => {
-  if (typeof window === "undefined") return "";
-  return String(
-    window.localStorage.getItem(SELECTED_AGENT_STORAGE_KEY) ||
-      LEGACY_SELECTED_AGENT_STORAGE_KEYS.map((key) =>
-        window.localStorage.getItem(key),
-      ).find(Boolean) ||
-      "",
-  ).trim();
-};
+const SELECTED_AGENT_STORAGE_KEY = "agently:selected-voice-agent-id";
 
 const isDateWithinScheduleWindow = (dateValue: string) => {
   if (!dateValue) return false;
@@ -392,7 +377,12 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
 
   const initialAgentId = String(params.get("agentId") || "").trim();
   const activeAgentId = getAgentId(orgRecord.agent);
-  const rememberedAgentId = readRememberedAgentId();
+  const rememberedAgentId =
+    typeof window !== "undefined"
+      ? String(
+          window.localStorage.getItem(SELECTED_AGENT_STORAGE_KEY) || "",
+        ).trim()
+      : "";
   const rememberedAgentIsAvailable = rawAgents.some(
     (agent) => getAgentId(agent) === rememberedAgentId,
   );

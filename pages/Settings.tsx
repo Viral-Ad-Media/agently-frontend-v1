@@ -63,6 +63,14 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
 
   const settingCards = [
     {
+      title: "Knowledge Bases",
+      description:
+        "Create separate business knowledge bases and assign them to agents or chatbots.",
+      href: "/knowledge-bases",
+      icon: "fa-layer-group",
+      accent: "bg-amber-50 text-amber-700 border-amber-100",
+    },
+    {
       title: "Team",
       description:
         "Invite members, manage roles, and control workspace access.",

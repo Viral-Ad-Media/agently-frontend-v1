@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Organization, AgentConfig, FAQ, LeadOutreachSchedule } from "../types";
+import {
+  Organization,
+  AgentConfig,
+  FAQ,
+  LeadOutreachSchedule,
+  KnowledgeBase,
+} from "../types";
 import { api } from "../services/api";
 import {
   voiceCallsApi,
@@ -118,6 +124,11 @@ interface AgentSettingsProps {
   onRemoveFaq: (id: string) => Promise<void>;
   onSyncFaqs: (website?: string) => Promise<void>;
   onRestartAgent: () => Promise<void>;
+  knowledgeBases?: KnowledgeBase[];
+  onAssignKnowledgeBase?: (
+    knowledgeBaseId: string,
+    voiceAgentId: string,
+  ) => Promise<void>;
 }
 
 type Tab = "persona" | "knowledge" | "rules";
@@ -157,6 +168,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   onCreateVoiceAgent,
   onDeleteVoiceAgent,
   onRestartAgent,
+  knowledgeBases = [],
+  onAssignKnowledgeBase,
 }) => {
   const [tab, setTab] = useState<Tab>("persona");
   const [draft, setDraft] = useState(org.agent);
@@ -1395,6 +1408,27 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     };
   };
 
+  const currentKnowledgeBase =
+    knowledgeBases.find((kb) => kb.id === draft.knowledgeBaseId) ||
+    knowledgeBases.find((kb) => kb.linkedVoiceAgentIds?.includes(draft.id)) ||
+    knowledgeBases.find((kb) => kb.isPrimary) ||
+    knowledgeBases[0] ||
+    null;
+
+  const assignDraftKnowledgeBase = async (knowledgeBaseId: string) => {
+    if (!knowledgeBaseId || !draft.id || !onAssignKnowledgeBase) return;
+    const nextBase = knowledgeBases.find((kb) => kb.id === knowledgeBaseId);
+    await run(
+      "assign-knowledge-base",
+      async () => {
+        await onAssignKnowledgeBase(knowledgeBaseId, draft.id);
+        setDraft((current) => ({ ...current, knowledgeBaseId }));
+        setSavedAgentBaseline((current) => ({ ...current, knowledgeBaseId }));
+      },
+      `${draft.name} now uses ${nextBase?.businessName || nextBase?.name || "the selected business knowledge base"}.`,
+    );
+  };
+
   return (
     <div className="animate-fade-up space-y-6">
       {/* ── Toast ── */}
@@ -2193,6 +2227,63 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Business Knowledge Base
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      This agent only answers from the selected business source.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select
+                      value={currentKnowledgeBase?.id || ""}
+                      onChange={(event) =>
+                        void assignDraftKnowledgeBase(event.target.value)
+                      }
+                      disabled={
+                        !knowledgeBases.length ||
+                        busy === "assign-knowledge-base" ||
+                        !onAssignKnowledgeBase
+                      }
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:w-72"
+                    >
+                      {knowledgeBases.length === 0 ? (
+                        <option value="">
+                          No business knowledge bases yet
+                        </option>
+                      ) : (
+                        knowledgeBases.map((kb) => (
+                          <option key={kb.id} value={kb.id}>
+                            {kb.businessName || kb.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <a
+                      href="#/knowledge-bases"
+                      className="rounded-2xl border border-slate-200 px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-200 hover:text-amber-700"
+                    >
+                      Manage
+                    </a>
+                  </div>
+                </div>
+                {currentKnowledgeBase && (
+                  <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
+                    Current business:{" "}
+                    <span className="font-black text-slate-800">
+                      {currentKnowledgeBase.businessName ||
+                        currentKnowledgeBase.name}
+                    </span>
+                    {currentKnowledgeBase.domain
+                      ? ` • ${currentKnowledgeBase.domain}`
+                      : ""}
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
                 <div>

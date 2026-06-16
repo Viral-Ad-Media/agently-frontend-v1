@@ -45,6 +45,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Settings = lazy(() => import("./pages/Settings"));
+const KnowledgeBases = lazy(() => import("./pages/KnowledgeBases"));
 const CallSimulator = lazy(() => import("./components/CallSimulator"));
 
 const App: React.FC = () => {
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const leads = workspace?.leads ?? [];
   const conversation = workspace?.conversation ?? [];
   const dashboard = workspace?.dashboard ?? null;
+  const knowledgeBases = workspace?.knowledgeBases ?? [];
 
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
@@ -205,6 +207,22 @@ const App: React.FC = () => {
 
   const handleDeleteVoiceAgent = async (voiceAgentId: string) => {
     await api.deleteVoiceAgent(voiceAgentId);
+    await refreshWorkspace();
+  };
+
+  const handleAssignVoiceAgentKnowledgeBase = async (
+    knowledgeBaseId: string,
+    voiceAgentId: string,
+  ) => {
+    await api.assignVoiceAgentKnowledgeBase(knowledgeBaseId, voiceAgentId);
+    await refreshWorkspace();
+  };
+
+  const handleAssignChatbotKnowledgeBase = async (
+    knowledgeBaseId: string,
+    chatbotId: string,
+  ) => {
+    await api.assignChatbotKnowledgeBase(knowledgeBaseId, chatbotId);
     await refreshWorkspace();
   };
 
@@ -567,6 +585,8 @@ const App: React.FC = () => {
                     onCreateVoiceAgent={handleCreateVoiceAgent}
                     onActivateVoiceAgent={handleActivateVoiceAgent}
                     onDeleteVoiceAgent={handleDeleteVoiceAgent}
+                    knowledgeBases={knowledgeBases}
+                    onAssignKnowledgeBase={handleAssignVoiceAgentKnowledgeBase}
                     onUpdateRules={handleUpdateRules}
                     onAddFaq={handleAddFaq}
                     onUpdateFaq={handleUpdateFaq}
@@ -595,6 +615,8 @@ const App: React.FC = () => {
                     onImportChatbotFaqs={handleImportChatbotFaqs}
                     onActivateChatbot={handleActivateChatbot}
                     onDeleteChatbot={handleDeleteChatbot}
+                    knowledgeBases={knowledgeBases}
+                    onAssignKnowledgeBase={handleAssignChatbotKnowledgeBase}
                   />
                 </ProtectedRoute>
               ) : (
@@ -714,6 +736,22 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <TestAgent
                     org={org}
+                    onChanged={() => void refreshWorkspace()}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/knowledge-bases"
+            element={
+              org ? (
+                <ProtectedRoute>
+                  <KnowledgeBases
+                    org={org}
+                    initialKnowledgeBases={knowledgeBases}
                     onChanged={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>

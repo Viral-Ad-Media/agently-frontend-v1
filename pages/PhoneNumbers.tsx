@@ -365,6 +365,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
       showToast(
         `${agent.name || "Agent"} can no longer use ${phoneNumber || "this number"} for outbound calls.`,
       );
+      setOpenAgentMenu(null);
       setNumbers((current) =>
         current.map((item) => {
           if (getNumberId(item) !== numberId) return item;
@@ -519,35 +520,76 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
           </div>
 
           {outboundAgents.length > 0 && (
-            <div className="mb-4 space-y-2">
-              {outboundAgents.map((agent) => (
-                <div
-                  key={agent.id || agent.name}
-                  className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      {agent.name || "Unnamed agent"}
-                    </p>
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      {agent.isDefaultForAgent
-                        ? "Default outbound number"
-                        : "Outbound access"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      void handleRemoveAgentAssignment(number, agent)
-                    }
-                    disabled={!!busy}
-                    className="rounded-xl border border-amber-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:bg-amber-50 disabled:opacity-50"
-                  >
-                    {busy === `unassign-${numberId}-${agent.id}`
-                      ? "Removing…"
-                      : "Remove"}
-                  </button>
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="max-h-28 overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-2">
+                  {outboundAgents.map((agent) => {
+                    const agentId = String(agent.id || agent.name || "");
+                    const selected =
+                      openAgentMenu?.numberId === numberId &&
+                      openAgentMenu?.agentId === agentId;
+                    return (
+                      <button
+                        key={agentId}
+                        type="button"
+                        onClick={() =>
+                          setOpenAgentMenu((current) =>
+                            current?.numberId === numberId &&
+                            current?.agentId === agentId
+                              ? null
+                              : { numberId, agentId },
+                          )
+                        }
+                        className={`inline-flex max-w-[220px] items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black transition-all ${selected ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-200 hover:bg-amber-50"}`}
+                        title={agent.name || "Unnamed agent"}
+                      >
+                        <span className="truncate">
+                          {agent.name || "Unnamed agent"}
+                        </span>
+                        {agent.isDefaultForAgent && (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                            title="Default outbound number"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+              {(() => {
+                const selectedAgent = outboundAgents.find(
+                  (agent) =>
+                    String(agent.id || agent.name || "") ===
+                      openAgentMenu?.agentId &&
+                    openAgentMenu?.numberId === numberId,
+                );
+                if (!selectedAgent) return null;
+                return (
+                  <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-amber-100 bg-amber-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-900">
+                        {selectedAgent.name || "Unnamed agent"}
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        This agent can place outbound calls from this number.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleRemoveAgentAssignment(number, selectedAgent)
+                      }
+                      disabled={!!busy}
+                      className="rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 shadow-sm transition-all hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {busy === `unassign-${numberId}-${selectedAgent.id}`
+                        ? "Removing…"
+                        : "Remove this agent"}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

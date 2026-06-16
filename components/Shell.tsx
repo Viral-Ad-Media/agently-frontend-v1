@@ -41,18 +41,6 @@ const NAV_ITEMS: Array<{
     description: "Transcripts, outcomes, and reports",
   },
   {
-    to: "/outreach",
-    icon: "fa-solid fa-calendar-check",
-    label: "Call Campaigns",
-    description: "Plan, schedule, and manage calls",
-  },
-  {
-    to: "/notifications",
-    icon: "fa-solid fa-bell",
-    label: "Notifications",
-    description: "Alerts, follow-ups, and system activity",
-  },
-  {
     to: "/leads",
     icon: "fa-solid fa-users",
     label: "Lead CRM",
@@ -122,6 +110,12 @@ const getPageMeta = (pathname: string, org: Organization) => {
       description:
         "Customize every chatbot, sync knowledge, and control how your website assistant behaves.",
     },
+    "/knowledge-bases": {
+      eyebrow: "Business Intelligence",
+      title: "Business Knowledge Bases",
+      description:
+        "Separate each business website, source library, FAQs, and agent assignments without data mixing.",
+    },
     "/calls": {
       eyebrow: "Conversation Records",
       title: "Call Intelligence",
@@ -156,7 +150,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
       eyebrow: "Workspace Setup",
       title: "Settings",
       description:
-        "Control organization details, routing preferences, and business-number settings.",
+        "Control organization details, routing preferences, team access, billing, and business-number settings.",
     },
   };
 

@@ -243,6 +243,39 @@ export const api = {
     return response.source;
   },
 
+  async updateKnowledgeSource(knowledgeBaseId: string, sourceId: string, updates: {
+    url?: string;
+    title?: string;
+    isPrimary?: boolean;
+    scrapeStatus?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const response = await request<{ source: KnowledgeSource }>(`/api/knowledge-bases/${knowledgeBaseId}/sources/${sourceId}`, {
+      method: 'PATCH',
+      body: updates,
+    });
+    return response.source;
+  },
+
+  async deleteKnowledgeSource(knowledgeBaseId: string, sourceId: string) {
+    return request<{ success: boolean }>(`/api/knowledge-bases/${knowledgeBaseId}/sources/${sourceId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async syncKnowledgeSource(knowledgeBaseId: string, sourceId: string) {
+    return request<{
+      success: boolean;
+      chunksStored: number;
+      pagesScraped: number;
+      strategy: string;
+      source: KnowledgeSource;
+    }>(`/api/knowledge-bases/${knowledgeBaseId}/sources/${sourceId}/sync`, {
+      method: 'POST',
+      body: {},
+    });
+  },
+
   async assignVoiceAgentKnowledgeBase(knowledgeBaseId: string, voiceAgentId: string) {
     return request<{ success: boolean; knowledgeBase: KnowledgeBase }>(`/api/knowledge-bases/${knowledgeBaseId}/voice-agents/${voiceAgentId}`, {
       method: 'PUT',
