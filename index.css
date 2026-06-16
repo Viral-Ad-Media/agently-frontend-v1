@@ -263,3 +263,33 @@ textarea {
 .animate-fade-up-d3 {
   animation-delay: .24s;
 }
+
+/* ─── MOBILE/TOUCH VIEWPORT STABILITY ──────────────────────────
+   Prevent horizontal rubber-band dragging and off-screen page drift.
+   The app shell owns vertical scrolling; individual overflow areas can still
+   scroll normally via .custom-scrollbar and overflow-y-auto. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 320px;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+body {
+  position: relative;
+  touch-action: pan-y;
+}
+
+#root {
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+[data-radix-scroll-area-viewport],
+.custom-scrollbar,
+main {
+  overscroll-behavior-x: contain;
+}

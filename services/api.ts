@@ -7,6 +7,8 @@ import {
   FAQ,
   Lead,
   LeadOutreachSchedule,
+  KnowledgeBase,
+  KnowledgeSource,
   Organization,
   User,
   UserRole,
@@ -15,7 +17,7 @@ import {
 } from '../types';
 import { getSessionToken } from './session';
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class ApiError extends Error {
   status: number;
@@ -194,6 +196,67 @@ export const api = {
     return request<WorkspaceBootstrap>('/api/bootstrap');
   },
 
+  async listKnowledgeBases() {
+    const response = await request<{ knowledgeBases: KnowledgeBase[] }>('/api/knowledge-bases');
+    return response.knowledgeBases;
+  },
+
+  async createKnowledgeBase(payload: {
+    name?: string;
+    businessName?: string;
+    website: string;
+    description?: string;
+    industry?: string;
+    isPrimary?: boolean;
+    metadata?: Record<string, unknown>;
+  }) {
+    const response = await request<{ knowledgeBase: KnowledgeBase }>('/api/knowledge-bases', {
+      method: 'POST',
+      body: payload,
+    });
+    return response.knowledgeBase;
+  },
+
+  async updateKnowledgeBase(id: string, updates: Partial<KnowledgeBase> & { website?: string }) {
+    const response = await request<{ knowledgeBase: KnowledgeBase }>(`/api/knowledge-bases/${id}`, {
+      method: 'PATCH',
+      body: updates,
+    });
+    return response.knowledgeBase;
+  },
+
+  async deleteKnowledgeBase(id: string) {
+    return request<{ success: boolean }>(`/api/knowledge-bases/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async addKnowledgeSource(knowledgeBaseId: string, payload: {
+    url: string;
+    title?: string;
+    isPrimary?: boolean;
+  }) {
+    const response = await request<{ source: KnowledgeSource }>(`/api/knowledge-bases/${knowledgeBaseId}/sources`, {
+      method: 'POST',
+      body: payload,
+    });
+    return response.source;
+  },
+
+  async assignVoiceAgentKnowledgeBase(knowledgeBaseId: string, voiceAgentId: string) {
+    return request<{ success: boolean; knowledgeBase: KnowledgeBase }>(`/api/knowledge-bases/${knowledgeBaseId}/voice-agents/${voiceAgentId}`, {
+      method: 'PUT',
+      body: {},
+    });
+  },
+
+  async assignChatbotKnowledgeBase(knowledgeBaseId: string, chatbotId: string) {
+    return request<{ success: boolean; knowledgeBase: KnowledgeBase }>(`/api/knowledge-bases/${knowledgeBaseId}/chatbots/${chatbotId}`, {
+      method: 'PUT',
+      body: {},
+    });
+  },
+
   async generateOnboardingFaqs(website: string) {
     const response = await request<{ website: string; faqs: FAQ[] }>('/api/onboarding/faqs', {
       method: 'POST',
@@ -253,30 +316,31 @@ export const api = {
     });
   },
 
-  async createFaq(question: string, answer: string) {
+  async createFaq(question: string, answer: string, voiceAgentId?: string) {
     return request<FAQ>('/api/agent/faqs', {
       method: 'POST',
-      body: { question, answer },
+      body: { question, answer, voiceAgentId, voice_agent_id: voiceAgentId },
     });
   },
 
-  async updateFaq(id: string, updates: Partial<FAQ>) {
+  async updateFaq(id: string, updates: Partial<FAQ>, voiceAgentId?: string) {
     return request<FAQ>(`/api/agent/faqs/${id}`, {
       method: 'PATCH',
-      body: updates,
+      body: { ...updates, voiceAgentId, voice_agent_id: voiceAgentId },
     });
   },
 
-  async removeFaq(id: string) {
-    return request<{ success: boolean }>(`/api/agent/faqs/${id}`, {
+  async removeFaq(id: string, voiceAgentId?: string) {
+    const suffix = voiceAgentId ? `?voiceAgentId=${encodeURIComponent(voiceAgentId)}` : '';
+    return request<{ success: boolean }>(`/api/agent/faqs/${id}${suffix}`, {
       method: 'DELETE',
     });
   },
 
-  async syncFaqs(website?: string) {
+  async syncFaqs(website?: string, voiceAgentId?: string) {
     const response = await request<{ website: string; faqs: FAQ[] }>('/api/agent/faqs/sync', {
       method: 'POST',
-      body: { website },
+      body: { website, voiceAgentId, voice_agent_id: voiceAgentId },
     });
     return response.faqs;
   },

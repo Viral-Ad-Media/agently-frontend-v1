@@ -228,7 +228,7 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   const timezone =
     org.profile?.timezone ||
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    "America/New_York";
+    "America/Chicago";
 
   const defaultPurposeText = useMemo(
     () =>

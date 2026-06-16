@@ -7,6 +7,12 @@ import {
   LeadOutreachWindow,
   Organization,
 } from "../types";
+import {
+  formatTimezoneOptionLabel,
+  getAvailableTimezones,
+  resolveOrgTimezone,
+  resolveWorkspaceTimezone,
+} from "@/utils/timezones";
 
 interface LeadsProps {
   leads: Lead[];
@@ -64,49 +70,6 @@ const WEEKDAYS = [
   { code: "sat", label: "Sat" },
   { code: "sun", label: "Sun" },
 ];
-const TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Phoenix",
-  "America/Anchorage",
-  "America/Sao_Paulo",
-  "America/Mexico_City",
-  "America/Bogota",
-  "America/Buenos_Aires",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Madrid",
-  "Europe/Rome",
-  "Europe/Amsterdam",
-  "Europe/Zurich",
-  "Europe/Stockholm",
-  "Europe/Moscow",
-  "Africa/Lagos",
-  "Africa/Nairobi",
-  "Africa/Johannesburg",
-  "Africa/Cairo",
-  "Africa/Accra",
-  "Asia/Dubai",
-  "Asia/Riyadh",
-  "Asia/Karachi",
-  "Asia/Kolkata",
-  "Asia/Bangkok",
-  "Asia/Singapore",
-  "Asia/Hong_Kong",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Australia/Melbourne",
-  "Australia/Perth",
-  "Pacific/Auckland",
-  "UTC",
-];
-
 const PAGE_SIZE = 10;
 const SIDEBAR_SIZE = 3;
 const emptyWindow = (): LeadOutreachWindow => ({
@@ -310,7 +273,7 @@ const normalizeSchedule = (value: unknown): Schedule => {
       raw.callPurpose ||
       raw.call_purpose ||
       firstRecipient.name ||
-      (tag ? `#${tag}` : "Outreach schedule"),
+      (tag ? `#${tag}` : "Call campaign"),
   );
   const startDate = String(
     raw.startDate ||
@@ -338,7 +301,9 @@ const normalizeSchedule = (value: unknown): Schedule => {
     tag,
     voiceAgentId: String(raw.voiceAgentId || raw.voice_agent_id || ""),
     windows: normalizeWindows(raw.windows || value),
-    timezone: String(raw.timezone || "America/New_York"),
+    timezone: resolveWorkspaceTimezone(
+      typeof raw.timezone === "string" ? raw.timezone : null,
+    ),
     extraContext: String(
       raw.extraContext ||
         raw.extra_context ||
@@ -427,10 +392,7 @@ const Leads: React.FC<LeadsProps> = ({
   const [refreshingLeads, setRefreshingLeads] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const defaultTz =
-    (org as any)?.profile?.timezone ||
-    (org as any)?.settings?.timezone ||
-    "America/New_York";
+  const defaultTz = resolveOrgTimezone(org);
 
   const allTags = useMemo(() => {
     const s = new Set<string>();
@@ -502,6 +464,24 @@ const Leads: React.FC<LeadsProps> = ({
     };
   };
   const [scheduleForm, setScheduleForm] = useState(defaultSchedForm());
+  const defaultTimezoneRef = useRef(defaultTz);
+
+  useEffect(() => {
+    const previousDefault = defaultTimezoneRef.current;
+    if (previousDefault === defaultTz) return;
+
+    setScheduleForm((current) =>
+      !current.timezone || current.timezone === previousDefault
+        ? { ...current, timezone: defaultTz }
+        : current,
+    );
+    setEditingSchedule((current) =>
+      current && (!current.timezone || current.timezone === previousDefault)
+        ? { ...current, timezone: defaultTz }
+        : current,
+    );
+    defaultTimezoneRef.current = defaultTz;
+  }, [defaultTz]);
 
   useEffect(() => {
     if (!toast) return;
@@ -672,10 +652,7 @@ const Leads: React.FC<LeadsProps> = ({
           .filter((schedule) => schedule.id),
       );
     } catch (error) {
-      showMsg(
-        friendlyError(error, "Could not load outreach schedules."),
-        false,
-      );
+      showMsg(friendlyError(error, "Could not load call campaigns."), false);
     }
   };
   useEffect(() => {
@@ -969,7 +946,7 @@ const Leads: React.FC<LeadsProps> = ({
       setScheduleTarget(null); // auto-close
       setSelectedIds(new Set());
       await refreshSchedules();
-      showMsg("Schedule saved.");
+      showMsg("Call campaign saved.");
     });
   };
 
@@ -1003,7 +980,7 @@ const Leads: React.FC<LeadsProps> = ({
       } as Record<string, unknown>);
       setEditingSchedule(null); // auto-close
       await refreshSchedules();
-      showMsg("Schedule updated.");
+      showMsg("Call campaign updated.");
     });
   };
 
@@ -1507,7 +1484,7 @@ const Leads: React.FC<LeadsProps> = ({
               Tag collections
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Create outreach campaigns by tag.
+              Create call campaigns by tag.
             </p>
             {tagStats.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center text-sm font-semibold text-slate-400">
@@ -1533,7 +1510,7 @@ const Leads: React.FC<LeadsProps> = ({
                         onClick={() => openTagSchedule(tag)}
                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700 sm:w-auto sm:py-1.5"
                       >
-                        Schedule in Outreach
+                        Create Campaign
                       </button>
                     </div>
                   </div>
@@ -2069,7 +2046,7 @@ const Leads: React.FC<LeadsProps> = ({
       <AppModal
         open={!!scheduleTarget}
         onClose={() => setScheduleTarget(null)}
-        title="Create outreach schedule"
+        title="Create call campaign"
         description={scheduleTarget?.label || ""}
         size="xl"
         footer={
@@ -2273,14 +2250,13 @@ const Leads: React.FC<LeadsProps> = ({
               }
               className={iCls}
             >
-              {[
-                scheduleForm.timezone,
-                ...TIMEZONES.filter((t) => t !== scheduleForm.timezone),
-              ].map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
+              {getAvailableTimezones(scheduleForm.timezone || defaultTz).map(
+                (tz) => (
+                  <option key={tz} value={tz}>
+                    {formatTimezoneOptionLabel(tz)}
+                  </option>
+                ),
+              )}
             </select>
           </div>
 
@@ -2447,12 +2423,11 @@ const Leads: React.FC<LeadsProps> = ({
                 }
                 className={iCls}
               >
-                {[
-                  editingSchedule.timezone,
-                  ...TIMEZONES.filter((t) => t !== editingSchedule.timezone),
-                ].map((tz) => (
+                {getAvailableTimezones(
+                  editingSchedule.timezone || defaultTz,
+                ).map((tz) => (
                   <option key={tz} value={tz}>
-                    {tz}
+                    {formatTimezoneOptionLabel(tz)}
                   </option>
                 ))}
               </select>

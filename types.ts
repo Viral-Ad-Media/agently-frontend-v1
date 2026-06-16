@@ -272,6 +272,7 @@ export interface AgentConfig {
   voicemailFallback: boolean;
   dataCaptureFields: string[];
   isActive: boolean;
+  knowledgeBaseId?: string | null;
   webhookUrl?: string;
   escalationWorkingHoursStart?: string;
   escalationWorkingHoursEnd?: string;
@@ -319,6 +320,7 @@ export interface ChatbotConfig {
   id: string;
   name: string;
   voiceAgentId: string;
+  knowledgeBaseId?: string | null;
   faqs: FAQ[];
   headerTitle: string;
   welcomeMessage: string;
@@ -333,6 +335,51 @@ export interface ChatbotConfig {
   widgetScriptUrl: string;
   chatVoice?: string;
   chatLanguages?: string[];
+}
+
+
+export interface KnowledgeSource {
+  id: string;
+  knowledgeBaseId: string;
+  sourceType: string;
+  url: string;
+  normalizedUrl: string;
+  domain: string;
+  title: string;
+  isPrimary: boolean;
+  scrapeStatus: string;
+  scrapeStrategy?: string;
+  lastScrapedAt?: string | null;
+  lastError?: string;
+  pageCount: number;
+  chunkCount: number;
+  productCount: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface KnowledgeBase {
+  id: string;
+  organizationId: string;
+  name: string;
+  businessName: string;
+  description: string;
+  industry: string;
+  primaryUrl: string;
+  domain: string;
+  isPrimary: boolean;
+  status: string;
+  syncStatus: string;
+  lastSyncedAt?: string | null;
+  metadata?: Record<string, unknown>;
+  sources: KnowledgeSource[];
+  linkedVoiceAgentIds: string[];
+  linkedChatbotIds: string[];
+  agentCount: number;
+  chatbotCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface BusinessProfile {
@@ -407,4 +454,6 @@ export interface WorkspaceBootstrap {
   calls: CallRecord[];
   conversation: ChatMessage[];
   dashboard: DashboardData;
+  agentStats?: AgentStats[];
+  knowledgeBases?: KnowledgeBase[];
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Organization, User, UserRole } from "../types";
 import AppModal from "../components/AppModal";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
@@ -171,6 +172,13 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     <div className="space-y-6 animate-fade-up">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <Link
+            to="/settings"
+            className="mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-amber-700"
+          >
+            <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
+            Settings
+          </Link>
           <h2 className="text-xl font-black text-slate-900">Team Management</h2>
           <p className="mt-0.5 text-xs text-slate-400">
             Manage workspace access and permissions.

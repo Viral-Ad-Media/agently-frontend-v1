@@ -41,40 +41,16 @@ const NAV_ITEMS: Array<{
     description: "Transcripts, outcomes, and reports",
   },
   {
-    to: "/outreach",
-    icon: "fa-solid fa-calendar-check",
-    label: "Outreach",
-    description: "Schedule outbound calls",
-  },
-  {
-    to: "/notifications",
-    icon: "fa-solid fa-bell",
-    label: "Notifications",
-    description: "Alerts, follow-ups, and system activity",
-  },
-  {
     to: "/leads",
     icon: "fa-solid fa-users",
     label: "Lead CRM",
     description: "Pipeline health and contact capture",
   },
   {
-    to: "/team",
-    icon: "fa-solid fa-user-shield",
-    label: "Team",
-    description: "Members, permissions, and invites",
-  },
-  {
-    to: "/billing",
-    icon: "fa-solid fa-credit-card",
-    label: "Billing",
-    description: "Plan usage, invoices, and upgrades",
-  },
-  {
     to: "/settings",
     icon: "fa-solid fa-gear",
     label: "Settings",
-    description: "Workspace and phone setup",
+    description: "Workspace, team, billing, and phone setup",
   },
 ];
 
@@ -114,13 +90,13 @@ const getPageMeta = (pathname: string, org: Organization) => {
       eyebrow: "Number Management",
       title: "Phone Numbers",
       description:
-        "Search, purchase, and assign Twilio numbers to your voice agents — all from your master account.",
+        "Search, connect, and manage business numbers for your voice agents.",
     },
     "/test-agent": {
-      eyebrow: "Beta Trial Line",
+      eyebrow: "Agent Preview",
       title: "Test Your Agent",
       description:
-        "Run limited trial calls on the platform-owned number before buying a dedicated line.",
+        "Run limited trial calls before connecting a dedicated business number.",
     },
     "/features": {
       eyebrow: "Product Surface",
@@ -141,10 +117,10 @@ const getPageMeta = (pathname: string, org: Organization) => {
         "Review transcripts, outcomes, and downloadable reports across every conversation.",
     },
     "/outreach": {
-      eyebrow: "Outbound Scheduling",
-      title: "Outreach Scheduler",
+      eyebrow: "Outbound Calls",
+      title: "Call Campaigns",
       description:
-        "Create direct-recipient and lead-backed outbound call schedules for your agents.",
+        "Create call-now, scheduled, and lead-backed campaigns for your agents.",
     },
     "/leads": {
       eyebrow: "Pipeline Health",
@@ -168,7 +144,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
       eyebrow: "Workspace Setup",
       title: "Settings",
       description:
-        "Control organization details, routing preferences, and Twilio connection settings.",
+        "Control organization details, routing preferences, team access, billing, and business-number settings.",
     },
   };
 
@@ -212,7 +188,7 @@ const AppLoading: React.FC = () => (
   <div className="min-h-screen bg-transparent px-3 py-6 sm:px-6 sm:py-10">
     <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center">
       <div className="w-full rounded-[1.5rem] border border-white/70 bg-white/85 p-5 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)] sm:h-14 sm:w-14">
+        <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)] sm:h-14 sm:w-14">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
         </div>
         <p className="text-[9px] font-black uppercase tracking-[0.24em] text-indigo-500 sm:text-[10px] sm:tracking-[0.35em]">
@@ -262,26 +238,26 @@ const SidebarLink: React.FC<{
       href={`#${to}`}
       title={description}
       onClick={handleNavigate}
-      className={`group flex items-center gap-3 rounded-[1.25rem] border px-3.5 py-3 transition-colors duration-150 ${
+      className={`group flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors duration-150 ${
         isActive
           ? "border-amber-200 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-[0_18px_40px_rgba(255,153,0,0.18)]"
           : "border-transparent bg-transparent text-slate-500 hover:border-white/70 hover:bg-white/70 hover:text-slate-900"
       }`}
     >
       <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors duration-150 ${
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
           isActive
             ? "bg-white/18 text-white"
             : "bg-slate-100 text-slate-700 group-hover:bg-white"
         }`}
       >
-        <i className={`${icon} text-base`} />
+        <i className={`${icon} text-sm`} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-black tracking-tight">{label}</p>
       </div>
       <div
-        className={`h-2.5 w-2.5 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-300"}`}
+        className={`h-2 w-2 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-300"}`}
       />
     </a>
   );
@@ -618,6 +594,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     org.agent;
   const pageMeta = getPageMeta(location.pathname, org);
   const isTestAgentPage = location.pathname === "/test-agent";
+  const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -633,19 +610,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         />
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[18.75rem] md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[16.5rem] md:translate-x-0 ${
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="m-2 flex h-[calc(100vh-1rem)] flex-col rounded-[1.5rem] border border-white/70 bg-white/88 p-4 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-xl sm:m-4 sm:h-[calc(100vh-2rem)] sm:rounded-[2rem] sm:p-5">
+          <div className="m-2 flex h-[calc(100vh-1rem)] flex-col rounded-2xl border border-white/70 bg-white/90 p-3 shadow-[0_18px_52px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:m-3 sm:h-[calc(100vh-1.5rem)] sm:p-3.5">
             <div className="flex items-center justify-between">
               <Link to="/dashboard" className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
-                  <i className="fa-solid fa-robot text-xl" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)]">
+                  <i className="fa-solid fa-robot text-base" />
                 </div>
                 <div>
-                  <p className="font-display text-xl text-slate-900">Agently</p>
-                  <p className="text-[10px] font-black uppercase tracking-[0.32em] text-indigo-500">
+                  <p className="font-display text-lg text-slate-900">Agently</p>
+                  <p className="text-[9px] font-black uppercase tracking-[0.24em] text-indigo-500">
                     Reception Ops
                   </p>
                 </div>
@@ -660,7 +637,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </button>
             </div>
 
-            <nav className="mt-5 flex-1 space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
+            <nav className="mt-4 flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1">
               {NAV_ITEMS.map((item) => (
                 <SidebarLink
                   key={item.to}
@@ -670,24 +647,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               ))}
             </nav>
 
-            <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
-              <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-3">
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
                     Plan Usage
                   </p>
                   <Link
-                    to="/billing"
+                    to="/settings"
                     className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600"
                   >
                     {org.subscription.plan}
                   </Link>
                 </div>
-                <p className="mt-2 text-xs font-semibold text-slate-600">
+                <p className="mt-1.5 text-[11px] font-semibold text-slate-600">
                   {org.subscription.usage.minutes} /{" "}
                   {org.subscription.usage.minuteLimit} minutes used
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-amber-400 to-emerald-400"
                     style={{ width: `${usagePercent}%` }}
@@ -697,7 +674,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <Link
                 to="/test-agent"
-                className={`flex w-full items-center justify-center gap-2 rounded-[1.35rem] px-5 py-3.5 text-[11px] font-black uppercase tracking-[0.28em] shadow-[0_18px_40px_rgba(255,153,0,0.24)] transition ${
+                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] shadow-sm transition ${
                   isTestAgentPage
                     ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white ring-2 ring-amber-200/70"
                     : "bg-indigo-600 text-white hover:bg-indigo-700"
@@ -710,7 +687,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <button
                 onClick={onLogout}
-                className="flex w-full items-center justify-center gap-2 rounded-[1.3rem] border border-slate-200 px-4 py-3 text-[11px] font-black uppercase tracking-[0.24em] text-slate-500 transition hover:border-red-200 hover:text-red-600"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-red-200 hover:text-red-600"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -733,9 +710,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex-1 md:ml-[18.75rem] md:min-w-0">
-          <div className="px-3 pb-8 pt-3 sm:px-5 sm:pb-10 sm:pt-4 lg:px-6 xl:px-8">
-            <header className="sticky top-4 z-20">
+        <div className="flex-1 md:ml-[16.5rem] md:min-w-0">
+          <div className="flex h-screen min-h-0 flex-col px-3 pb-0 pt-3 sm:px-5 sm:pt-4 lg:px-6 xl:px-8">
+            <header className="relative z-20 shrink-0">
               <div className="rounded-[1.35rem] border border-white/70 bg-white/84 px-3 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:rounded-[1.6rem] sm:px-5 sm:py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
@@ -748,6 +725,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                       <MenuButtonIcon />
                     </button>
                     <div className="min-w-0 flex-1">
+                      {settingsSubpageBack ? (
+                        <Link
+                          to="/settings"
+                          className="mb-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-amber-200 hover:text-indigo-600"
+                        >
+                          <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
+                          Settings
+                        </Link>
+                      ) : null}
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-indigo-600">
                           {pageMeta.eyebrow}
@@ -779,7 +765,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                       </span>
                     </div>
                     <Link
-                      to="/billing"
+                      to="/settings"
                       className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600"
                     >
                       {org.subscription.plan}
@@ -802,7 +788,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             </header>
 
-            <main className="mx-auto mt-5 w-full min-w-0 max-w-full md:mt-6 xl:max-w-[88%] 2xl:max-w-[88%]">
+            <main className="custom-scrollbar mx-auto mt-4 w-full min-w-0 max-w-full flex-1 overflow-y-auto pb-8 pr-1 md:mt-5 md:pb-10 xl:max-w-[88%] 2xl:max-w-[88%]">
               {user.role === "Viewer" &&
               [
                 "/agent",
@@ -878,7 +864,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
                 <ICONS.Robot />
               </div>
               <div>
-                <p className="font-display text-xl text-slate-900">Agently</p>
+                <p className="font-display text-lg text-slate-900">Agently</p>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">
                   AI Receptionist SaaS
                 </p>
