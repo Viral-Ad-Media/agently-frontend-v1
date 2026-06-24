@@ -686,6 +686,8 @@ export const voiceCallsApi = {
     getOutreachSchedule: (scheduleId: string) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}`),
     updateOutreachSchedule: (scheduleId: string, payload: unknown) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}`, { method: 'PATCH', body: payload }),
     cancelOutreachSchedule: (scheduleId: string, payload: unknown = {}) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}/cancel`, { method: 'POST', body: payload }),
+    previewRerunFromCalls: (payload: unknown) => request('/api/outreach/rerun-preview', { method: 'POST', body: payload }),
+    createRerunFromCalls: (payload: unknown) => request('/api/outreach/rerun', { method: 'POST', body: payload }),
     deleteOutreachSchedule: (scheduleId: string) => request(`/api/outreach/schedules/${encodeURIComponent(scheduleId)}`, { method: 'DELETE' })
       .catch(() => request(`/api/call-schedules/${encodeURIComponent(scheduleId)}`, { method: 'DELETE' })),
     runNow: (scheduleId: string) => {
@@ -719,6 +721,10 @@ export const voiceCallsApi = {
     getCallRecording: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/recording`),
     getCallUnansweredQuestions: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/unanswered-questions`),
     summarizeCall: (callId: string, payload: unknown = { force: true }) => request(`/api/calls/${encodeURIComponent(callId)}/summarize`, { method: 'POST', body: payload }),
+    updateCallTags: (callId: string, payload: { tags: string[]; action?: 'add' | 'remove' | 'replace' }) =>
+      request(`/api/calls/${encodeURIComponent(callId)}/tags`, { method: 'PATCH', body: payload }),
+    bulkUpdateCallTags: (payload: { callIds: string[]; tags: string[]; action?: 'add' | 'remove' | 'replace' }) =>
+      request('/api/calls/bulk-tags', { method: 'POST', body: payload }),
     endCall: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/end`, { method: 'POST', body: {} }),
     transferCall: (callId: string, payload: unknown) => request(`/api/calls/${encodeURIComponent(callId)}/transfer`, { method: 'POST', body: payload }),
   },

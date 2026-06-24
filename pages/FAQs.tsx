@@ -1,114 +1,125 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
+
+const FAQS = [
+  {
+    question: "What does Agently actually do?",
+    answer:
+      "Agently lets you launch AI voice agents, website chatbots, outbound follow-up workflows, lead capture, CRM handoff, and call intelligence from one workspace. It is built for customer conversations before, during, and after the first call.",
+  },
+  {
+    question: "Is Agently only an AI receptionist?",
+    answer:
+      "No. Reception-style answering is one workflow, but Agently is a broader AI agent platform for inbound calls, outbound campaigns, qualification, no-show recovery, cart recovery, appointment setting, onboarding, and post-call follow-up.",
+  },
+  {
+    question: "How does an agent know what to say?",
+    answer:
+      "Each agent can be connected to a selected Knowledge Base made from approved website content, FAQs, product details, policies, and custom instructions. The goal is to keep answers grounded in the content you assign to that agent.",
+  },
+  {
+    question: "Can different agents use different Knowledge Bases?",
+    answer:
+      "Yes. You can separate Knowledge Bases by brand, website, department, industry, or workflow. An agent assigned to one Knowledge Base should not fall back to another Knowledge Base when it does not know an answer.",
+  },
+  {
+    question: "Can Agently make outbound calls?",
+    answer:
+      "Yes. Agently supports outbound campaigns for lead follow-up, missed-call recovery, no-show reminders, trial activation, cart recovery, renewal nudges, and other structured call workflows.",
+  },
+  {
+    question: "What happens when the AI cannot answer?",
+    answer:
+      "The agent can be instructed to be honest, capture the question, route the conversation, schedule a callback, or escalate to a human with the relevant call summary and context.",
+  },
+  {
+    question: "Do I need special hardware?",
+    answer:
+      "No. Agently is cloud-based. You manage agents from the dashboard, connect or assign numbers where supported, and review conversations, outcomes, leads, and follow-up activity from the workspace.",
+  },
+];
 
 const FAQs: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-  const faqs = [
-    {
-      question: "How does Agently learn about my business?",
-      answer:
-        "Agently uses advanced AI to scan your website and extract key information about your services, pricing, and business hours. You can also manually add FAQ entries and specific instructions in the dashboard.",
-    },
-    {
-      question: "Can Agently handle complex customer questions?",
-      answer:
-        "Yes. Agently is powered by the latest Large Language Models, allowing it to understand context and provide nuanced answers. If a question is too complex, it can automatically escalate the call to a human team member.",
-    },
-    {
-      question: "What happens if Agently can't answer a question?",
-      answer:
-        "Agently is programmed to be honest. If it doesn't know an answer, it will offer to take a message or transfer the caller to your escalation number, ensuring the customer is never left frustrated.",
-    },
-    {
-      question: "Is my customer data secure?",
-      answer:
-        "Absolutely. We use industry-standard encryption for all data at rest and in transit. We are fully compliant with major data protection regulations and never sell your customer information.",
-    },
-    {
-      question: "Do I need any special hardware?",
-      answer:
-        "No. Agently is a cloud-based platform. You can use your existing phone number or we can provide a new one for you. All you need is an internet connection to manage your settings.",
-    },
-    {
-      question: "Can I customize the voice of my AI agent?",
-      answer:
-        "Yes. We offer a variety of high-quality, natural-sounding voice profiles. You can choose the one that best fits your brand's personality, from professional and authoritative to friendly and approachable.",
-    },
-  ];
-
   return (
-    <div className="min-h-screen bg-white font-inter pt-32 pb-20">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-20">
-          <h2 className="text-xs font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">
-            Support Center
-          </h2>
-          <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-none">
-            Got Questions? <br />
-            We've Got Answers.
-          </h1>
-          <p className="text-xl text-slate-500 font-medium leading-relaxed">
-            Everything you need to know about Agently and how it can transform
-            your business communications.
-          </p>
-        </div>
-
-        <div className="max-w-3xl mx-auto space-y-6">
-          {faqs.map((faq, i) => (
-            <div
-              key={i}
-              className="group rounded-[2.5rem] border-2 border-slate-50 bg-slate-50 hover:bg-white hover:border-indigo-100 transition-all duration-300 overflow-hidden"
-            >
-              <button
-                onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="w-full p-8 flex items-center justify-between text-left outline-none"
-              >
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                  {faq.question}
-                </h3>
-                <div
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${openIndex === i ? "bg-indigo-600 text-white rotate-45" : "bg-white text-slate-400"}`}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </div>
-              </button>
-              <div
-                className={`transition-all duration-500 overflow-hidden ${openIndex === i ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
-              >
-                <div className="px-8 pb-8 text-lg text-slate-500 font-medium leading-relaxed">
-                  {faq.answer}
-                </div>
-              </div>
+    <div className="marketing-page text-[#232f3e]">
+      <section className="border-b border-[#232f3e]/10">
+        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.8fr_1.2fr] lg:py-7">
+          <div>
+            <div className="marketing-eyebrow mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff5527]" />
+              FAQs
             </div>
-          ))}
-        </div>
+            <h1 className="marketing-page-title max-w-xl">
+              Questions before your first agent goes live.
+            </h1>
+            <p className="marketing-copy mt-5 max-w-xl">
+              Clear answers on voice agents, chatbots, Knowledge Bases, outbound
+              calls, escalation, and how Agently fits into customer conversation
+              workflows.
+            </p>
+            <div className="mt-6 rounded-[1.65rem] border border-[#232f3e]/10 bg-[#fbfaf4]/82 p-5 shadow-[0_18px_55px_rgba(35,47,62,0.08)] backdrop-blur-xl">
+              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#ff5527]">
+                Need a workflow review?
+              </p>
+              <h2 className="mt-2 max-w-sm text-[clamp(1.75rem,3vw,2.5rem)] font-medium leading-none tracking-[-0.055em] text-[#232f3e]">
+                Talk through your first agent setup.
+              </h2>
+              <p className="mt-3 text-base font-normal leading-[1.3125] text-[#232f3e]">
+                Share the calls, chats, or follow-ups you want to automate and
+                we will help you map the right starting point.
+              </p>
+              <Link
+                to="/contact"
+                className="mt-4 inline-flex rounded-full bg-[#232f3e] px-5 py-3 text-[11px] font-medium uppercase tracking-[0.2em] text-[#fbfaf4] transition hover:bg-[#1a2633]"
+              >
+                Contact us
+              </Link>
+            </div>
+          </div>
 
-        <div className="mt-24 text-center p-12 rounded-[3rem] bg-slate-900 text-white relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl -ml-32 -mt-32"></div>
-          <h3 className="text-3xl font-black mb-4 tracking-tight">
-            Still have questions?
-          </h3>
-          <p className="text-indigo-100 font-medium leading-relaxed mb-10">
-            Our support team is available 24/7 to help you with any inquiries.
-          </p>
-          <button className="px-10 py-5 bg-white text-slate-900 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all shadow-2xl active:scale-95">
-            Contact Support
-          </button>
+          <div className="space-y-3">
+            {FAQS.map((faq, index) => {
+              const isOpen = openIndex === index;
+              return (
+                <article
+                  key={faq.question}
+                  className="overflow-hidden rounded-[1.35rem] border border-[#232f3e]/10 bg-[#fbfaf4]/88 shadow-[0_14px_42px_rgba(35,47,62,0.055)] backdrop-blur-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenIndex(isOpen ? null : index)}
+                    className="flex w-full items-center justify-between gap-5 px-5 py-4 text-left outline-none"
+                  >
+                    <h2 className="text-base font-medium leading-[1.12] tracking-[-0.035em] text-[#232f3e]">
+                      {faq.question}
+                    </h2>
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-medium transition ${
+                        isOpen
+                          ? "rotate-45 bg-[#ff5527] text-white"
+                          : "bg-white text-[#232f3e]/58"
+                      }`}
+                    >
+                      +
+                    </span>
+                  </button>
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                      isOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    <p className="px-5 pb-5 text-base font-normal leading-[1.3125] text-[#232f3e]">
+                      {faq.answer}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ChatMessage,
   ChatbotConfig,
@@ -211,10 +212,20 @@ const Messenger: React.FC<MessengerProps> = ({
   const saveCustomization = async () => {
     await runAction("save", async () => {
       const freshEmbedScript = buildEmbedScript(draft);
+      const knowledgeBaseId =
+        currentKnowledgeBase?.id || draft.knowledgeBaseId || "";
+      if (knowledgeBaseId) {
+        const savedFaqs = await api.replaceKnowledgeBaseFaqs(
+          knowledgeBaseId,
+          draft.faqs || [],
+          { chatbotId: activeChatbot.id },
+        );
+        patch({ faqs: savedFaqs.manualFaqs || [] });
+      }
       await onUpdateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
-        knowledgeBaseId: draft.knowledgeBaseId,
+        knowledgeBaseId,
         headerTitle: draft.headerTitle,
         welcomeMessage: draft.welcomeMessage,
         placeholder: draft.placeholder,
@@ -224,12 +235,14 @@ const Messenger: React.FC<MessengerProps> = ({
         avatarLabel: draft.avatarLabel,
         customPrompt: draft.customPrompt,
         suggestedPrompts: draft.suggestedPrompts,
-        faqs: draft.faqs,
+        // Legacy chatbot.faqs is intentionally cleared when a Knowledge Base is selected.
+        // Runtime answers must come from knowledge_base_id-scoped DB FAQs/chunks only.
+        faqs: knowledgeBaseId ? [] : draft.faqs,
         embedScript: freshEmbedScript,
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
       } as any);
-      setSaveSuccess("Saved! Embed script updated.");
+      setSaveSuccess("Saved! Knowledge base assignment and FAQs are synced.");
       setSaveModalOpen(true);
     });
   };
@@ -248,10 +261,35 @@ const Messenger: React.FC<MessengerProps> = ({
       return;
     await runAction("assign-knowledge-base", async () => {
       await onAssignKnowledgeBase(knowledgeBaseId, activeChatbot.id);
-      patch({ knowledgeBaseId });
-      setSaveSuccess("Business knowledge base updated.");
+      patch({ knowledgeBaseId, faqs: [] });
+      setSaveSuccess("Knowledge base updated.");
     });
   };
+
+  useEffect(() => {
+    const knowledgeBaseId = currentKnowledgeBase?.id;
+    if (!knowledgeBaseId) return;
+    let cancelled = false;
+    api
+      .listKnowledgeBaseFaqs(knowledgeBaseId)
+      .then((result) => {
+        if (cancelled) return;
+        const kbFaqs = (result.manualFaqs || [])
+          .map((faq, index) => ({
+            id: String((faq as any).id || `kb-${knowledgeBaseId}-faq-${index}`),
+            question: String((faq as any).question || "").trim(),
+            answer: String((faq as any).answer || "").trim(),
+          }))
+          .filter((faq) => faq.question && faq.answer);
+        setDraft((current) => ({ ...current, knowledgeBaseId, faqs: kbFaqs }));
+      })
+      .catch(() => {
+        // Keep the current draft editable when the search endpoint is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentKnowledgeBase?.id]);
 
   const handleImport = async () => {
     if (!scrapeUrl.trim()) return;
@@ -796,112 +834,54 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
 
             {/* Knowledge Base */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-lg font-black text-slate-900">
-                    Knowledge Base
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Scraped content is stored in your database and used by the
-                    AI.
-                  </p>
-                </div>
+            <div className="rounded-[1.35rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 sm:p-5">
+              <div className="mb-4 min-w-0">
+                <h3 className="text-base font-black text-slate-900 sm:text-lg">
+                  Knowledge Base
+                </h3>
+                <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-slate-400">
+                  Select the knowledge base this chatbot should use for answers,
+                  FAQs, products, policies, and website content.
+                </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Business Knowledge Base
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      This chatbot only answers from the selected business.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select
-                      value={currentKnowledgeBase?.id || ""}
-                      onChange={(event) =>
-                        void assignDraftKnowledgeBase(event.target.value)
-                      }
-                      disabled={
-                        !knowledgeBases.length ||
-                        busyAction === "assign-knowledge-base" ||
-                        !onAssignKnowledgeBase
-                      }
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 sm:w-72"
-                    >
-                      {knowledgeBases.length === 0 ? (
-                        <option value="">
-                          No business knowledge bases yet
-                        </option>
-                      ) : (
-                        knowledgeBases.map((kb) => (
-                          <option key={kb.id} value={kb.id}>
-                            {kb.businessName || kb.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <a
-                      href="#/knowledge-bases"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700"
-                    >
-                      Manage
-                    </a>
-                  </div>
-                </div>
-                {currentKnowledgeBase && (
-                  <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs font-semibold text-slate-500">
-                    Current business:{" "}
-                    <span className="font-black text-slate-800">
-                      {currentKnowledgeBase.businessName ||
-                        currentKnowledgeBase.name}
-                    </span>
-                    {currentKnowledgeBase.domain
-                      ? ` • ${currentKnowledgeBase.domain}`
-                      : ""}
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Import from Website URL
-                </label>
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="text"
-                    value={scrapeUrl}
-                    onChange={(e) => setScrapeUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && void handleImport()}
-                    placeholder="https://yourwebsite.com"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleImport()}
-                    disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                    className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 sm:p-4">
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <select
+                    value={currentKnowledgeBase?.id || ""}
+                    onChange={(event) =>
+                      void assignDraftKnowledgeBase(event.target.value)
+                    }
+                    disabled={
+                      !knowledgeBases.length ||
+                      busyAction === "assign-knowledge-base" ||
+                      !onAssignKnowledgeBase
+                    }
+                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    {scrapeStatus === "loading" ? (
-                      <>
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Importing…
-                      </>
+                    {knowledgeBases.length === 0 ? (
+                      <option value="">Create a knowledge base first</option>
                     ) : (
-                      <>
-                        <i className="fa-sharp fa-solid fa-upload text-xs" />
-                        Import Website
-                      </>
+                      knowledgeBases.map((kb) => (
+                        <option key={kb.id} value={kb.id}>
+                          {kb.name ||
+                            kb.businessName ||
+                            kb.domain ||
+                            "Untitled knowledge base"}
+                        </option>
+                      ))
                     )}
-                  </button>
-                </div>
-                {scrapeMsg && (
-                  <p
-                    className={`mt-3 text-xs font-medium ${scrapeStatus === "error" ? "text-red-500" : "text-emerald-600"}`}
+                  </select>
+                  <Link
+                    to="/knowledge-bases"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700"
                   >
-                    {scrapeMsg}
+                    Manage
+                  </Link>
+                </div>
+                {!currentKnowledgeBase && (
+                  <p className="mt-3 text-xs font-semibold text-amber-600">
+                    Create and sync a knowledge base before deploying this
+                    chatbot.
                   </p>
                 )}
               </div>
@@ -1181,14 +1161,14 @@ const Messenger: React.FC<MessengerProps> = ({
       </div>
 
       {/* FAQ section - full width */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-900">FAQs</h3>
+            <h3 className="text-base font-black text-slate-900">FAQs</h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Manually added entries take more precedence over scraped content.
-              Add important details about your organization, services, policies,
-              pricing, hours, and support process here.
+              These manual FAQs belong to the selected Knowledge Base and are
+              stored separately from every other Knowledge Base. Scraped website
+              knowledge, products, and policies are still used at runtime.
             </p>
           </div>
           <button

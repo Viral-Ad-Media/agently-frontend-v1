@@ -63,10 +63,6 @@ const FALLBACK_TIMEZONES = [
   "Europe/Warsaw",
   "Europe/Athens",
   "Europe/Istanbul",
-  "Africa/Lagos",
-  "Africa/Accra",
-  "Africa/Nairobi",
-  "Africa/Johannesburg",
   "Asia/Dubai",
   "Asia/Riyadh",
   "Asia/Kolkata",
@@ -92,6 +88,24 @@ const getBrowserTimezones = (): string[] => {
     // Older browsers may not expose Intl.supportedValuesOf yet. The fallback list below keeps the UI usable.
   }
   return FALLBACK_TIMEZONES;
+};
+
+
+const LOCATION_TIMEZONE_RULES: Array<[RegExp, string]> = [
+  [/\b(houston|texas|dallas|austin|san antonio|fort worth)\b/i, "America/Chicago"],
+  [/\b(chicago|illinois|wisconsin|minnesota|louisiana|oklahoma|kansas|missouri|tennessee)\b/i, "America/Chicago"],
+  [/\b(new york|brooklyn|queens|manhattan|new jersey|florida|miami|atlanta|georgia|boston|massachusetts|washington,?\s*dc|philadelphia|pennsylvania)\b/i, "America/New_York"],
+  [/\b(denver|colorado|utah|wyoming|montana|new mexico)\b/i, "America/Denver"],
+  [/\b(los angeles|california|san francisco|seattle|washington|oregon|portland|las vegas|nevada)\b/i, "America/Los_Angeles"],
+  [/\b(phoenix|arizona)\b/i, "America/Phoenix"],
+  [/\b(london|united kingdom|england)\b/i, "Europe/London"],
+];
+
+export const inferWorkspaceTimezoneFromLocation = (location?: string | null) => {
+  const value = String(location || "").trim();
+  if (!value) return null;
+  const match = LOCATION_TIMEZONE_RULES.find(([pattern]) => pattern.test(value));
+  return match?.[1] || null;
 };
 
 const normalizeTimezone = (timezone?: string | null) => String(timezone || "").trim();
@@ -126,11 +140,26 @@ export const getAvailableTimezones = (selectedTimezone?: string | null) => {
   return [DEFAULT_WORKSPACE_TIMEZONE, ...ordered.filter((zone) => zone !== DEFAULT_WORKSPACE_TIMEZONE)];
 };
 
-export const resolveOrgTimezone = (org?: any) =>
-  resolveWorkspaceTimezone(
+export const resolveOrgTimezone = (org?: any) => {
+  const locationTimezone = inferWorkspaceTimezoneFromLocation(
+    org?.profile?.location || org?.location || org?.businessLocation || org?.settings?.location,
+  );
+  const savedTimezone = normalizeTimezone(
     org?.settings?.timezone ||
       org?.profile?.timezone ||
       org?.timezone ||
       org?.workspaceTimezone ||
       org?.defaultTimezone,
   );
+
+  // Do not let a browser/device default such as Africa/Lagos override a selected US business location.
+  if (locationTimezone && (!savedTimezone || savedTimezone === "Africa/Lagos")) {
+    return locationTimezone;
+  }
+
+  if (!savedTimezone || savedTimezone === "Africa/Lagos") {
+    return locationTimezone || DEFAULT_WORKSPACE_TIMEZONE;
+  }
+
+  return resolveWorkspaceTimezone(savedTimezone);
+};

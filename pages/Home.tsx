@@ -1,125 +1,188 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { ICONS } from '../constants';
+import React from "react";
+import { Link } from "react-router-dom";
+import { ICONS } from "../constants";
 
-const SIGNALS = [
-  { label: 'Calls answered', value: '96%', detail: 'Average coverage after setup' },
-  { label: 'Lead capture lift', value: '2.3x', detail: 'Compared with voicemail-only workflows' },
-  { label: 'Setup time', value: '< 15m', detail: 'Website import and first agent live' },
+const HERO_CHIPS = [
+  "Inbound calls",
+  "Outbound campaigns",
+  "Lead capture",
+  "Follow-up automation",
 ];
 
-const INDUSTRIES = ['Dental', 'Legal', 'Home Services', 'Real Estate', 'Clinics', 'Agencies'];
+const WORKSPACE_ITEMS = [
+  {
+    label: "Inbound line",
+    value: "Answering now",
+    tone: "bg-emerald-50 text-emerald-700",
+  },
+  {
+    label: "Outbound campaign",
+    value: "42 queued",
+    tone: "bg-orange-50 text-orange-700",
+  },
+  {
+    label: "Follow-up queue",
+    value: "No-shows + carts",
+    tone: "bg-slate-100 text-black/70",
+  },
+  {
+    label: "Knowledge Base",
+    value: "Synced",
+    tone: "bg-[#fff4d7] text-[#7c4a00]",
+  },
+];
+
+const FLOW_STEPS = [
+  "Understands intent",
+  "Qualifies the lead",
+  "Books or routes",
+  "Writes the CRM summary",
+];
+
+const OUTCOME_CARDS = [
+  {
+    title: "Voice agents",
+    copy: "Answer, qualify, route, and recover missed opportunities across inbound and outbound calls.",
+    icon: <ICONS.Phone />,
+    tone: "marketing-icon-tile marketing-icon-orange",
+  },
+  {
+    title: "Chatbot agents",
+    copy: "Turn website visitors into structured conversations grounded in the right Knowledge Base.",
+    icon: <ICONS.MessageSquare />,
+    tone: "marketing-icon-tile marketing-icon-blue",
+  },
+  {
+    title: "Call intelligence",
+    copy: "Track outcomes, transcripts, summaries, lead status, and the next best action from one workspace.",
+    icon: <ICONS.Dashboard />,
+    tone: "marketing-icon-tile marketing-icon-gold",
+  },
+];
 
 const Home: React.FC = () => {
   return (
-    <div className="pb-16 pt-8 sm:pt-10">
-      <section className="px-4 sm:px-6">
-        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="pt-12 lg:pt-20">
-            <div className="inline-flex items-center gap-3 rounded-full border border-amber-200 bg-white/80 px-4 py-2 shadow-sm backdrop-blur">
-              <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 shadow-[0_0_0_6px_rgba(255,153,0,0.14)]" />
-              <span className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-600">Voice + Chat + CRM</span>
+    <div className="marketing-page text-black">
+      <section className="relative overflow-hidden border-b border-black/12">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_50%_0%,rgba(255,153,0,0.22),transparent_58%)]" />
+        <div className="marketing-shell relative grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.92fr_1.08fr] lg:py-7">
+          <div className="max-w-3xl">
+            <div className="marketing-eyebrow mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
+              Voice · Chat · Campaigns · Leads
             </div>
 
-            <h1 className="font-display mt-8 max-w-4xl text-5xl leading-[0.95] text-slate-900 sm:text-6xl lg:text-7xl">
-              Reception software that feels like an operating system, not a widget.
+            <h1 className="marketing-hero-title max-w-4xl">
+              AI agents for every customer conversation.
             </h1>
 
-            <p className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-500 sm:text-xl">
-              Agently gives every business its own voice agents, website chatbots, lead capture, and call intelligence in one clean workspace.
+            <p className="marketing-copy mt-5 max-w-2xl">
+              Agently gives teams a control room for inbound calls, outbound
+              follow-ups, lead capture, no-show recovery, cart recovery,
+              appointment setting, onboarding, chatbot support, CRM handoff, and
+              call intelligence.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link
-                to="/login"
-                className="rounded-full bg-slate-950 px-7 py-4 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)] transition hover:bg-slate-800"
-              >
-                Start Free Trial
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link to="/login" className="marketing-button-primary">
+                Start trial
               </Link>
-              <Link
-                to="/pricing"
-                className="rounded-full border border-slate-200 bg-white/85 px-7 py-4 text-[11px] font-black uppercase tracking-[0.28em] text-slate-700 shadow-sm transition hover:border-amber-200 hover:text-indigo-600"
-              >
-                Explore Pricing
+              <Link to="/features" className="marketing-button-secondary">
+                Explore platform
               </Link>
             </div>
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
-              {SIGNALS.map((item) => (
-                <div key={item.label} className="rounded-[1.8rem] border border-white/70 bg-white/82 p-5 shadow-[0_22px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">{item.label}</p>
-                  <p className="mt-3 font-display text-3xl text-slate-900">{item.value}</p>
-                  <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{item.detail}</p>
-                </div>
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              {HERO_CHIPS.map((chip) => (
+                <span key={chip} className="marketing-chip">
+                  {chip}
+                </span>
               ))}
             </div>
           </div>
 
-          <div className="relative lg:pt-12">
-            <div className="absolute inset-x-8 top-8 h-52 rounded-full bg-indigo-600/12 blur-3xl" />
-            <div className="relative space-y-5 rounded-[2.5rem] border border-white/70 bg-white/88 p-6 shadow-[0_28px_90px_rgba(15,23,42,0.14)] backdrop-blur-xl sm:p-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Live Control Room</p>
-                  <h2 className="font-display mt-2 text-2xl text-slate-900">Always-on coverage</h2>
+          <div className="relative mx-auto w-full max-w-[640px] lg:justify-self-end">
+            <div className="absolute -inset-5 rounded-[2.5rem] bg-[#ff9900]/12 blur-3xl" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-black/12 bg-black p-3 shadow-[0_34px_90px_rgba(5,8,23,0.22)]">
+              <div className="mb-3 flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/[0.055] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
                 </div>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">
-                  4 agents online
-                </span>
+                <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/40">
+                  Agent workspace
+                </p>
               </div>
 
-              <div className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-[0_24px_60px_rgba(15,23,42,0.2)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/45">Voice Agent</p>
-                    <p className="mt-2 text-xl font-black">BrightPath Front Desk</p>
-                    <p className="mt-2 text-sm font-medium text-white/65">Inbound line answering, lead qualification, and appointment routing.</p>
-                  </div>
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-white">
-                    <ICONS.Phone />
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">Today</p>
-                    <p className="mt-2 text-2xl font-black">84 calls</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">Captured</p>
-                    <p className="mt-2 text-2xl font-black">27 leads</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-                      <ICONS.MessageSquare />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Chatbot Agent</p>
-                      <p className="text-sm font-black text-slate-900">Embeddable on any site</p>
-                    </div>
-                  </div>
-                  <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500">
-                    Use different chatbots for the homepage, pricing, and support pages while sharing the right voice logic behind each one.
+              <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
+                <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.055] p-4">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-white/40">
+                    Live operations
                   </p>
+                  <div className="mt-4 space-y-2.5">
+                    {WORKSPACE_ITEMS.map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-[1.1rem] border border-white/10 bg-white/[0.05] p-3"
+                      >
+                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/35">
+                          {item.label}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium tracking-[-0.035em] text-white">
+                            {item.value}
+                          </p>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-medium ${item.tone}`}
+                          >
+                            Active
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                      <ICONS.Users />
-                    </div>
+                <div className="rounded-[1.45rem] border border-white/10 bg-[#fbfaf4] p-4 text-black">
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Lead Workspace</p>
-                      <p className="text-sm font-black text-slate-900">Captured automatically</p>
+                      <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-black/42">
+                        Conversation flow
+                      </p>
+                      <h2 className="mt-2 max-w-sm text-[clamp(1.55rem,3vw,2.55rem)] font-medium leading-[0.96] tracking-[-0.065em]">
+                        From missed intent to booked action.
+                      </h2>
+                    </div>
+                    <div className="marketing-icon-tile marketing-icon-orange h-11 w-11 shrink-0 rounded-full">
+                      <ICONS.Sparkles />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500">
-                    Every conversation turns into structured CRM data your team can review, update, and export without duct-taping tools together.
-                  </p>
+
+                  <div className="mt-4 space-y-2.5">
+                    {FLOW_STEPS.map((step, index) => (
+                      <div
+                        key={step}
+                        className="flex items-center gap-3 rounded-[1rem] border border-black/12 bg-white px-3 py-2.5"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ff5527]/12 text-[10px] font-medium text-[#ff5527] ring-1 ring-[#ff5527]/18">
+                          {index + 1}
+                        </span>
+                        <span className="text-sm font-medium tracking-[-0.03em] text-black/80">
+                          {step}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 rounded-[1.15rem] bg-[#fff4d7] p-3">
+                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#9a5b00]">
+                      Next action
+                    </p>
+                    <p className="mt-1 text-sm font-medium tracking-[-0.03em]">
+                      Save summary, assign owner, trigger follow-up.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -127,106 +190,64 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="mt-20 px-4 sm:px-6">
-        <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-white/70 bg-white/78 px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.09)] backdrop-blur-xl sm:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="border-b border-black/12 bg-[#f7f4eb]">
+        <div className="marketing-shell grid items-center gap-8 py-12 lg:grid-cols-[0.82fr_1.18fr] lg:py-14">
+          <div>
+            <div className="marketing-eyebrow mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
+              About Agently
+            </div>
+            <h2 className="marketing-section-title max-w-xl">
+              Built for the conversations that create revenue.
+            </h2>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <p className="marketing-copy">
+              Agently connects voice agents, chatbots, outbound campaigns, lead
+              capture, CRM handoff, and call intelligence in one operating
+              layer.
+            </p>
+            <p className="marketing-copy">
+              Instead of treating every call, chat, and follow-up as separate
+              work, Agently keeps the context, outcome, and next action
+              together.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-black/12 bg-[#fbfaf4]">
+        <div className="marketing-shell py-12 lg:py-14">
+          <div className="grid gap-4 md:grid-cols-3">
+            {OUTCOME_CARDS.map((card) => (
+              <div key={card.title} className="marketing-card p-6">
+                <div className={card.tone}>{card.icon}</div>
+                <h3 className="text-xl font-medium tracking-[-0.055em] text-black">
+                  {card.title}
+                </h3>
+                <p className="mt-3 text-sm font-normal leading-relaxed text-[#232f3e]/72">
+                  {card.copy}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#f7f4eb]">
+        <div className="marketing-shell py-14">
+          <div className="grid items-center gap-8 rounded-[2rem] border border-black/12 bg-black p-6 text-white shadow-[0_28px_90px_rgba(5,8,23,0.18)] md:grid-cols-[1fr_auto] md:p-8">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-slate-400">Built for real operators</p>
-              <h2 className="font-display mt-2 text-2xl text-slate-900">Designed for teams that run on conversations</h2>
+              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
+                Built for daily revenue operations
+              </p>
+              <h2 className="mt-3 max-w-2xl text-[clamp(1.9rem,4vw,3.4rem)] font-medium leading-[0.98] tracking-[-0.065em]">
+                Launch agents that answer, recover, qualify, and report.
+              </h2>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {INDUSTRIES.map((industry) => (
-                <span key={industry} className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-slate-600">
-                  {industry}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-20 px-4 sm:px-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-10 max-w-2xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.34em] text-indigo-500">Why teams switch</p>
-            <h2 className="font-display mt-3 text-4xl text-slate-900">A sharper UI for a sharper workflow</h2>
-            <p className="mt-4 text-base font-medium leading-relaxed text-slate-500">
-              One workspace to manage voice agents, chatbots, Twilio credentials, training data, and every captured conversation.
-            </p>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-[2.5rem] border border-white/70 bg-white/82 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.1)] backdrop-blur-xl">
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white">
-                    <ICONS.Robot />
-                  </div>
-                  <h3 className="font-display mt-5 text-2xl text-slate-900">Multiple voice agents</h3>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                    Launch inbound and outbound voice agents with separate numbers, rules, knowledge, and call handling behavior.
-                  </p>
-                </div>
-
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white">
-                    <ICONS.MessageSquare />
-                  </div>
-                  <h3 className="font-display mt-5 text-2xl text-slate-900">Custom chatbots</h3>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                    Style, train, and embed separate chatbot agents for different campaigns, websites, and funnels.
-                  </p>
-                </div>
-
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500 text-white">
-                    <ICONS.Dashboard />
-                  </div>
-                  <h3 className="font-display mt-5 text-2xl text-slate-900">Clean operational UI</h3>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                    Review performance, knowledge, billing, leads, and call logs without jumping across disconnected screens.
-                  </p>
-                </div>
-
-                <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                    <ICONS.Sparkles />
-                  </div>
-                  <h3 className="font-display mt-5 text-2xl text-slate-900">Website-trained answers</h3>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                    Import public site content into your knowledge base, then refine entries directly from the dashboard.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[2.5rem] bg-slate-950 p-8 text-white shadow-[0_28px_90px_rgba(15,23,42,0.24)]">
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-white/45">Deployment Flow</p>
-              <h3 className="font-display mt-3 text-3xl">From website to live receptionist in one session.</h3>
-
-              <div className="mt-8 space-y-4">
-                {[
-                  'Import your public website and generate the first knowledge base.',
-                  'Create one or more voice agents with their own Twilio lines.',
-                  'Customize chatbots, copy the embed script, and deploy anywhere.',
-                  'Review leads, transcripts, and conversion activity from the same workspace.',
-                ].map((step, index) => (
-                  <div key={step} className="flex gap-4 rounded-[1.8rem] border border-white/10 bg-white/5 p-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 font-display text-lg">
-                      {index + 1}
-                    </div>
-                    <p className="text-sm font-medium leading-relaxed text-white/72">{step}</p>
-                  </div>
-                ))}
-              </div>
-
-              <Link
-                to="/login"
-                className="mt-8 inline-flex rounded-full bg-white px-6 py-4 text-[11px] font-black uppercase tracking-[0.28em] text-slate-900 transition hover:bg-amber-50"
-              >
-                Build Your Workspace
-              </Link>
-            </div>
+            <Link to="/pricing" className="marketing-button-light">
+              View pricing
+            </Link>
           </div>
         </div>
       </section>

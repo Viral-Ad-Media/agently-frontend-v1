@@ -1,94 +1,162 @@
+import React from "react";
+import { Link } from "react-router-dom";
+import { ICONS } from "../constants";
 
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { ICONS } from '../constants';
+const FEATURES = [
+  {
+    title: "Inbound voice agents",
+    desc: "Answer calls, screen intent, capture messages, route urgent issues, and keep your team focused on qualified work.",
+    icon: <ICONS.Phone />,
+    tone: "marketing-icon-tile marketing-icon-orange",
+  },
+  {
+    title: "Outbound campaigns",
+    desc: "Run follow-ups for trials, renewals, missed calls, no-shows, abandoned carts, and reactivation lists.",
+    icon: <ICONS.Dashboard />,
+    tone: "marketing-icon-tile marketing-icon-blue",
+  },
+  {
+    title: "Website chatbot",
+    desc: "Convert visitors with a chatbot that answers from approved sources and captures structured lead data.",
+    icon: <ICONS.MessageSquare />,
+    tone: "marketing-icon-tile marketing-icon-cream",
+  },
+  {
+    title: "Knowledge Base grounding",
+    desc: "Assign each agent to the right Knowledge Base so answers stay scoped, accurate, and separated by use case.",
+    icon: <ICONS.Shield />,
+    tone: "marketing-icon-tile marketing-icon-gold",
+  },
+  {
+    title: "Lead capture + CRM handoff",
+    desc: "Turn conversations into clean records with summaries, contact details, qualification notes, and next actions.",
+    icon: <ICONS.Users />,
+    tone: "marketing-icon-tile marketing-icon-mint",
+  },
+  {
+    title: "Call intelligence",
+    desc: "Review outcomes, transcripts, recordings, categories, tags, and follow-up opportunities from one workspace.",
+    icon: <ICONS.Sparkles />,
+    tone: "marketing-icon-tile marketing-icon-violet",
+  },
+];
+
+const PIPELINE = [
+  {
+    step: "Answer",
+    detail: "Pick up inbound calls and chats before demand leaks away.",
+  },
+  {
+    step: "Qualify",
+    detail: "Ask the right questions and capture structured intent.",
+  },
+  {
+    step: "Recover",
+    detail: "Bring back missed calls, no-shows, carts, and stale leads.",
+  },
+  {
+    step: "Route",
+    detail: "Send urgent or qualified conversations to the right owner.",
+  },
+  {
+    step: "Summarize",
+    detail: "Write the call outcome, notes, lead status, and next action.",
+  },
+  {
+    step: "Follow up",
+    detail: "Trigger the next call, message, CRM handoff, or campaign step.",
+  },
+];
 
 const Features: React.FC = () => {
-  const features = [
-    {
-      title: '24/7 Intelligent Support',
-      desc: 'Never miss a call or chat. Agently is always on, providing personalized support that goes beyond simple routing.',
-      icon: <ICONS.Dashboard />,
-      accentClass: 'bg-indigo-50 text-indigo-600'
-    },
-    {
-      title: 'Automated Basics',
-      desc: 'Handle FAQs and routine inquiries automatically, freeing up your team for more complex tasks.',
-      icon: <ICONS.Robot />,
-      accentClass: 'bg-emerald-50 text-emerald-600'
-    },
-    {
-      title: 'Seamless Handoffs',
-      desc: 'When a human touch is needed, Agently transitions the conversation smoothly to your team with full context.',
-      icon: <ICONS.Users />,
-      accentClass: 'bg-violet-50 text-violet-600'
-    },
-    {
-      title: 'No-Code Setup',
-      desc: 'Get started in minutes. Our AI scans your website to learn your business—no coding or complex scripting required.',
-      icon: <ICONS.Settings />,
-      accentClass: 'bg-amber-50 text-amber-600'
-    },
-    {
-      title: 'Brand-Consistent Voice',
-      desc: 'Choose a voice and tone that matches your brand. Agently sounds like a natural extension of your business.',
-      icon: <ICONS.Phone />,
-      accentClass: 'bg-rose-50 text-rose-600'
-    },
-    {
-      title: 'Multi-language Support',
-      desc: 'Break down language barriers. Agently can communicate with your customers in their preferred language.',
-      icon: <ICONS.Shield />,
-      accentClass: 'bg-sky-50 text-sky-600'
-    }
-  ];
-
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="text-center max-w-2xl mx-auto">
-        <h2 className="text-xs font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Platform Capabilities</h2>
-        <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-6">Meet your 24/7 AI Receptionist</h1>
-        <p className="text-xl text-slate-500 leading-relaxed">
-          Agently delivers intelligent phone and chat support that works for your business, handles the basics automatically, and scales with your team.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {features.map((feature, i) => (
-          <div key={i} className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300 ${feature.accentClass}`}>
-              {feature.icon}
+    <div className="marketing-page text-black">
+      <section className="border-b border-black/12">
+        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.78fr_1.22fr] lg:py-7">
+          <div>
+            <div className="marketing-eyebrow mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
+              Platform features
             </div>
-            <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{feature.title}</h3>
-            <p className="text-slate-500 leading-relaxed font-medium">
-              {feature.desc}
+            <h1 className="marketing-page-title">
+              One platform for voice, chat, follow-ups, and revenue recovery.
+            </h1>
+            <p className="marketing-copy mt-5 max-w-xl">
+              Agently combines customer-facing AI agents with the operational
+              controls your team needs: Knowledge Base assignment, campaign
+              workflows, lead handoff, call records, and follow-up automation.
             </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-slate-900 rounded-[3rem] p-12 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl -mr-48 -mt-48"></div>
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
-          <div className="max-w-xl">
-            <h2 className="text-3xl font-black mb-6 tracking-tight">Ready to transform your customer experience?</h2>
-            <p className="text-indigo-100 text-lg font-medium mb-8">
-              Join thousands of small businesses using Agently to provide world-class support without the overhead of a traditional call center.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <Link to="/login" className="bg-white text-slate-900 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all">
-                Get Started Free
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link to="/login" className="marketing-button-primary">
+                Start trial
               </Link>
-              <Link to="/contact" className="bg-transparent border-2 border-white/20 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all">
-                Book a Demo
+              <Link to="/pricing" className="marketing-button-secondary">
+                See pricing
               </Link>
             </div>
           </div>
-          <div className="w-full md:w-1/3 aspect-square bg-indigo-500/10 rounded-[2rem] border border-white/10 flex items-center justify-center">
-             <div className="text-8xl animate-pulse">🤖</div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {FEATURES.map((feature) => (
+              <article
+                key={feature.title}
+                className="marketing-card p-5 lg:p-6"
+              >
+                <div className={feature.tone}>{feature.icon}</div>
+                <h3 className="text-lg font-medium leading-tight tracking-[-0.055em]">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm font-normal leading-relaxed text-[#232f3e]/72">
+                  {feature.desc}
+                </p>
+              </article>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="bg-[#fbfaf4]">
+        <div className="marketing-shell py-12 lg:py-14">
+          <div className="grid items-center gap-8 rounded-[2rem] border border-black/12 bg-white p-6 shadow-[0_20px_70px_rgba(5,8,23,0.08)] lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-black/42">
+                Agent workflow
+              </p>
+              <h2 className="mt-3 text-[clamp(1.85rem,3.2vw,3.2rem)] font-medium leading-[0.98] tracking-[-0.065em]">
+                Built around what happens after the conversation starts.
+              </h2>
+              <p className="mt-4 text-sm font-normal leading-relaxed text-black/62">
+                The product is not only a bot. It is a workflow layer that helps
+                every call or chat become a record, a decision, or a follow-up.
+              </p>
+            </div>
+            <div className="relative grid gap-3 sm:grid-cols-2">
+              <div className="pointer-events-none absolute left-5 top-6 hidden h-[calc(100%-3rem)] w-px bg-gradient-to-b from-[#ff5527]/40 via-[#f6b94d]/40 to-[#232f3e]/10 sm:block" />
+              {PIPELINE.map((item, index) => (
+                <div
+                  key={item.step}
+                  className="group relative overflow-hidden rounded-[1.45rem] border border-[#232f3e]/12 bg-[#fbfaf4] p-4 shadow-[0_12px_34px_rgba(35,47,62,0.06)] transition-transform duration-200 hover:-translate-y-0.5"
+                >
+                  <div className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#ff5527]/10 blur-2xl transition-opacity group-hover:opacity-80" />
+                  <div className="relative flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#ff5527] text-[12px] font-medium text-white shadow-[0_12px_24px_rgba(255,85,39,0.22)]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <p className="text-base font-medium tracking-[-0.045em] text-[#232f3e]">
+                        {item.step}
+                      </p>
+                      <p className="mt-1 text-sm font-normal leading-snug text-[#232f3e]/68">
+                        {item.detail}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

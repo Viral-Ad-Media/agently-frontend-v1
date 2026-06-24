@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Organization,
   AgentConfig,
+  AgentVoicemailSettings,
+  AgentCallScreeningSettings,
   FAQ,
   LeadOutreachSchedule,
   KnowledgeBase,
@@ -30,37 +33,9 @@ const LANGUAGES = [
 ] as const;
 
 const DEFAULT_OPENAI_VOICE = "alloy";
-const AGENT_FLEET_VIEW_STORAGE_KEY = "agently:agentFleetViewMode";
-const LEGACY_AGENT_FLEET_VIEW_STORAGE_KEYS = ["agently:agent-fleet-view"];
-const SELECTED_AGENT_STORAGE_KEY = "agently:lastSelectedAgentId";
-const LEGACY_SELECTED_AGENT_STORAGE_KEYS = [
-  "agently:selected-agent-id",
-  "agently:selected-voice-agent-id",
-];
-
-const readLocalStorageValue = (
-  primaryKey: string,
-  legacyKeys: string[] = [],
-) => {
-  if (typeof window === "undefined") return null;
-  return (
-    window.localStorage.getItem(primaryKey) ||
-    legacyKeys
-      .map((key) => window.localStorage.getItem(key))
-      .find((value) => Boolean(value)) ||
-    null
-  );
-};
-
-const writeLocalStorageValue = (
-  primaryKey: string,
-  value: string,
-  legacyKeys: string[] = [],
-) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(primaryKey, value);
-  legacyKeys.forEach((key) => window.localStorage.setItem(key, value));
-};
+const SELECTED_AGENT_STORAGE_KEY = "agently:selected-agent-id";
+const getSelectedAgentStorageKey = (orgId?: string) =>
+  `${SELECTED_AGENT_STORAGE_KEY}:${orgId || "global"}`;
 
 const DEFAULT_VOICE_PREVIEW_TEXT =
   "Hello, this is a voice preview from Agently.";
@@ -71,6 +46,99 @@ const DEFAULT_ELEVENLABS_SETTINGS: Required<VoiceSettings> = {
   speed: 0.92,
   use_speaker_boost: true,
 };
+
+const VOICEMAIL_ACTION_OPTIONS: Array<{
+  value: AgentVoicemailSettings["action"];
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "hangup",
+    label: "Hang up",
+    description: "Detect voicemail, log it, and end the call quickly.",
+  },
+  {
+    value: "leave_message",
+    label: "Leave voicemail message",
+    description:
+      "Wait for voicemail, speak the configured message, then hang up.",
+  },
+  {
+    value: "callback_later",
+    label: "Callback / redial later",
+    description:
+      "Log voicemail and mark the call for a later callback workflow.",
+  },
+  {
+    value: "manual_followup",
+    label: "Manual follow-up",
+    description: "Log voicemail and mark the recipient for human review.",
+  },
+];
+
+const DEFAULT_VOICEMAIL_SETTINGS: AgentVoicemailSettings = {
+  action: "hangup",
+  message: "",
+  callbackDelayMinutes: 60,
+  maxRedialAttempts: 1,
+};
+
+const readAgentVoicemailSettings = (
+  agent: Partial<AgentConfig> | null | undefined,
+): AgentVoicemailSettings => ({
+  action:
+    agent?.voicemailSettings?.action ||
+    agent?.voicemailBehavior ||
+    DEFAULT_VOICEMAIL_SETTINGS.action,
+  message:
+    agent?.voicemailSettings?.message ||
+    agent?.voicemailMessage ||
+    DEFAULT_VOICEMAIL_SETTINGS.message,
+  callbackDelayMinutes: Number.isFinite(
+    Number(
+      agent?.voicemailSettings?.callbackDelayMinutes ??
+        agent?.voicemailCallbackDelayMinutes,
+    ),
+  )
+    ? Number(
+        agent?.voicemailSettings?.callbackDelayMinutes ??
+          agent?.voicemailCallbackDelayMinutes,
+      )
+    : DEFAULT_VOICEMAIL_SETTINGS.callbackDelayMinutes,
+  maxRedialAttempts: Number.isFinite(
+    Number(
+      agent?.voicemailSettings?.maxRedialAttempts ??
+        agent?.voicemailMaxRedialAttempts,
+    ),
+  )
+    ? Number(
+        agent?.voicemailSettings?.maxRedialAttempts ??
+          agent?.voicemailMaxRedialAttempts,
+      )
+    : DEFAULT_VOICEMAIL_SETTINGS.maxRedialAttempts,
+});
+
+const DEFAULT_CALL_SCREENING_SETTINGS: AgentCallScreeningSettings = {
+  enabled: true,
+  responseMessage: "",
+  allowPurposeDisclosure: true,
+};
+
+const readAgentCallScreeningSettings = (
+  agent: Partial<AgentConfig> | null | undefined,
+): AgentCallScreeningSettings => ({
+  enabled:
+    agent?.callScreeningSettings?.enabled ??
+    agent?.callScreeningEnabled ??
+    DEFAULT_CALL_SCREENING_SETTINGS.enabled,
+  responseMessage:
+    agent?.callScreeningSettings?.responseMessage ||
+    agent?.callScreeningMessage ||
+    DEFAULT_CALL_SCREENING_SETTINGS.responseMessage,
+  allowPurposeDisclosure:
+    agent?.callScreeningSettings?.allowPurposeDisclosure ??
+    DEFAULT_CALL_SCREENING_SETTINGS.allowPurposeDisclosure,
+});
 
 const toSliderValue = (value: number | undefined, fallback: number) =>
   Number.isFinite(value) ? Number(value) : fallback;
@@ -158,9 +226,18 @@ const Sel = (
   </select>
 );
 const Label = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+  <p className="text-[10px] font-black text-[#7a8493] uppercase tracking-widest mb-1.5">
     {children}
   </p>
+);
+
+const MarqueeText: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = "" }) => (
+  <span className={`ag-marquee-text ${className}`}>
+    <span>{children}</span>
+  </span>
 );
 
 const AgentSettings: React.FC<AgentSettingsProps> = ({
@@ -232,21 +309,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [voicePreviewing, setVoicePreviewing] = useState(false);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(true);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
-  const [agentFleetView, setAgentFleetView] = useState<"grid" | "list">(() => {
-    if (typeof window === "undefined") return "grid";
-    const savedView = readLocalStorageValue(
-      AGENT_FLEET_VIEW_STORAGE_KEY,
-      LEGACY_AGENT_FLEET_VIEW_STORAGE_KEYS,
-    );
-    return savedView === "list" ? "list" : "grid";
-  });
+  const [faqLoading, setFaqLoading] = useState(false);
+  const [faqLoadError, setFaqLoadError] = useState("");
   const [agentFleetPage, setAgentFleetPage] = useState(0);
 
   useEffect(() => {
-    const rememberedAgentId = readLocalStorageValue(
-      SELECTED_AGENT_STORAGE_KEY,
-      LEGACY_SELECTED_AGENT_STORAGE_KEYS,
-    );
+    const rememberedAgentId =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(getSelectedAgentStorageKey(org.id))
+        : null;
     const rememberedAgent = rememberedAgentId
       ? org.voiceAgents.find((agent) => agent.id === rememberedAgentId)
       : null;
@@ -260,22 +331,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   }, [org.agent.id, org.voiceAgents]);
 
   useEffect(() => {
-    writeLocalStorageValue(
-      AGENT_FLEET_VIEW_STORAGE_KEY,
-      agentFleetView,
-      LEGACY_AGENT_FLEET_VIEW_STORAGE_KEYS,
-    );
-  }, [agentFleetView]);
-
-  useEffect(() => {
-    if (draft.id) {
-      writeLocalStorageValue(
-        SELECTED_AGENT_STORAGE_KEY,
-        draft.id,
-        LEGACY_SELECTED_AGENT_STORAGE_KEYS,
-      );
+    if (typeof window !== "undefined" && draft.id) {
+      window.localStorage.setItem(getSelectedAgentStorageKey(org.id), draft.id);
     }
-  }, [draft.id]);
+  }, [draft.id, org.id]);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -370,7 +429,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [org.agent.id]);
+  }, [draft.id, org.agent.id]);
 
   useEffect(() => {
     if (!selectedElevenLabsVoiceId || selectedElevenLabsVoiceName) return;
@@ -837,6 +896,42 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     }));
   };
 
+  const updateDraftVoicemailSettings = (
+    updates: Partial<AgentVoicemailSettings>,
+  ) => {
+    setDraft((current) => {
+      const nextSettings: AgentVoicemailSettings = {
+        ...readAgentVoicemailSettings(current),
+        ...updates,
+      };
+      return {
+        ...current,
+        voicemailSettings: nextSettings,
+        voicemailBehavior: nextSettings.action,
+        voicemailMessage: nextSettings.message,
+        voicemailCallbackDelayMinutes: nextSettings.callbackDelayMinutes,
+        voicemailMaxRedialAttempts: nextSettings.maxRedialAttempts,
+      };
+    });
+  };
+
+  const updateDraftCallScreeningSettings = (
+    updates: Partial<AgentCallScreeningSettings>,
+  ) => {
+    setDraft((current) => {
+      const nextSettings: AgentCallScreeningSettings = {
+        ...readAgentCallScreeningSettings(current),
+        ...updates,
+      };
+      return {
+        ...current,
+        callScreeningSettings: nextSettings,
+        callScreeningEnabled: nextSettings.enabled,
+        callScreeningMessage: nextSettings.responseMessage,
+      };
+    });
+  };
+
   const getAgentPrompt = (agent: AgentConfig | null | undefined = draft) =>
     readAgentWorkspaceValue(agent, "agentPrompt", [
       "agentPrompt",
@@ -891,6 +986,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       "tone",
       "escalationPhone",
       "businessHours",
+      "voicemailBehavior",
+      "voicemailMessage",
+      "voicemailCallbackDelayMinutes",
+      "voicemailMaxRedialAttempts",
+      "callScreeningEnabled",
+      "callScreeningMessage",
     ] as const;
 
     fields.forEach((field) => {
@@ -901,6 +1002,33 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         updates[field] = currentDraft[field] as never;
       }
     });
+
+    const draftVoicemailSettings = readAgentVoicemailSettings(currentDraft);
+    const savedVoicemailSettings = readAgentVoicemailSettings(baseline);
+    if (
+      JSON.stringify(draftVoicemailSettings) !==
+      JSON.stringify(savedVoicemailSettings)
+    ) {
+      updates.voicemailSettings = draftVoicemailSettings;
+      updates.voicemailBehavior = draftVoicemailSettings.action;
+      updates.voicemailMessage = draftVoicemailSettings.message;
+      updates.voicemailCallbackDelayMinutes =
+        draftVoicemailSettings.callbackDelayMinutes;
+      updates.voicemailMaxRedialAttempts =
+        draftVoicemailSettings.maxRedialAttempts;
+    }
+
+    const draftCallScreeningSettings =
+      readAgentCallScreeningSettings(currentDraft);
+    const savedCallScreeningSettings = readAgentCallScreeningSettings(baseline);
+    if (
+      JSON.stringify(draftCallScreeningSettings) !==
+      JSON.stringify(savedCallScreeningSettings)
+    ) {
+      updates.callScreeningSettings = draftCallScreeningSettings;
+      updates.callScreeningEnabled = draftCallScreeningSettings.enabled;
+      updates.callScreeningMessage = draftCallScreeningSettings.responseMessage;
+    }
 
     const draftFields = currentDraft.dataCaptureFields || [];
     const savedFields = baseline.dataCaptureFields || [];
@@ -927,14 +1055,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     );
     return updates;
   };
-
-  const normalizeRules = (
-    rules: Partial<AgentConfig["rules"]> | undefined,
-  ): AgentConfig["rules"] => ({
-    autoBook: rules?.autoBook ?? false,
-    autoEscalate: rules?.autoEscalate ?? true,
-    captureAllLeads: rules?.captureAllLeads ?? true,
-  });
 
   const getFaqChangesFrom = (
     currentDraft: AgentConfig,
@@ -973,19 +1093,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   };
 
   const visibleVoiceAgents = org.voiceAgents.map(getDisplayAgent);
-  const AGENT_FLEET_PAGE_SIZE = 6;
+  const AGENT_FLEET_PAGE_SIZE = 10;
   const agentFleetPageCount = Math.max(
     1,
     Math.ceil(visibleVoiceAgents.length / AGENT_FLEET_PAGE_SIZE),
   );
   const safeAgentFleetPage = Math.min(agentFleetPage, agentFleetPageCount - 1);
-  const pagedVoiceAgents =
-    agentFleetView === "grid"
-      ? visibleVoiceAgents.slice(
-          safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE,
-          safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE + AGENT_FLEET_PAGE_SIZE,
-        )
-      : visibleVoiceAgents;
+  const pagedVoiceAgents = visibleVoiceAgents.slice(
+    safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE,
+    safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE + AGENT_FLEET_PAGE_SIZE,
+  );
 
   useEffect(() => {
     if (agentFleetPage > agentFleetPageCount - 1) {
@@ -1005,11 +1122,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       [currentDraft.id]: currentDraft,
     }));
     setDraft(target);
-    writeLocalStorageValue(
-      SELECTED_AGENT_STORAGE_KEY,
-      target.id,
-      LEGACY_SELECTED_AGENT_STORAGE_KEYS,
-    );
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        getSelectedAgentStorageKey(org.id),
+        target.id,
+      );
+    }
     setSavedAgentBaseline(targetFromOrg);
     setDeletedFaqIds([]);
     setSelectedAgent(null);
@@ -1043,16 +1161,23 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   };
 
   const syncFaqsWithoutPageReload = async () => {
+    const assignedKbId =
+      currentKnowledgeBase?.id || draft.knowledgeBaseId || "";
+    if (!assignedKbId) {
+      showToast("Assign a Knowledge Base before regenerating FAQs.", false);
+      return;
+    }
     setBusy("sync");
     try {
       const syncedFaqs = await api.syncFaqs(
         scrapeUrl || org.profile.website,
-        draftRef.current.id,
+        draft.id,
+        assignedKbId,
       );
       setDraft((d) => ({ ...d, faqs: syncedFaqs }));
       setSavedAgentBaseline((base) => ({ ...base, faqs: syncedFaqs }));
       setDeletedFaqIds([]);
-      showToast("FAQs regenerated");
+      showToast("FAQs regenerated for the assigned Knowledge Base.");
     } catch (e) {
       showToast(
         e instanceof Error ? e.message : "Could not regenerate FAQs.",
@@ -1093,7 +1218,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           ok: true,
         });
       }
-      return true;
+      return;
     }
 
     if (!options.silent) setBusy("save-agent-settings");
@@ -1106,14 +1231,29 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       if (hasObjectKeys(ruleUpdates as Record<string, unknown>)) {
         await api.updateVoiceAgent(currentDraft.id, {
           rules: {
-            ...normalizeRules(baseline.rules),
+            autoBook: baseline.rules?.autoBook ?? false,
+            autoEscalate: baseline.rules?.autoEscalate ?? false,
+            captureAllLeads: baseline.rules?.captureAllLeads ?? true,
             ...ruleUpdates,
           },
         });
       }
 
+      const scopedFaqKnowledgeBaseId =
+        currentDraft.knowledgeBaseId || currentKnowledgeBase?.id || "";
+      if (
+        (faqChanges.newFaqs.length ||
+          faqChanges.updatedFaqs.length ||
+          removedFaqIds.length) &&
+        !scopedFaqKnowledgeBaseId
+      ) {
+        throw new Error(
+          "Assign a Knowledge Base to this agent before saving FAQ changes.",
+        );
+      }
+
       for (const faqId of removedFaqIds) {
-        await api.removeFaq(faqId, currentDraft.id);
+        await api.removeFaq(faqId, currentDraft.id, scopedFaqKnowledgeBaseId);
       }
 
       const createdFaqs: FAQ[] = [];
@@ -1122,6 +1262,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           faq.question,
           faq.answer,
           currentDraft.id,
+          scopedFaqKnowledgeBaseId,
         );
         createdFaqs.push(created);
       }
@@ -1135,6 +1276,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             answer: faq.answer,
           },
           currentDraft.id,
+          scopedFaqKnowledgeBaseId,
         );
         updatedFaqs.push(updated);
       }
@@ -1154,18 +1296,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         );
       const nextBaseline = { ...currentDraft, faqs: nextFaqs };
 
-      setDraft(nextBaseline);
-      setSavedAgentBaseline(nextBaseline);
-      setAgentDraftCache((current) => ({
-        ...current,
-        [nextBaseline.id]: nextBaseline,
-      }));
-      setDeletedFaqIds([]);
-      setSelectedAgent((current) =>
-        current && current.id === nextBaseline.id
-          ? { ...current, ...nextBaseline }
-          : current,
-      );
+      if (!options.silent) {
+        setDraft(nextBaseline);
+        setSavedAgentBaseline(nextBaseline);
+        setAgentDraftCache((current) => ({
+          ...current,
+          [nextBaseline.id]: nextBaseline,
+        }));
+        setDeletedFaqIds([]);
+        setSelectedAgent((current) =>
+          current && current.id === nextBaseline.id
+            ? { ...current, ...nextBaseline }
+            : current,
+        );
+      }
 
       if (options.showModal) {
         setSaveModal({
@@ -1174,7 +1318,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           ok: true,
         });
       }
-      return true;
     } catch (e) {
       if (options.showModal) {
         setSaveModal({
@@ -1191,7 +1334,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           false,
         );
       }
-      return false;
     } finally {
       if (!options.silent) setBusy(null);
     }
@@ -1206,16 +1348,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   ) => {
     const currentDraft = draftRef.current;
     if (hasUnsavedChanges) {
-      const saved = await persistAgentChanges({ silent: true });
-      if (!saved) {
-        setSaveModal({
-          title: "Save failed",
-          message:
-            "Agently could not save this agent yet, so the call campaign was not opened. Please save the agent changes and try again.",
-          ok: false,
-        });
-        return;
-      }
+      await persistAgentChanges({ silent: true });
     }
 
     const params = new URLSearchParams({
@@ -1331,7 +1464,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     },
     {
       id: "knowledge",
-      label: "Knowledge",
+      label: "Assignment & FAQs",
       icon: (
         <svg
           width="14"
@@ -1411,9 +1544,64 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const currentKnowledgeBase =
     knowledgeBases.find((kb) => kb.id === draft.knowledgeBaseId) ||
     knowledgeBases.find((kb) => kb.linkedVoiceAgentIds?.includes(draft.id)) ||
-    knowledgeBases.find((kb) => kb.isPrimary) ||
-    knowledgeBases[0] ||
     null;
+
+  const assignedKnowledgeBaseId = currentKnowledgeBase?.id || "";
+
+  useEffect(() => {
+    let cancelled = false;
+    const agentId = draft.id;
+    const knowledgeBaseId = assignedKnowledgeBaseId;
+
+    setFaqLoadError("");
+    setDeletedFaqIds([]);
+
+    if (!agentId || !knowledgeBaseId) {
+      setFaqLoading(false);
+      setDraft((current) =>
+        current.id === agentId ? { ...current, faqs: [] } : current,
+      );
+      setSavedAgentBaseline((current) =>
+        current.id === agentId ? { ...current, faqs: [] } : current,
+      );
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setFaqLoading(true);
+    api
+      .listKnowledgeBaseFaqs(knowledgeBaseId)
+      .then((response) => {
+        if (cancelled) return;
+        const nextFaqs = response.faqs || [];
+        setDraft((current) =>
+          current.id === agentId ? { ...current, faqs: nextFaqs } : current,
+        );
+        setSavedAgentBaseline((current) =>
+          current.id === agentId ? { ...current, faqs: nextFaqs } : current,
+        );
+        setDeletedFaqIds([]);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setFaqLoadError(
+          error instanceof Error
+            ? error.message
+            : "Could not load FAQs for the assigned Knowledge Base.",
+        );
+        setDraft((current) =>
+          current.id === agentId ? { ...current, faqs: [] } : current,
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setFaqLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignedKnowledgeBaseId, draft.id]);
 
   const assignDraftKnowledgeBase = async (knowledgeBaseId: string) => {
     if (!knowledgeBaseId || !draft.id || !onAssignKnowledgeBase) return;
@@ -1425,12 +1613,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         setDraft((current) => ({ ...current, knowledgeBaseId }));
         setSavedAgentBaseline((current) => ({ ...current, knowledgeBaseId }));
       },
-      `${draft.name} now uses ${nextBase?.businessName || nextBase?.name || "the selected business knowledge base"}.`,
+      `${draft.name} now uses ${nextBase?.name || nextBase?.businessName || "the selected knowledge base"}.`,
     );
   };
 
   return (
-    <div className="animate-fade-up space-y-6">
+    <div className="agently-agent-settings-page animate-fade-up space-y-4">
       {/* ── Toast ── */}
       {toast && (
         <div
@@ -1488,10 +1676,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <div className="h-10 w-10 shrink-0 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500" />
             <div>
-              <p className="text-sm font-black text-slate-900">
+              <p className="text-sm font-medium text-[#232f3e]">
                 {busy === "save-agent-settings" ? "Saving…" : "Creating…"}
               </p>
-              <p className="text-xs font-medium text-slate-400">
+              <p className="text-xs font-medium text-[#7a8493]">
                 This should only take a moment.
               </p>
             </div>
@@ -1499,20 +1687,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         </AppModal>
       )}
 
-      {/* ── Header + tab switcher ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Agent Settings</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Configure how your AI receptionist behaves
-          </p>
-        </div>
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl self-start sm:self-auto">
+      {/* ── Page route tabs, directly under the main title bar ── */}
+      <div className="ag-page-inline-actions justify-start">
+        <div className="ag-agent-tabs ag-agent-tabs-flat">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${tab === t.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium uppercase tracking-[0.16em] transition-all ${tab === t.id ? "bg-[#232f3e] text-white" : "text-[#687386] hover:bg-[#fff7ef] hover:text-[#232f3e]"}`}
             >
               {t.icon}
               {t.label}
@@ -1524,90 +1706,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ PERSONA TAB */}
       {tab === "persona" && (
         <div className="space-y-6">
-          {/* Voice agents fleet — clickable cards */}
-          <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-card p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div>
-                <h3 className="text-base font-black text-slate-900">
-                  Voice Agent Fleet
+          {/* Voice agents fleet — clickable compact grid */}
+          <div className="ag-panel ag-agent-fleet-panel p-4 sm:p-5">
+            <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="min-w-0">
+                <h3 className="text-lg font-medium tracking-[-0.04em] text-[#232f3e]">
+                  Voice agent fleet
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Every agent is active. Click an agent to edit its
-                  customization.
-                </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    aria-label="Grid view"
-                    title="Grid view"
-                    onClick={() => {
-                      setAgentFleetView("grid");
-                      setAgentFleetPage(0);
-                    }}
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all ${agentFleetView === "grid" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-700"}`}
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="List view"
-                    title="List view"
-                    onClick={() => setAgentFleetView("list")}
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all ${agentFleetView === "list" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-700"}`}
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="8" y1="6" x2="21" y2="6" />
-                      <line x1="8" y1="12" x2="21" y2="12" />
-                      <line x1="8" y1="18" x2="21" y2="18" />
-                      <circle cx="4" cy="6" r="1" />
-                      <circle cx="4" cy="12" r="1" />
-                      <circle cx="4" cy="18" r="1" />
-                    </svg>
-                  </button>
-                </div>
                 <button
                   type="button"
                   onClick={() => void openCallCampaignComposer("call-now")}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
+                  className="ag-button-orange"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.32 1.77.59 2.61a2 2 0 0 1-.45 2.11L8 9.69a16 16 0 0 0 6.31 6.31l1.25-1.25a2 2 0 0 1 2.11-.45c.84.27 1.71.47 2.61.59A2 2 0 0 1 22 16.92z" />
-                  </svg>
                   Start Call
                 </button>
                 <button
@@ -1618,7 +1730,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       "Agent created",
                     )
                   }
-                  className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                  className="ag-button-dark"
                 >
                   + Inbound
                 </button>
@@ -1630,278 +1742,145 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       "Agent created",
                     )
                   }
-                  className="rounded-xl border border-slate-200 text-slate-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 transition-all"
+                  className="ag-button-soft"
                 >
                   + Outbound
                 </button>
               </div>
             </div>
-            <div className="relative">
-              {agentFleetView === "grid" ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {pagedVoiceAgents.map((agent) => {
-                      const isEditing = agent.id === draft.id;
-                      const isOutbound = agent.direction === "outbound";
-                      return (
-                        <div
-                          key={agent.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => selectAgentForEditing(agent)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              selectAgentForEditing(agent);
-                            }
-                          }}
-                          className={`group flex h-20 min-w-0 cursor-pointer items-center gap-3 rounded-2xl border px-3 text-left transition-all ${
-                            isEditing
-                              ? "border-amber-300 bg-amber-50 text-slate-900 shadow-sm ring-2 ring-amber-100"
-                              : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-200 hover:bg-white"
-                          }`}
-                        >
-                          <span
-                            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xs font-black uppercase ${
-                              isOutbound
-                                ? "bg-indigo-100 text-indigo-700"
-                                : "bg-slate-200 text-slate-600"
-                            }`}
-                          >
-                            {agent.direction === "outbound" ? "O" : "I"}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-black leading-tight">
-                              {agent.name}
-                            </span>
-                            <span className="mt-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">
-                              {isEditing ? "Editing" : agent.direction}
-                            </span>
-                          </span>
-                          <div
-                            className="flex shrink-0 items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void openAgentModal(getDisplayAgent(agent))
-                              }
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-amber-200 hover:text-amber-700"
-                              aria-label={`View ${agent.name} details`}
-                              title="Details"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.4"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="16" x2="12" y2="12" />
-                                <line x1="12" y1="8" x2="12.01" y2="8" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDeleteConfirmAgent(getDisplayAgent(agent))
-                              }
-                              disabled={org.voiceAgents.length <= 1}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition hover:border-red-200 hover:text-red-500 disabled:opacity-30"
-                              aria-label={`Delete ${agent.name}`}
-                              title="Delete"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.4"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                <path d="M10 11v6" />
-                                <path d="M14 11v6" />
-                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
 
-                  {agentFleetPageCount > 1 && (
-                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                      <button
-                        type="button"
-                        aria-label="Previous agents"
-                        onClick={() =>
-                          setAgentFleetPage((page) => Math.max(0, page - 1))
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+                {pagedVoiceAgents.map((agent) => {
+                  const isEditing = agent.id === draft.id;
+                  const isOutbound = agent.direction === "outbound";
+                  return (
+                    <div
+                      key={agent.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectAgentForEditing(agent)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          selectAgentForEditing(agent);
                         }
-                        disabled={safeAgentFleetPage === 0}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="15 18 9 12 15 6" />
-                        </svg>
-                      </button>
-                      <div className="flex items-center gap-1.5">
-                        {Array.from({ length: agentFleetPageCount }).map(
-                          (_, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              aria-label={`Agent page ${index + 1}`}
-                              onClick={() => setAgentFleetPage(index)}
-                              className={`h-2 rounded-full transition-all ${index === safeAgentFleetPage ? "w-6 bg-amber-500" : "w-2 bg-slate-300 hover:bg-slate-400"}`}
-                            />
-                          ),
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        aria-label="Next agents"
-                        onClick={() =>
-                          setAgentFleetPage((page) =>
-                            Math.min(agentFleetPageCount - 1, page + 1),
-                          )
-                        }
-                        disabled={safeAgentFleetPage >= agentFleetPageCount - 1}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="max-h-[19rem] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                  {pagedVoiceAgents.map((agent) => {
-                    const isEditing = agent.id === draft.id;
-                    const isOutbound = agent.direction === "outbound";
-                    return (
-                      <div
-                        key={agent.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => selectAgentForEditing(agent)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            selectAgentForEditing(agent);
-                          }
-                        }}
-                        className={`group flex h-16 min-w-0 cursor-pointer items-center gap-3 rounded-2xl border px-3 text-left transition-all ${
-                          isEditing
-                            ? "border-amber-300 bg-amber-50 text-slate-900 shadow-sm ring-2 ring-amber-100"
-                            : "border-slate-200 bg-slate-50 text-slate-700 hover:border-amber-200 hover:bg-white"
-                        }`}
-                      >
+                      }}
+                      className={`ag-agent-fleet-card group min-h-[5.4rem] min-w-0 cursor-pointer rounded-2xl border px-2.5 py-2.5 text-left transition-all ${
+                        isEditing
+                          ? "border-[#ff9f43] bg-[#fff5eb] text-[#232f3e] shadow-[0_16px_34px_rgba(255,85,39,0.12)] ring-2 ring-[#ffd6af]"
+                          : "border-[#eee2d2] bg-[#fbfaf4] text-[#232f3e] hover:border-[#ffb26b] hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
                         <span
-                          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black uppercase ${
+                          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[9px] font-black uppercase ${
                             isOutbound
                               ? "bg-indigo-100 text-indigo-700"
-                              : "bg-slate-200 text-slate-600"
+                              : "bg-slate-200 text-[#566274]"
                           }`}
                         >
                           {agent.direction === "outbound" ? "O" : "I"}
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-black leading-tight">
-                            {agent.name}
-                          </span>
-                          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-black leading-tight text-slate-900">
+                            <MarqueeText>{agent.name}</MarqueeText>
+                          </p>
+                          <p className="mt-0.5 truncate text-[8px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                             {isEditing ? "Editing" : agent.direction}
-                          </span>
-                        </span>
-                        <div
-                          className="flex shrink-0 items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void openAgentModal(getDisplayAgent(agent))
-                            }
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-amber-200 hover:text-amber-700"
-                            aria-label={`View ${agent.name} details`}
-                            title="Details"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.4"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <line x1="12" y1="16" x2="12" y2="12" />
-                              <line x1="12" y1="8" x2="12.01" y2="8" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDeleteConfirmAgent(getDisplayAgent(agent))
-                            }
-                            disabled={org.voiceAgents.length <= 1}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition hover:border-red-200 hover:text-red-500 disabled:opacity-30"
-                            aria-label={`Delete ${agent.name}`}
-                            title="Delete"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.4"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                              <path d="M10 11v6" />
-                              <path d="M14 11v6" />
-                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                            </svg>
-                          </button>
+                          </p>
                         </div>
                       </div>
-                    );
-                  })}
+                      <div
+                        className="mt-1.5 flex items-center justify-between gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void openAgentModal(getDisplayAgent(agent))
+                          }
+                          className="text-[9px] font-medium uppercase tracking-[0.18em] text-[#7a8493] transition hover:text-amber-700"
+                        >
+                          Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeleteConfirmAgent(getDisplayAgent(agent))
+                          }
+                          disabled={org.voiceAgents.length <= 1}
+                          className="text-[9px] font-medium uppercase tracking-[0.18em] text-red-300 transition hover:text-red-500 disabled:opacity-30"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {agentFleetPageCount > 1 && (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                  <button
+                    type="button"
+                    aria-label="Previous agents"
+                    onClick={() =>
+                      setAgentFleetPage((page) => Math.max(0, page - 1))
+                    }
+                    disabled={safeAgentFleetPage === 0}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#687386] transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: agentFleetPageCount }).map(
+                      (_, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          aria-label={`Agent page ${index + 1}`}
+                          onClick={() => setAgentFleetPage(index)}
+                          className={`h-2 rounded-full transition-all ${index === safeAgentFleetPage ? "w-6 bg-amber-500" : "w-2 bg-slate-300 hover:bg-slate-400"}`}
+                        />
+                      ),
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Next agents"
+                    onClick={() =>
+                      setAgentFleetPage((page) =>
+                        Math.min(agentFleetPageCount - 1, page + 1),
+                      )
+                    }
+                    disabled={safeAgentFleetPage >= agentFleetPageCount - 1}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#687386] transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
                 </div>
               )}
             </div>
@@ -1911,7 +1890,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <h3 className="text-base font-medium text-[#232f3e] flex items-center gap-2">
                   <svg
                     width="16"
                     height="16"
@@ -1930,11 +1909,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </h3>
                 <div className="mt-2">
                   {hasUnsavedChanges ? (
-                    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-amber-100">
+                    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-100">
                       Unsaved changes
                     </span>
                   ) : (
-                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 ring-1 ring-emerald-100">
+                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-emerald-700 ring-1 ring-emerald-100">
                       Saved
                     </span>
                   )}
@@ -1947,7 +1926,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386] transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Discard
                 </button>
@@ -1957,7 +1936,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
                 </button>
@@ -2017,7 +1996,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       </option>
                     ))}
                   </Sel>
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-[10px] text-[#7a8493] mt-1">
                     OpenAI remains available as the fallback provider.
                   </p>
                 </div>
@@ -2067,7 +2046,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <div>
                 <Label>Assigned Number</Label>
                 <div className="flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-slate-500 flex items-center gap-2">
+                  <div className="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-[#687386] flex items-center gap-2">
                     <span className="text-base shrink-0">📱</span>
                     <span className="truncate">
                       {draft.twilioPhoneNumber || "Not assigned"}
@@ -2080,13 +2059,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           window.location.hash = "#/phone-numbers";
                         });
                       }}
-                      className="shrink-0 whitespace-nowrap rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 hover:border-amber-300 transition-all"
+                      className="shrink-0 whitespace-nowrap rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:bg-amber-50 hover:border-amber-300 transition-all"
                     >
                       Manage
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-[#7a8493] mt-1">
                   {draft.twilioPhoneNumber
                     ? "Manage or unassign this number in Phone Numbers."
                     : "Assign a number in the Phone Numbers section."}
@@ -2094,15 +2073,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-amber-50/40 p-5 shadow-sm space-y-4">
+            <div className="ag-voice-engine-card space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-black text-slate-900">
+                  <p className="text-sm font-medium text-[#232f3e]">
                     Voice Engine Settings
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Save the provider and listen to the selected voice before
-                    using this agent in calls.
+                  <p className="text-xs text-[#7a8493] mt-0.5">
+                    Tune how the agent sounds on live calls without changing its
+                    script or assigned Knowledge Base.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -2114,7 +2093,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       (voiceProvider === "elevenlabs" &&
                         !selectedElevenLabsVoiceId)
                     }
-                    className="rounded-xl border border-slate-200 bg-white text-slate-700 px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-all"
+                    className="rounded-xl border border-slate-200 bg-white text-slate-700 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-all"
                   >
                     {voicePreviewing ? "Listening…" : "Listen to Voice"}
                   </button>
@@ -2126,10 +2105,32 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       (voiceProvider === "elevenlabs" &&
                         !selectedElevenLabsVoiceId)
                     }
-                    className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 transition-all"
+                    className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:bg-amber-600 disabled:opacity-40 transition-all"
                   >
                     {voiceConfigSaving ? "Saving…" : "Save Voice"}
                   </button>
+                </div>
+              </div>
+
+              <div className="ag-definition-row">
+                <div className="ag-definition-tile">
+                  <span>Voice</span>
+                  <p>
+                    Choose the provider and voice identity callers will hear.
+                  </p>
+                </div>
+                <div className="ag-definition-tile">
+                  <span>Tuning</span>
+                  <p>
+                    Adjust stability, speed, style, and similarity for natural
+                    delivery.
+                  </p>
+                </div>
+                <div className="ag-definition-tile">
+                  <span>Guardrail</span>
+                  <p>
+                    Keep the agent grounded to its assigned Knowledge Base only.
+                  </p>
                 </div>
               </div>
 
@@ -2175,13 +2176,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       control.fallback,
                     );
                     return (
-                      <div
-                        key={control.key}
-                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                      >
+                      <div key={control.key} className="ag-voice-control-card">
                         <div className="flex items-center justify-between mb-2">
                           <Label>{control.label}</Label>
-                          <span className="text-[10px] font-black text-slate-500">
+                          <span className="text-[10px] font-black text-[#687386]">
                             {value.toFixed(2)}
                           </span>
                         </div>
@@ -2197,17 +2195,17 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                               Number(e.target.value) as never,
                             )
                           }
-                          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gradient-to-r from-slate-200 via-amber-200 to-amber-500 accent-amber-500 outline-none"
+                          className="ag-range-slider"
                         />
                       </div>
                     );
                   })}
-                  <div className="md:col-span-2 flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
+                  <div className="md:col-span-2 flex items-center justify-between rounded-2xl bg-[#fffaf1] px-4 py-3 ring-1 ring-[#f2e2cf]">
                     <div>
-                      <p className="text-sm font-black text-slate-900">
+                      <p className="text-sm font-medium text-[#232f3e]">
                         Speaker Boost
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-[#7a8493]">
                         Improve similarity and clarity when supported.
                       </p>
                     </div>
@@ -2228,82 +2226,103 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </div>
               )}
 
-              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Business Knowledge Base
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      This agent only answers from the selected business source.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select
-                      value={currentKnowledgeBase?.id || ""}
-                      onChange={(event) =>
-                        void assignDraftKnowledgeBase(event.target.value)
-                      }
-                      disabled={
-                        !knowledgeBases.length ||
-                        busy === "assign-knowledge-base" ||
-                        !onAssignKnowledgeBase
-                      }
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:w-72"
-                    >
-                      {knowledgeBases.length === 0 ? (
-                        <option value="">
-                          No business knowledge bases yet
-                        </option>
-                      ) : (
-                        knowledgeBases.map((kb) => (
-                          <option key={kb.id} value={kb.id}>
-                            {kb.businessName || kb.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <a
-                      href="#/knowledge-bases"
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-200 hover:text-amber-700"
-                    >
-                      Manage
-                    </a>
-                  </div>
-                </div>
-                {currentKnowledgeBase && (
-                  <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
-                    Current business:{" "}
-                    <span className="font-black text-slate-800">
-                      {currentKnowledgeBase.businessName ||
-                        currentKnowledgeBase.name}
+              <div className="ag-knowledge-engine-strip">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#ff5527] text-white shadow-[0_12px_26px_rgba(255,85,39,0.18)]">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+                        <path d="M8 7h8" />
+                        <path d="M8 11h6" />
+                      </svg>
                     </span>
-                    {currentKnowledgeBase.domain
-                      ? ` • ${currentKnowledgeBase.domain}`
-                      : ""}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-[#232f3e]">
+                          Knowledge guardrail
+                        </p>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${knowledgeEnabled ? "bg-[#ff5527]/10 text-[#b94820]" : "bg-slate-100 text-[#687386]"}`}
+                        >
+                          {knowledgeEnabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </div>
+                      <p className="mt-1 max-w-xl text-xs leading-5 text-[#7a8493]">
+                        Select exactly which Knowledge Base this agent can use.
+                        No fallback to other sources.
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-white border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Use Knowledge Base
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    Let this voice agent answer from connected FAQs and
-                    knowledge chunks.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void toggleKnowledgeBase()}
+                    disabled={knowledgeSaving}
+                    className={`relative flex h-7 w-12 shrink-0 items-center rounded-full px-0.5 transition-all disabled:opacity-50 ${knowledgeEnabled ? "bg-[#ff5527]" : "bg-slate-200"}`}
+                    aria-label="Toggle knowledge base"
+                  >
+                    <span
+                      className={`h-6 w-6 rounded-full bg-white shadow-sm transition-all ${knowledgeEnabled ? "translate-x-5" : "translate-x-0"}`}
+                    />
+                  </button>
                 </div>
-                <button
-                  onClick={() => void toggleKnowledgeBase()}
-                  disabled={knowledgeSaving}
-                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 disabled:opacity-50 ${knowledgeEnabled ? "bg-amber-500" : "bg-slate-200"}`}
-                >
-                  <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${knowledgeEnabled ? "translate-x-5" : "translate-x-0"}`}
-                  />
-                </button>
+
+                <div className="ag-knowledge-select-wrap mt-4">
+                  {knowledgeBases.length > 0 ? (
+                    <div className="grid min-w-0 gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                      <select
+                        value={currentKnowledgeBase?.id || ""}
+                        onChange={(event) =>
+                          void assignDraftKnowledgeBase(event.target.value)
+                        }
+                        disabled={
+                          busy === "assign-knowledge-base" ||
+                          !onAssignKnowledgeBase
+                        }
+                        className="min-w-0 rounded-2xl border-0 bg-white px-4 py-3 text-sm font-medium text-[#232f3e] outline-none focus:ring-2 focus:ring-[#ff5527]/15"
+                        aria-label="Selected knowledge base"
+                      >
+                        <option value="">No Knowledge Base assigned</option>
+                        {knowledgeBases.map((kb) => (
+                          <option key={kb.id} value={kb.id}>
+                            {kb.name ||
+                              kb.businessName ||
+                              kb.domain ||
+                              "Untitled knowledge base"}
+                          </option>
+                        ))}
+                      </select>
+                      <Link
+                        to="/knowledge-bases"
+                        className="rounded-2xl bg-[#232f3e] px-4 py-3 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-white transition hover:bg-[#ff5527]"
+                      >
+                        Manage
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs font-medium text-[#687386]">
+                        Create a Knowledge Base first, then assign it here.
+                      </p>
+                      <Link
+                        to="/knowledge-bases"
+                        className="rounded-2xl bg-[#232f3e] px-4 py-3 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-white transition hover:bg-[#ff5527]"
+                      >
+                        Create Knowledge Base
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2317,15 +2336,68 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 space-y-4">
+            <div className="ag-prompt-purpose-card space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Prompt & Call Purpose
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#232f3e] text-white shadow-[0_12px_26px_rgba(35,47,62,0.16)]">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-[#232f3e]">
+                      Conversation blueprint
+                    </p>
+                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#7a8493]">
+                      Write the operating instructions this agent follows during
+                      every call, including tone, mission, and escalation
+                      boundaries.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {["Behavior", "Mission", "Handoff"].map((chip) => (
+                    <span
+                      key={chip}
+                      className="rounded-full bg-white/72 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#687386] shadow-[inset_0_0_0_1px_rgba(35,47,62,0.055)]"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ag-definition-row">
+                <div className="ag-definition-tile">
+                  <span>Behavior</span>
+                  <p>
+                    How the agent should speak, listen, confirm, and handle
+                    uncertainty.
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Keep the agent instructions and default call goal in the
-                    same workspace.
+                </div>
+                <div className="ag-definition-tile">
+                  <span>Purpose</span>
+                  <p>
+                    The specific outcome the call should drive before ending or
+                    escalating.
+                  </p>
+                </div>
+                <div className="ag-definition-tile">
+                  <span>Handoff</span>
+                  <p>
+                    What context must be passed to your CRM, team, or follow-up
+                    queue.
                   </p>
                 </div>
               </div>
@@ -2334,7 +2406,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <Label>Agent Prompt</Label>
                 <textarea
                   rows={4}
-                  className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:ring-2 focus:ring-amber-400"
+                  className="ag-textarea-premium"
                   placeholder="Describe how this agent should behave, what it should prioritize, and what it should avoid."
                   value={getAgentPrompt()}
                   onChange={(e) =>
@@ -2348,7 +2420,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <Label>Default Call Purpose</Label>
                   <textarea
                     rows={3}
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:ring-2 focus:ring-amber-400"
+                    className="ag-textarea-premium"
                     placeholder="Example: Confirm interest, answer questions, and book a follow-up appointment."
                     value={getDefaultCallPurpose()}
                     onChange={(e) =>
@@ -2360,7 +2432,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <Label>Default Call Instructions</Label>
                   <textarea
                     rows={3}
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:ring-2 focus:ring-amber-400"
+                    className="ag-textarea-premium"
                     placeholder="Add any extra calling rules, qualification notes, or handoff instructions."
                     value={getCallInstructions()}
                     onChange={(e) =>
@@ -2383,7 +2455,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         item.mode as "call-now" | "schedule",
                       )
                     }
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-all hover:border-amber-300 hover:text-amber-700"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386] transition-all hover:border-amber-300 hover:text-amber-700"
                   >
                     {item.label}
                   </button>
@@ -2398,7 +2470,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <button
                     key={t}
                     onClick={() => updateDraftField("tone", t)}
-                    className={`py-2.5 rounded-xl border-2 text-xs font-black transition-all ${draft.tone === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-100 text-slate-500 bg-slate-50 hover:border-slate-200"}`}
+                    className={`py-2.5 rounded-xl border-2 text-xs font-black transition-all ${draft.tone === t ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-100 text-[#687386] bg-slate-50 hover:border-slate-200"}`}
                   >
                     {t}
                   </button>
@@ -2412,81 +2484,63 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ KNOWLEDGE TAB */}
       {tab === "knowledge" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
-            <div className="flex items-start justify-between mb-5">
-              <div>
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-amber-500"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                  Website Scraper
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">
+                  Agent assignment
+                </p>
+                <h3 className="mt-1 text-lg font-medium text-[#232f3e]">
+                  Assign this agent's approved knowledge source
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Fetch your site's content and save it to the knowledge base.
+                <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-[#687386]">
+                  Sources, FAQs, products, policies, and scraped content stay
+                  isolated inside the selected knowledge base.
                 </p>
               </div>
-              {scrapeStatus === "done" && (
-                <span className="shrink-0 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-                  {chunks} chunks saved
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="flex-1 relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">
-                  https://
-                </span>
-                <input
-                  type="text"
-                  value={scrapeUrl}
-                  onChange={(e) => setScrapeUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void handleScrape()}
-                  placeholder="yourwebsite.com"
-                  className="w-full pl-[4.5rem] pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition-all"
-                />
-              </div>
-              <button
-                onClick={handleScrape}
-                disabled={!scrapeUrl.trim() || scrapeStatus === "loading"}
-                className="shrink-0 rounded-2xl bg-slate-900 text-white px-5 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-40 flex items-center gap-2 transition-all active:scale-95"
-              >
-                {scrapeStatus === "loading" ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Scraping…
-                  </>
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:items-center">
+                {knowledgeBases.length > 0 ? (
+                  <select
+                    value={currentKnowledgeBase?.id || ""}
+                    onChange={(event) =>
+                      void assignDraftKnowledgeBase(event.target.value)
+                    }
+                    disabled={
+                      busy === "assign-knowledge-base" || !onAssignKnowledgeBase
+                    }
+                    className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:min-w-72"
+                  >
+                    <option value="">No Knowledge Base assigned</option>
+                    {knowledgeBases.map((kb) => (
+                      <option key={kb.id} value={kb.id}>
+                        {kb.name ||
+                          kb.businessName ||
+                          kb.domain ||
+                          "Untitled knowledge base"}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
-                  "Import Website"
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs font-bold text-[#687386]">
+                    Create a knowledge base before assigning this agent.
+                  </div>
                 )}
-              </button>
-            </div>
-            {scrapeResult && (
-              <div
-                className={`rounded-2xl px-4 py-3 text-xs font-medium ${scrapeStatus === "error" ? "bg-red-50 text-red-600 border border-red-100" : "bg-emerald-50 text-emerald-700 border border-emerald-100"}`}
-              >
-                {scrapeResult}
+                <Link
+                  to="/knowledge-bases"
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-[#566274] transition hover:border-amber-200 hover:text-amber-700"
+                >
+                  Manage
+                </Link>
               </div>
-            )}
+            </div>
           </div>
-
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 className="text-base font-medium text-[#232f3e]">
                   FAQ Knowledge Entries
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-[#7a8493] mt-0.5">
                   Q&A pairs the AI uses to answer callers.
                 </p>
               </div>
@@ -2497,33 +2551,43 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
+                  {busy === "save-agent-settings" ? "Saving…" : "Save"}
                 </button>
                 <button
                   onClick={() => void syncFaqsWithoutPageReload()}
-                  disabled={busy === "sync"}
-                  className="rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:border-amber-300 hover:text-amber-700 transition-all flex items-center gap-1.5"
+                  disabled={busy === "sync" || !currentKnowledgeBase}
+                  className="rounded-xl border border-slate-200 text-[#566274] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:border-amber-300 hover:text-amber-700 transition-all flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy === "sync" ? "Syncing…" : "Regenerate"}
                 </button>
                 <button
                   onClick={addLocalFaq}
-                  className="rounded-xl bg-slate-900 text-white px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                  disabled={!currentKnowledgeBase}
+                  className="rounded-xl bg-slate-900 text-white px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:bg-slate-800 transition-all disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   + Add
                 </button>
               </div>
             </div>
+            {faqLoadError ? (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
+                {faqLoadError}
+              </div>
+            ) : null}
             {draft.faqs.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-200 py-8 text-center">
                 <p className="text-2xl mb-2">💡</p>
-                <p className="text-sm font-bold text-slate-400">
-                  No FAQ entries yet.
+                <p className="text-sm font-bold text-[#7a8493]">
+                  {faqLoading
+                    ? "Loading assigned FAQs..."
+                    : "No FAQ entries yet."}
                 </p>
                 <p className="text-xs text-slate-300 mt-1">
-                  Import a website or click + Add.
+                  {currentKnowledgeBase
+                    ? "Click + Add or regenerate from the assigned Knowledge Base."
+                    : "Assign a Knowledge Base to this agent first."}
                 </p>
               </div>
             ) : (
@@ -2535,17 +2599,17 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   >
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-500">
+                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-[#687386]">
                           {i + 1}
                         </span>
-                        <p className="truncate text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        <p className="truncate text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
                           FAQ knowledge entry
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeLocalFaq(faq.id)}
-                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-red-200 hover:text-red-500"
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium uppercase tracking-[0.18em] text-[#7a8493] transition-all hover:border-red-200 hover:text-red-500"
                       >
                         Remove
                       </button>
@@ -2553,7 +2617,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
                     <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
                       <label className="block">
-                        <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                           <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-amber-50 text-[9px] text-amber-700">
                             Q
                           </span>
@@ -2577,7 +2641,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         />
                       </label>
                       <label className="block">
-                        <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                           <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-[9px] text-emerald-700">
                             A
                           </span>
@@ -2612,23 +2676,24 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ RULES TAB */}
       {tab === "rules" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-5 sm:p-6 space-y-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 className="text-base font-medium text-[#232f3e]">
                   Routing & Behaviour
                 </h3>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  Control booking, escalation, and lead-capture behavior.
+                <p className="mt-1 text-xs text-[#7a8493]">
+                  Control lead capture, booking, escalation, voicemail, and
+                  screening behavior.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void saveAllAgentChanges()}
                 disabled={!hasUnsavedChanges || busy === "save-agent-settings"}
-                className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
+                {busy === "save-agent-settings" ? "Saving…" : "Save"}
               </button>
             </div>
             {(
@@ -2646,7 +2711,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 {
                   key: "autoEscalate",
                   label: "Auto Escalation",
-                  desc: "Forward to human on complex queries",
+                  desc: "Only suggest an escalation manager for extreme or unresolved matters",
                 },
               ] as {
                 key: keyof AgentConfig["rules"];
@@ -2659,8 +2724,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all"
               >
                 <div>
-                  <p className="text-sm font-black text-slate-900">{r.label}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{r.desc}</p>
+                  <p className="text-sm font-medium text-[#232f3e]">
+                    {r.label}
+                  </p>
+                  <p className="text-[11px] text-[#7a8493] mt-0.5">{r.desc}</p>
                 </div>
                 <button
                   onClick={() =>
@@ -2680,6 +2747,175 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </button>
               </div>
             ))}
+            <div className="rounded-3xl border border-amber-100 bg-amber-50/40 p-5 space-y-4">
+              <div>
+                <p className="text-sm font-medium text-[#232f3e]">
+                  Voicemail Handling
+                </p>
+                <p className="text-xs text-[#687386] mt-0.5">
+                  Decide what this specific agent should do when voicemail is
+                  detected.
+                </p>
+              </div>
+              <div>
+                <Label>When voicemail is detected</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {VOICEMAIL_ACTION_OPTIONS.map((option) => {
+                    const currentVoicemail = readAgentVoicemailSettings(draft);
+                    const active = currentVoicemail.action === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          updateDraftVoicemailSettings({ action: option.value })
+                        }
+                        className={`rounded-2xl border px-4 py-3 text-left transition-all ${active ? "border-amber-300 bg-white shadow-sm" : "border-slate-200 bg-white/70 hover:border-amber-200"}`}
+                      >
+                        <p className="text-xs font-medium text-[#232f3e]">
+                          {active ? "✓ " : ""}
+                          {option.label}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-[#687386]">
+                          {option.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {readAgentVoicemailSettings(draft).action === "leave_message" && (
+                <div>
+                  <Label>Voicemail Message</Label>
+                  <textarea
+                    rows={3}
+                    value={readAgentVoicemailSettings(draft).message}
+                    onChange={(e) =>
+                      updateDraftVoicemailSettings({ message: e.target.value })
+                    }
+                    placeholder="Example: Hello, this is {{agent_name}} from {{business_name}}. I am calling about {{call_purpose}}. Please call us back at {{callback_number}}."
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-amber-300 focus:ring-2 focus:ring-amber-200"
+                  />
+                  <p className="mt-2 text-[11px] text-[#687386]">
+                    Supported tokens: {"{{agent_name}}"}, {"{{business_name}}"},{" "}
+                    {"{{call_purpose}}"}, {"{{callback_number}}"}.
+                  </p>
+                </div>
+              )}
+
+              {readAgentVoicemailSettings(draft).action ===
+                "callback_later" && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label>Callback Delay Minutes</Label>
+                    <Inp
+                      type="number"
+                      min={5}
+                      max={10080}
+                      value={
+                        readAgentVoicemailSettings(draft).callbackDelayMinutes
+                      }
+                      onChange={(e) =>
+                        updateDraftVoicemailSettings({
+                          callbackDelayMinutes: Number(e.target.value) || 60,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Max Redial Attempts</Label>
+                    <Inp
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={
+                        readAgentVoicemailSettings(draft).maxRedialAttempts
+                      }
+                      onChange={(e) =>
+                        updateDraftVoicemailSettings({
+                          maxRedialAttempts: Number(e.target.value) || 1,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-sky-100 bg-sky-50/40 p-5 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-[#232f3e]">
+                    Call Screening Assistants
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#687386]">
+                    Let this agent answer carrier or phone-screening prompts
+                    before the real recipient joins.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDraftCallScreeningSettings({
+                      enabled: !readAgentCallScreeningSettings(draft).enabled,
+                    })
+                  }
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-black transition-all ${readAgentCallScreeningSettings(draft).enabled ? "bg-slate-900 text-white" : "bg-white text-[#687386] border border-slate-200"}`}
+                >
+                  {readAgentCallScreeningSettings(draft).enabled
+                    ? "Enabled"
+                    : "Disabled"}
+                </button>
+              </div>
+
+              {readAgentCallScreeningSettings(draft).enabled && (
+                <>
+                  <label className="flex items-start gap-3 rounded-2xl border border-white/80 bg-white/80 p-4">
+                    <input
+                      type="checkbox"
+                      checked={
+                        readAgentCallScreeningSettings(draft)
+                          .allowPurposeDisclosure
+                      }
+                      onChange={(e) =>
+                        updateDraftCallScreeningSettings({
+                          allowPurposeDisclosure: e.target.checked,
+                        })
+                      }
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-300"
+                    />
+                    <span>
+                      <span className="block text-xs font-medium text-[#232f3e]">
+                        State the call purpose when screened
+                      </span>
+                      <span className="block text-[11px] leading-relaxed text-[#687386]">
+                        The agent will briefly state its name, organization, and
+                        reason for calling, then wait to be connected.
+                      </span>
+                    </span>
+                  </label>
+
+                  <div>
+                    <Label>Optional custom screening response</Label>
+                    <textarea
+                      rows={3}
+                      value={
+                        readAgentCallScreeningSettings(draft).responseMessage
+                      }
+                      onChange={(e) =>
+                        updateDraftCallScreeningSettings({
+                          responseMessage: e.target.value,
+                        })
+                      }
+                      placeholder="Leave blank to let Agently generate a short name, organization, and call-purpose response."
+                      className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-amber-300 focus:ring-2 focus:ring-amber-200"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
             <div>
               <Label>Escalation Phone Number</Label>
               <Inp
@@ -2692,9 +2928,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
             <div>
-              <Label>Business Hours</Label>
+              <Label>Escalation Manager Working Hours</Label>
               <Inp
-                placeholder="Mon-Fri 9AM-6PM"
+                placeholder="Mon-Fri 9AM-6PM for human escalation only"
                 value={draft.businessHours ?? ""}
                 onChange={(e) =>
                   updateDraftField("businessHours", e.target.value)
@@ -2703,23 +2939,24 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-5 sm:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 className="text-base font-medium text-[#232f3e]">
                   Data Capture Fields
                 </h3>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  Choose the details this agent should collect from callers.
+                <p className="mt-1 text-xs text-[#7a8493]">
+                  Select the caller details this agent should collect before
+                  finishing the call.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void saveAllAgentChanges()}
                 disabled={!hasUnsavedChanges || busy === "save-agent-settings"}
-                className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
+                {busy === "save-agent-settings" ? "Saving…" : "Save"}
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -2739,7 +2976,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           : [...(draft.dataCaptureFields || []), field];
                         setDraft((d) => ({ ...d, dataCaptureFields: next }));
                       }}
-                      className={`rounded-full border-2 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all ${active ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-400 hover:border-slate-300"}`}
+                      className={`rounded-full border-2 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] transition-all ${active ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-[#7a8493] hover:border-slate-300"}`}
                     >
                       {active && "✓ "}
                       {field}
@@ -2748,7 +2985,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 },
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-4">
+            <p className="text-xs text-[#7a8493] mt-4">
               These fields are requested from callers before ending the call.
             </p>
           </div>
@@ -2767,7 +3004,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <button
                 type="button"
                 onClick={() => setDeleteConfirmAgent(null)}
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-[#566274] transition hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -2843,7 +3080,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           footer={
             <button
               onClick={() => setSelectedAgent(null)}
-              className="w-full rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+              className="w-full rounded-xl border border-slate-200 py-3 text-sm font-black text-[#566274] hover:bg-slate-50"
             >
               Close
             </button>
@@ -2853,41 +3090,41 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             {/* Agent info grid */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1">
                   Direction
                 </p>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest
-                    ${selectedAgent.direction === "outbound" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-600"}`}
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em]
+                    ${selectedAgent.direction === "outbound" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-[#566274]"}`}
                   >
                     {selectedAgent.direction}
                   </span>
                 </div>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1">
                   Phone number
                 </p>
-                <p className="text-sm font-black text-slate-900">
+                <p className="text-sm font-medium text-[#232f3e]">
                   {selectedAgent.twilioPhoneNumber || "—"}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1">
                   Voice
                 </p>
-                <p className="text-sm font-black text-slate-900">
+                <p className="text-sm font-medium text-[#232f3e]">
                   {selectedAgentVoiceLoading
                     ? "Loading saved voice..."
                     : getAgentVoiceDisplay(selectedAgent)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1">
                   Language
                 </p>
-                <p className="text-sm font-black text-slate-900">
+                <p className="text-sm font-medium text-[#232f3e]">
                   {selectedAgent.language}
                 </p>
               </div>
@@ -2896,7 +3133,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             {/* Greeting */}
             {selectedAgent.greeting && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1.5">
                   Greeting
                 </p>
                 <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 italic">
@@ -2911,7 +3148,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {getDefaultCallPurpose(selectedAgent) && (
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1.5">
                       Default call purpose
                     </p>
                     <p className="text-sm text-slate-700">
@@ -2921,7 +3158,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 )}
                 {getCallInstructions(selectedAgent) && (
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1.5">
                       Call instructions
                     </p>
                     <p className="text-sm text-slate-700">
@@ -2931,7 +3168,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 )}
                 {getAgentPrompt(selectedAgent) && (
                   <div className="rounded-2xl bg-slate-50 px-4 py-3 lg:col-span-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493] mb-1.5">
                       Agent prompt
                     </p>
                     <p className="text-sm text-slate-700">
@@ -2945,16 +3182,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             {/* Assigned schedules */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                   Call Campaigns
                 </p>
                 {!loadingSchedules && (
                   <span
-                    className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest
+                    className={`rounded-full px-3 py-1 text-[9px] font-medium uppercase tracking-[0.18em]
                     ${
                       agentSchedules.length > 0
                         ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-500"
+                        : "bg-slate-100 text-[#687386]"
                     }`}
                   >
                     {agentSchedules.length > 0
@@ -2967,12 +3204,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               {loadingSchedules ? (
                 <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4">
                   <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-                  <p className="text-sm text-slate-400">Loading schedules…</p>
+                  <p className="text-sm text-[#7a8493]">Loading schedules…</p>
                 </div>
               ) : agentSchedules.length === 0 ? (
                 <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center">
                   <p className="text-2xl mb-2">📅</p>
-                  <p className="text-sm font-bold text-slate-400">
+                  <p className="text-sm font-bold text-[#7a8493]">
                     No call campaigns assigned
                   </p>
                   <p className="text-xs text-slate-300 mt-1">
@@ -2991,20 +3228,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div>
-                            <p className="font-black text-slate-900 text-sm">
+                            <p className="font-medium text-[#232f3e] text-sm">
                               {sch.name || `Tag · ${sch.tag}`}
                             </p>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-[#7a8493]">
                               {sch.targetType === "tag"
                                 ? `Tag: #${sch.tag}`
                                 : `Lead schedule`}
                               {(sch as any).startDate &&
                                 ` · ${(sch as any).startDate} → ${(sch as any).endDate || "?"}`}
                             </p>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-[#7a8493]">
                               {formatTimezoneOptionLabel(sch.timezone)}
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">
+                            <p className="text-xs text-[#687386] mt-1">
                               {sch.windows
                                 .map(
                                   (w) => `${w.weekdays.join(", ")} @ ${w.time}`,
@@ -3013,8 +3250,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                             </p>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest
-                            ${sch.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.18em]
+                            ${sch.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-[#7a8493]"}`}
                           >
                             {sch.isActive ? "Active" : "Paused"}
                           </span>
@@ -3027,11 +3264,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                                   ✓ Campaign complete
                                 </span>
                               ) : (
-                                <span className="text-slate-500">
+                                <span className="text-[#687386]">
                                   {prog.completed} of {prog.total} calls reached
                                 </span>
                               )}
-                              <span className="text-slate-400">
+                              <span className="text-[#7a8493]">
                                 {prog.remaining} remaining
                               </span>
                             </div>

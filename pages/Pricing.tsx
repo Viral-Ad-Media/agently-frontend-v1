@@ -1,100 +1,162 @@
+import React from "react";
+import { Link } from "react-router-dom";
 
-import React from 'react';
-import { Link } from 'react-router-dom';
+const PLANS = [
+  {
+    name: "Starter",
+    price: "$49",
+    period: "/mo",
+    desc: "For teams launching their first AI voice and chat workflows.",
+    features: [
+      "100 call minutes",
+      "AI web chat",
+      "Lead capture workspace",
+      "Standard voice profiles",
+      "Knowledge Base setup",
+    ],
+    cta: "Start trial",
+    popular: false,
+  },
+  {
+    name: "Professional",
+    price: "$149",
+    period: "/mo",
+    desc: "For teams running inbound support, outbound follow-ups, and recovery campaigns.",
+    features: [
+      "500 call minutes",
+      "Custom agent instructions",
+      "Appointment and no-show workflows",
+      "Premium voice profiles",
+      "CRM-ready summaries",
+      "Priority support",
+    ],
+    cta: "Get started",
+    popular: true,
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    desc: "For high-volume teams with advanced routing, security, and deployment needs.",
+    features: [
+      "Custom usage volume",
+      "Dedicated onboarding support",
+      "Advanced integrations",
+      "Custom voice options",
+      "SLA planning",
+      "Security review support",
+    ],
+    cta: "Contact sales",
+    popular: false,
+  },
+];
 
 const Pricing: React.FC = () => {
-  const plans = [
-    {
-      name: 'Starter',
-      price: '$49',
-      period: '/mo',
-      desc: 'Perfect for small businesses starting with AI.',
-      features: ['100 Call Minutes', 'AI Web Chat', 'Lead Capture CRM', 'Standard Voice Profiles', 'Email Support'],
-      cta: 'Start Free Trial',
-      popular: false
-    },
-    {
-      name: 'Professional',
-      price: '$149',
-      period: '/mo',
-      desc: 'For growing teams with higher call volume.',
-      features: ['500 Call Minutes', 'Custom AI Training', 'Appointment Booking', 'Premium Voice Profiles', 'Priority Support', 'CRM Integration'],
-      cta: 'Get Started',
-      popular: true
-    },
-    {
-      name: 'Enterprise',
-      price: 'Custom',
-      period: '',
-      desc: 'Tailored solutions for large organizations.',
-      features: ['Unlimited Minutes', 'API Access', 'Dedicated Account Manager', 'Custom Voice Cloning', 'SLA Guarantees', 'On-premise Options'],
-      cta: 'Contact Sales',
-      popular: false
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-slate-50 font-inter pt-32 pb-20">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-20">
-          <h2 className="text-xs font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Pricing Plans</h2>
-          <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-none">Simple, Transparent <br />Pricing.</h1>
-          <p className="text-xl text-slate-500 font-medium leading-relaxed">
-            Choose the plan that fits your business needs. No hidden fees, no complex contracts.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {plans.map((plan, i) => (
-            <div key={i} className={`relative p-10 rounded-[3rem] bg-white border transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 ${plan.popular ? 'border-indigo-600 shadow-xl shadow-indigo-100' : 'border-slate-200 shadow-sm'}`}>
-              {plan.popular && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
-                  Most Popular
-                </div>
-              )}
-              <div className="mb-8">
-                <h3 className="text-2xl font-black text-slate-900 mb-2">{plan.name}</h3>
-                <p className="text-slate-500 text-sm font-medium">{plan.desc}</p>
+    <div className="marketing-page text-black">
+      <section className="border-b border-black/12">
+        <div className="marketing-shell flex min-h-[calc(100svh-74px)] flex-col justify-center py-8 lg:py-7">
+          <div className="grid items-end gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+            <div>
+              <div className="marketing-eyebrow mb-5">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
+                Pricing plans
               </div>
-              <div className="mb-10 flex items-baseline gap-1">
-                <span className="text-5xl font-black text-slate-900 tracking-tighter">{plan.price}</span>
-                <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">{plan.period}</span>
-              </div>
-              <ul className="space-y-4 mb-12">
-                {plan.features.map((feature, j) => (
-                  <li key={j} className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <Link 
-                to="/login" 
-                className={`block w-full py-5 rounded-2xl font-black uppercase tracking-widest text-xs text-center transition-all active:scale-95 ${
-                  plan.popular 
-                    ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:bg-indigo-700' 
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                }`}
-              >
-                {plan.cta}
-              </Link>
+              <h1 className="marketing-page-title max-w-3xl">
+                Simple pricing for agents that answer, qualify, and follow up.
+              </h1>
             </div>
-          ))}
-        </div>
-
-        <div className="mt-24 p-12 rounded-[3rem] bg-indigo-600 text-white flex flex-col lg:flex-row items-center justify-between gap-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-          <div className="max-w-xl">
-            <h3 className="text-3xl font-black mb-4 tracking-tight">Need something custom?</h3>
-            <p className="text-indigo-100 font-medium leading-relaxed">
-              We offer custom plans for high-volume businesses and specialized industries. Contact our team to discuss your requirements.
+            <p className="marketing-copy max-w-2xl lg:justify-self-end">
+              Start lean, then scale your AI agent operations across inbound
+              calls, outbound campaigns, website chat, lead recovery, and call
+              intelligence without rebuilding your workflow.
             </p>
           </div>
-          <Link to="/contact" className="px-10 py-5 bg-white text-indigo-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all shadow-2xl active:scale-95">
-            Talk to Sales
-          </Link>
+
+          <div className="mt-7 grid gap-4 lg:grid-cols-3">
+            {PLANS.map((plan) => (
+              <article
+                key={plan.name}
+                className={`relative rounded-[1.9rem] border bg-white p-6 shadow-[0_18px_60px_rgba(5,8,23,0.08)] transition hover:-translate-y-1 hover:shadow-[0_26px_80px_rgba(5,8,23,0.12)] ${
+                  plan.popular
+                    ? "border-[#ff9900] ring-4 ring-[#ff9900]/12"
+                    : "border-black/12"
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute right-5 top-5 rounded-full bg-black px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-white">
+                    Popular
+                  </div>
+                )}
+
+                <div className="pr-24">
+                  <h2 className="text-2xl font-medium tracking-[-0.06em] text-black">
+                    {plan.name}
+                  </h2>
+                  <p className="mt-2 text-sm font-normal leading-relaxed text-black/62">
+                    {plan.desc}
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-end gap-1">
+                  <span className="text-[clamp(2rem,3.4vw,3.2rem)] font-medium leading-none tracking-[-0.07em]">
+                    {plan.price}
+                  </span>
+                  {plan.period && (
+                    <span className="pb-1 text-xs font-medium uppercase tracking-[0.18em] text-black/42">
+                      {plan.period}
+                    </span>
+                  )}
+                </div>
+
+                <ul className="mt-5 space-y-2.5">
+                  {plan.features.map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-start gap-2.5 text-sm font-medium text-black/70"
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#fff4d7] text-[10px] text-[#9a5b00]">
+                        ✓
+                      </span>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  to={plan.name === "Enterprise" ? "/contact" : "/login"}
+                  className={`mt-6 flex w-full items-center justify-center rounded-full px-5 py-3 text-[11px] font-medium uppercase tracking-[0.22em] transition active:scale-95 ${
+                    plan.popular
+                      ? "bg-[#ff9900] text-black hover:bg-[#e68a00]"
+                      : "bg-black text-white hover:bg-black"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              </article>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section className="bg-[#fbfaf4]">
+        <div className="marketing-shell py-12 lg:py-14">
+          <div className="grid items-center gap-5 rounded-[2rem] border border-black/12 bg-black p-6 text-white md:grid-cols-[1fr_auto] md:p-8">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
+                Need a custom rollout?
+              </p>
+              <h2 className="mt-3 max-w-2xl text-[clamp(1.7rem,3vw,2.8rem)] font-medium leading-[1] tracking-[-0.065em]">
+                Plan higher volume, custom routing, and advanced integrations
+                with the team.
+              </h2>
+            </div>
+            <Link to="/contact" className="marketing-button-light">
+              Talk to sales
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

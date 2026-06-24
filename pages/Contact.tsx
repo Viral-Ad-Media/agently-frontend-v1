@@ -1,143 +1,198 @@
+import React, { useState } from "react";
+import { api } from "../services/api";
 
-import React, { useState } from 'react';
-import { api } from '../services/api';
+const CONTACT_POINTS = [
+  {
+    label: "Sales",
+    title: "Plan your rollout",
+    copy: "Discuss voice agents, chatbot use cases, campaigns, and the right starting plan.",
+  },
+  {
+    label: "Support",
+    title: "Get implementation help",
+    copy: "Ask about Knowledge Base setup, agent behavior, call flows, and workspace configuration.",
+  },
+  {
+    label: "Partnerships",
+    title: "Build with Agently",
+    copy: "Explore agency, implementation, and platform partnership opportunities.",
+  },
+];
 
 const Contact: React.FC = () => {
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await api.submitContact(form);
       setSent(true);
-      setForm({ name: '', email: '', subject: '', message: '' });
+      setForm({ name: "", email: "", subject: "", message: "" });
       window.setTimeout(() => setSent(false), 5000);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to send your message.');
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to send your message.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-inter pt-32 pb-20">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-20">
-          <h2 className="text-xs font-black text-indigo-600 uppercase tracking-[0.3em] mb-4">Contact Us</h2>
-          <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-none">Get in Touch.</h1>
-          <p className="text-xl text-slate-500 font-medium leading-relaxed">
-            Have questions about Agently? Our team is here to help you get started or answer any technical inquiries.
-          </p>
-        </div>
+    <div className="marketing-page text-black">
+      <section className="border-b border-black/12">
+        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.82fr_1.18fr] lg:py-7">
+          <div>
+            <div className="marketing-eyebrow mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
+              Contact
+            </div>
+            <h1 className="marketing-page-title max-w-xl">
+              Let’s design the agent workflow your team needs next.
+            </h1>
+            <p className="marketing-copy mt-5 max-w-xl">
+              Tell us whether you are launching inbound answering, outbound
+              follow-ups, chatbot support, lead recovery, appointment setting,
+              or a custom AI agent workflow.
+            </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+            <div className="mt-6 grid gap-3">
+              {CONTACT_POINTS.map((point) => (
+                <article
+                  key={point.label}
+                  className="rounded-[1.5rem] border border-black/12 bg-white p-4 shadow-[0_14px_50px_rgba(5,8,23,0.06)]"
+                >
+                  <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#9a5b00]">
+                    {point.label}
+                  </p>
+                  <h2 className="mt-1 text-lg font-medium tracking-[-0.055em]">
+                    {point.title}
+                  </h2>
+                  <p className="mt-1 text-sm font-normal leading-relaxed text-black/62">
+                    {point.copy}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-black/12 bg-white p-5 shadow-[0_24px_80px_rgba(5,8,23,0.1)] sm:p-6">
             {sent ? (
-              <div className="text-center py-20 animate-in fade-in zoom-in">
-                <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div className="flex min-h-[430px] flex-col items-center justify-center text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-3xl font-medium text-emerald-600">
+                  ✓
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">Message Sent!</h3>
-                <p className="text-slate-500 font-medium leading-relaxed">We'll get back to you as soon as possible.</p>
+                <h2 className="text-2xl font-medium tracking-[-0.06em]">
+                  Message sent.
+                </h2>
+                <p className="mt-2 max-w-sm text-sm font-normal leading-relaxed text-black/62">
+                  Thanks for reaching out. The team will review your message and
+                  respond as soon as possible.
+                </p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-black/42">
+                    Send a message
+                  </p>
+                  <h2 className="mt-2 text-2xl font-medium tracking-[-0.06em]">
+                    Tell us what you want Agently to handle.
+                  </h2>
+                </div>
+
                 {error && (
-                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-normal text-red-600">
                     {error}
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Full Name</label>
-                    <input 
-                      type="text" 
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.22em] text-black/42">
+                      Full name
+                    </span>
+                    <input
+                      type="text"
                       required
-                      className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-medium"
+                      className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                       value={form.name}
-                      onChange={e => setForm({...form, name: e.target.value})}
+                      onChange={(event) =>
+                        setForm({ ...form, name: event.target.value })
+                      }
                     />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
-                    <input 
-                      type="email" 
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.22em] text-black/42">
+                      Email address
+                    </span>
+                    <input
+                      type="email"
                       required
-                      className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-medium"
+                      className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                       value={form.email}
-                      onChange={e => setForm({...form, email: e.target.value})}
+                      onChange={(event) =>
+                        setForm({ ...form, email: event.target.value })
+                      }
                     />
-                  </div>
+                  </label>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Subject</label>
-                  <input 
-                    type="text" 
+
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.22em] text-black/42">
+                    Subject
+                  </span>
+                  <input
+                    type="text"
                     required
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-medium"
+                    className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                     value={form.subject}
-                    onChange={e => setForm({...form, subject: e.target.value})}
+                    onChange={(event) =>
+                      setForm({ ...form, subject: event.target.value })
+                    }
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Message</label>
-                  <textarea 
-                    rows={6}
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.22em] text-black/42">
+                    Message
+                  </span>
+                  <textarea
+                    rows={5}
                     required
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-medium resize-none"
+                    className="w-full resize-none rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                     value={form.message}
-                    onChange={e => setForm({...form, message: e.target.value})}
+                    onChange={(event) =>
+                      setForm({ ...form, message: event.target.value })
+                    }
                   />
-                </div>
-                <button type="submit" disabled={loading} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-100 active:scale-95 disabled:opacity-50">
-                  {loading ? 'Sending...' : 'Send Message'}
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex w-full items-center justify-center rounded-full bg-black px-6 py-3.5 text-[11px] font-medium uppercase tracking-[0.22em] text-white transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "Sending..." : "Send message"}
                 </button>
               </form>
             )}
           </div>
-
-          <div className="space-y-8">
-            <div className="p-10 rounded-[3rem] bg-indigo-600 text-white shadow-2xl shadow-indigo-100 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-              <h3 className="text-2xl font-black mb-6 tracking-tight">Direct Support</h3>
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center font-black">@</div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest opacity-70">Email Us</p>
-                    <p className="text-lg font-black tracking-tight">hello@agently.ai</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center font-black">#</div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest opacity-70">Call Us</p>
-                    <p className="text-lg font-black tracking-tight">+1 (415) 555-0123</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-10 rounded-[3rem] bg-white border border-slate-200 shadow-sm">
-              <h3 className="text-2xl font-black text-slate-900 mb-6 tracking-tight">Office Location</h3>
-              <p className="text-slate-500 font-medium leading-relaxed mb-6">
-                123 AI Boulevard, Suite 456 <br />
-                San Francisco, CA 94103 <br />
-                United States
-              </p>
-              <div className="w-full h-48 bg-slate-100 rounded-3xl overflow-hidden grayscale">
-                <img src="https://picsum.photos/seed/sf/800/400" alt="Map" className="w-full h-full object-cover opacity-50" />
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

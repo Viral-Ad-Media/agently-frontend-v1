@@ -65,7 +65,7 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
     {
       title: "Knowledge Bases",
       description:
-        "Create separate business knowledge bases and assign them to agents or chatbots.",
+        "Create separate knowledge bases and assign them to agents or chatbots.",
       href: "/knowledge-bases",
       icon: "fa-layer-group",
       accent: "bg-amber-50 text-amber-700 border-amber-100",
@@ -144,11 +144,6 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
                   </option>
                 ))}
               </select>
-              <span className="mt-2 block text-[11px] font-semibold text-slate-400">
-                Default is Central Time (US). If your workspace saved a
-                different timezone during onboarding or in Settings, Agently
-                uses that timezone across scheduling and call campaign pages.
-              </span>
             </label>
 
             <label className="block">

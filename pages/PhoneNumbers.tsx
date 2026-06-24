@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AgentConfig, Organization } from "../types";
+import { useSearchParams } from "react-router-dom";
+import { AgentConfig, CallRecord, Organization } from "../types";
 import {
   TwilioNumberRecord,
   AvailableTwilioNumber,
   voiceCallsApi,
 } from "../services/voiceCallsApi";
+import CallLogs from "./CallLogs";
 
 const FLAG_MAP: Record<string, string> = {
   US: "🇺🇸",
@@ -12,12 +14,21 @@ const FLAG_MAP: Record<string, string> = {
   GB: "🇬🇧",
 };
 
-type Tab = "numbers" | "search";
+type Tab = "numbers" | "search" | "calls";
 type Toast = { msg: string; ok: boolean } | null;
+
+const parseTabParam = (value: string | null): Tab | null => {
+  return value === "numbers" || value === "search" || value === "calls"
+    ? value
+    : null;
+};
 
 interface PhoneNumbersProps {
   org: Organization;
+  calls?: CallRecord[];
+  onDownloadReport?: (callId: string) => Promise<void>;
   onAgentUpdated?: () => void;
+  initialTab?: Tab;
 }
 
 const Label = ({ children }: { children: React.ReactNode }) => (
@@ -170,9 +181,18 @@ const getOutboundAssignedAgents = (
   return [...byId.values()];
 };
 
-const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
+const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
+  org,
+  calls = [],
+  onDownloadReport = async () => undefined,
+  onAgentUpdated,
+  initialTab = "numbers",
+}) => {
   const orgId = org.id;
-  const [tab, setTab] = useState<Tab>("numbers");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(
+    () => parseTabParam(searchParams.get("tab")) || initialTab,
+  );
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<TwilioNumberRecord[]>([]);
@@ -192,6 +212,25 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
   } | null>(null);
 
   const agents = useMemo(() => org.voiceAgents || [], [org.voiceAgents]);
+
+  useEffect(() => {
+    const requestedTab = parseTabParam(searchParams.get("tab")) || initialTab;
+    setTab((current) => (current === requestedTab ? current : requestedTab));
+  }, [searchParams, initialTab]);
+
+  const updateTab = useCallback(
+    (nextTab: Tab) => {
+      setTab(nextTab);
+      const nextParams = new URLSearchParams(searchParams);
+      if (nextTab === "numbers") {
+        nextParams.delete("tab");
+      } else {
+        nextParams.set("tab", nextTab);
+      }
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -273,7 +312,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         `${phoneNumber} purchased. Assign it to an agent from the Numbers tab.`,
       );
       await loadNumbers();
-      setTab("numbers");
+      updateTab("numbers");
       window.setTimeout(() => onAgentUpdated?.(), 0);
     } catch (error: any) {
       showToast(error?.message || "Purchase failed.", false);
@@ -650,56 +689,68 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
         </div>
       )}
 
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Phone Numbers</h2>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Search, reserve, and share business numbers across outbound agents
-            in this organization.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
+      <div className="rounded-[1.35rem] bg-white p-3 shadow-sm ring-1 ring-slate-100 sm:p-4">
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div className="min-w-0">
+            <h2 className="text-lg font-black text-slate-900 sm:text-xl">
+              Phone Numbers
+            </h2>
+            <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-slate-400">
+              Manage business numbers, call logs, recordings, and outcomes from
+              one workspace.
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="custom-scrollbar hide-scrollbar-mobile flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1">
+              <button
+                onClick={() => updateTab("numbers")}
+                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "numbers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Numbers
+              </button>
+              <button
+                onClick={() => updateTab("search")}
+                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "search" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Buy Number
+              </button>
+              <button
+                onClick={() => updateTab("calls")}
+                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "calls" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                Call Logs
+              </button>
+            </div>
             <button
-              onClick={() => setTab("numbers")}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "numbers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              onClick={() => void loadNumbers()}
+              disabled={busy === "load"}
+              className="shrink-0 rounded-2xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:opacity-50"
             >
-              Numbers
-            </button>
-            <button
-              onClick={() => setTab("search")}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "search" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Buy US Number
+              {busy === "load" ? "Refreshing…" : "Refresh"}
             </button>
           </div>
-          <button
-            onClick={() => void loadNumbers()}
-            disabled={busy === "load"}
-            className="rounded-2xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:opacity-50"
-          >
-            {busy === "load" ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-black text-slate-900">
-              Manage calling numbers
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Assign one business number to multiple outbound agents. Inbound
-              routing stays controlled separately, while outbound campaigns can
-              share the same number.
-            </p>
+      {tab !== "calls" && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-black text-slate-900">
+                Manage calling numbers
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Assign one business number to multiple outbound agents. Inbound
+                routing stays controlled separately, while outbound campaigns
+                can share the same number.
+              </p>
+            </div>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+              Multi-agent outbound
+            </span>
           </div>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-            Multi-agent outbound
-          </span>
         </div>
-      </div>
+      )}
 
       {tab === "numbers" && (
         <div className="space-y-4">
@@ -720,7 +771,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
               </p>
               <div className="mt-5 flex justify-center gap-3">
                 <button
-                  onClick={() => setTab("search")}
+                  onClick={() => updateTab("search")}
                   className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
                 >
                   Buy Number
@@ -739,6 +790,15 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({ org, onAgentUpdated }) => {
             </div>
           )}
         </div>
+      )}
+
+      {tab === "calls" && (
+        <CallLogs
+          calls={calls}
+          org={org}
+          onDownloadReport={onDownloadReport}
+          embedded
+        />
       )}
 
       {tab === "search" && (

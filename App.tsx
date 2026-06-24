@@ -25,7 +25,6 @@ import TestAgent from "./pages/TestAgent";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
-const CallLogs = lazy(() => import("./pages/CallLogs"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
@@ -35,6 +34,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Team = lazy(() => import("./pages/Team"));
 const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const Messenger = lazy(() => import("./pages/Messenger"));
 const Features = lazy(() => import("./pages/Features"));
 const Home = lazy(() => import("./pages/Home"));
@@ -48,6 +48,18 @@ const Settings = lazy(() => import("./pages/Settings"));
 const KnowledgeBases = lazy(() => import("./pages/KnowledgeBases"));
 const CallSimulator = lazy(() => import("./components/CallSimulator"));
 
+function hasPasswordResetTokenInUrl() {
+  if (typeof window === "undefined") return false;
+  const href = window.location.href || "";
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+  return (
+    /(?:[?&#]|%3F|%26)(resetToken|token)=/i.test(href) ||
+    /(?:[?&])(resetToken|token)=/i.test(search) ||
+    /(?:[?&])(resetToken|token)=/i.test(hash)
+  );
+}
+
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -60,6 +72,38 @@ const App: React.FC = () => {
   const conversation = workspace?.conversation ?? [];
   const dashboard = workspace?.dashboard ?? null;
   const knowledgeBases = workspace?.knowledgeBases ?? [];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const readTokenFromUrl = () => {
+      const candidates: string[] = [];
+      candidates.push(window.location.search || "");
+      candidates.push(
+        window.location.hash.includes("?")
+          ? window.location.hash.slice(window.location.hash.indexOf("?"))
+          : "",
+      );
+
+      for (const candidate of candidates) {
+        const params = new URLSearchParams(candidate);
+        const token = params.get("resetToken") || params.get("token");
+        if (token) return token.trim().replace(/[\s.]+$/g, "");
+      }
+      return "";
+    };
+
+    const resetToken = readTokenFromUrl();
+    const isAlreadyResetRoute =
+      window.location.hash.startsWith("#/forgot-password") ||
+      window.location.hash.startsWith("#/reset-password");
+    if (!resetToken || isAlreadyResetRoute) return;
+
+    const nextUrl = `${window.location.origin}${window.location.pathname}#/forgot-password?resetToken=${encodeURIComponent(resetToken)}`;
+    // Use replace() instead of history.replaceState so HashRouter reliably re-hydrates
+    // into the reset route even when the email client opened /?resetToken=... first.
+    window.location.replace(nextUrl);
+  }, []);
 
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
@@ -548,6 +592,8 @@ const App: React.FC = () => {
               )
             }
           />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ForgotPassword />} />
           <Route
             path="/features"
             element={
@@ -627,12 +673,19 @@ const App: React.FC = () => {
           <Route
             path="/calls"
             element={
-              <ProtectedRoute>
-                <CallLogs
-                  calls={calls}
-                  onDownloadReport={handleDownloadCallReport}
-                />
-              </ProtectedRoute>
+              org ? (
+                <ProtectedRoute>
+                  <PhoneNumbers
+                    org={org}
+                    calls={calls}
+                    onDownloadReport={handleDownloadCallReport}
+                    onAgentUpdated={() => void refreshWorkspace()}
+                    initialTab="calls"
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
             }
           />
           <Route
@@ -721,6 +774,8 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <PhoneNumbers
                     org={org}
+                    calls={calls}
+                    onDownloadReport={handleDownloadCallReport}
                     onAgentUpdated={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>
@@ -744,22 +799,34 @@ const App: React.FC = () => {
               )
             }
           />
-          <Route
-            path="/knowledge-bases"
-            element={
-              org ? (
-                <ProtectedRoute>
-                  <KnowledgeBases
-                    org={org}
-                    initialKnowledgeBases={knowledgeBases}
-                    onChanged={() => void refreshWorkspace()}
-                  />
-                </ProtectedRoute>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
+          {[
+            "/knowledge-bases",
+            "/knowledge-base",
+            "/knowledgebases",
+            "/knowledgebase",
+            "/business-knowledge-bases",
+            "/business-knowledge-base",
+            "/businessknowledgebases",
+            "/businessknowledgebase",
+          ].map((path) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                org ? (
+                  <ProtectedRoute>
+                    <KnowledgeBases
+                      org={org}
+                      initialKnowledgeBases={knowledgeBases}
+                      onChanged={() => void refreshWorkspace()}
+                    />
+                  </ProtectedRoute>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+          ))}
           <Route
             path="/settings"
             element={
@@ -772,7 +839,16 @@ const App: React.FC = () => {
               )
             }
           />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route
+            path="*"
+            element={
+              hasPasswordResetTokenInUrl() ? (
+                <ForgotPassword />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
         </Routes>
       </Suspense>
 

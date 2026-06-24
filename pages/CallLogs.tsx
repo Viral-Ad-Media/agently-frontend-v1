@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocation } from "react-router-dom";
-import { CallRecord } from "../types";
+import { CallRecord, Organization } from "../types";
 import AppModal from "../components/AppModal";
 import { voiceCallsApi } from "../services/voiceCallsApi";
 
@@ -22,6 +22,16 @@ type CallListItem = {
   duration: number;
   timestamp: string;
   voiceAgentId?: string | null;
+  callCategory?: string;
+  categoryLabel?: string;
+  disposition?: string;
+  answeredBy?: string;
+  voicemailDetected?: boolean;
+  screeningDetected?: boolean;
+  rerunEligible?: boolean;
+  tags?: string[];
+  scheduleId?: string | null;
+  campaignId?: string | null;
   recordingAvailable?: boolean;
   recordingUrl?: string;
   transcript?: TranscriptMessage[];
@@ -48,14 +58,55 @@ type CallMetrics = {
   completed: number;
   failed: number;
   avg: number;
+  answeredHuman?: number;
+  voicemail?: number;
+  noAnswer?: number;
+  screened?: number;
+  rerunEligible?: number;
+  categories?: Record<string, number>;
 };
 
 interface CallLogsProps {
   calls?: CallRecord[];
+  org?: Organization | null;
   onDownloadReport: (callId: string) => Promise<void>;
+  embedded?: boolean;
 }
 
 const PAGE_SIZE = 10;
+
+const CATEGORY_OPTIONS = [
+  { value: "all", label: "All outcomes" },
+  { value: "answered_human", label: "Answered by human" },
+  { value: "voicemail", label: "Voicemail" },
+  { value: "left_voicemail", label: "Voicemail left" },
+  { value: "no_answer", label: "No answer" },
+  { value: "busy", label: "Busy" },
+  { value: "failed", label: "Failed" },
+  { value: "unavailable", label: "Unavailable" },
+  { value: "screened", label: "Screened" },
+  { value: "screened_then_connected", label: "Screened then connected" },
+  { value: "callback_scheduled", label: "Callback scheduled" },
+  { value: "manual_followup_required", label: "Needs follow-up" },
+  { value: "opted_out", label: "Opted out" },
+  { value: "transferred", label: "Transferred" },
+];
+
+const CATEGORY_STYLE: Record<string, string> = {
+  answered_human: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  voicemail: "bg-violet-50 text-violet-700 border-violet-100",
+  left_voicemail: "bg-violet-50 text-violet-700 border-violet-100",
+  no_answer: "bg-amber-50 text-amber-700 border-amber-100",
+  busy: "bg-orange-50 text-orange-700 border-orange-100",
+  failed: "bg-red-50 text-red-600 border-red-100",
+  unavailable: "bg-red-50 text-red-600 border-red-100",
+  screened: "bg-blue-50 text-blue-700 border-blue-100",
+  screened_then_connected: "bg-cyan-50 text-cyan-700 border-cyan-100",
+  callback_scheduled: "bg-sky-50 text-sky-700 border-sky-100",
+  manual_followup_required: "bg-pink-50 text-pink-700 border-pink-100",
+  opted_out: "bg-slate-100 text-slate-600 border-slate-200",
+  transferred: "bg-indigo-50 text-indigo-700 border-indigo-100",
+};
 
 const STATUS_STYLE: Record<string, string> = {
   completed: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -66,6 +117,36 @@ const STATUS_STYLE: Record<string, string> = {
   "in-progress": "bg-indigo-50 text-indigo-700 border-indigo-100",
   canceled: "bg-slate-100 text-slate-500 border-slate-200",
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
+};
+
+const RERUN_ELIGIBLE_CATEGORIES = new Set([
+  "voicemail",
+  "left_voicemail",
+  "no_answer",
+  "busy",
+  "failed",
+  "unavailable",
+  "callback_scheduled",
+  "manual_followup_required",
+  "screened",
+]);
+
+const toLocalDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toLocalTimeInput = (date: Date) => {
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute}`;
+};
+
+const defaultRerunDateTime = () => {
+  const date = new Date(Date.now() + 10 * 60 * 1000);
+  return { date: toLocalDateInput(date), time: toLocalTimeInput(date) };
 };
 
 const safeString = (value: unknown, fallback = "") => {
@@ -231,6 +312,97 @@ const getRecordObject = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+const normalizeTagList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => safeString(item, "").trim().toLowerCase())
+      .filter(Boolean)
+      .filter((item, index, list) => list.indexOf(item) === index)
+      .slice(0, 30);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((item, index, list) => list.indexOf(item) === index)
+      .slice(0, 30);
+  }
+  return [];
+};
+
+const normalizeCallCategory = (row: Record<string, unknown>) => {
+  const meta = getRecordObject(row.metadata || row.call_metadata);
+  const explicit = safeString(
+    row.callCategory ||
+      row.call_category ||
+      meta.callCategory ||
+      meta.call_category ||
+      "",
+    "",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (explicit) return explicit;
+  const text = [
+    row.status,
+    row.outcome,
+    row.disposition,
+    row.answeredBy,
+    row.answered_by,
+    meta.disposition,
+    meta.answered_by,
+    meta.machine_detection_result,
+    meta.hangup_reason,
+  ]
+    .map((item) => safeString(item, "").toLowerCase())
+    .join(" ");
+  if (
+    Boolean(
+      row.screeningDetected ||
+      row.screening_detected ||
+      meta.screening_detected,
+    ) ||
+    text.includes("screen")
+  )
+    return "screened";
+  if (
+    Boolean(
+      row.voicemailDetected ||
+      row.voicemail_detected ||
+      meta.voicemail_detected,
+    ) ||
+    /voicemail|machine|answering_machine/.test(text)
+  )
+    return "voicemail";
+  if (/busy/.test(text)) return "busy";
+  if (/no[-_ ]?answer|unanswered|did not pick|not picked/.test(text))
+    return "no_answer";
+  if (/unavailable|invalid|not in service|not reachable/.test(text))
+    return "unavailable";
+  if (/failed|error|cancelled|canceled/.test(text)) return "failed";
+  if (/callback/.test(text)) return "callback_scheduled";
+  if (/follow/.test(text)) return "manual_followup_required";
+  if (/transfer/.test(text)) return "transferred";
+  if (/opt[_ -]?out|do not call|not interested/.test(text)) return "opted_out";
+  if (normalizeCallStatus(row) === "completed") return "answered_human";
+  return "unknown";
+};
+
+const categoryLabel = (category: string) =>
+  CATEGORY_OPTIONS.find((item) => item.value === category)?.label ||
+  titleCase(category || "Unknown");
+
+const extractAgentName = (
+  org: Organization | null | undefined,
+  agentId?: string | null,
+) => {
+  if (!agentId) return "Unknown agent";
+  const agent = org?.voiceAgents?.find((item) => item.id === agentId);
+  return agent?.name || "Unknown agent";
+};
+
 const extractProvidedCallerName = (row: Record<string, unknown>) => {
   const meta = getRecordObject(row.metadata || row.call_metadata);
   const lead = getRecordObject(row.lead);
@@ -298,8 +470,13 @@ const normalizeCall = (value: unknown): CallListItem | null => {
         0,
     ) || 0;
   const status = normalizeCallStatus(row);
+  const callCategory = normalizeCallCategory(row);
   const outcome = safeString(
-    row.outcome || row.result || status || "Completed",
+    row.outcome ||
+      row.result ||
+      categoryLabel(callCategory) ||
+      status ||
+      "Completed",
     "Completed",
   );
   const callerName = extractProvidedCallerName(row);
@@ -326,6 +503,18 @@ const normalizeCall = (value: unknown): CallListItem | null => {
     timestamp,
     voiceAgentId:
       safeString(row.voice_agent_id || row.voiceAgentId || "", "") || null,
+    callCategory,
+    categoryLabel:
+      safeString(row.categoryLabel || row.category_label || "", "") ||
+      categoryLabel(callCategory),
+    disposition: safeString(row.disposition || "", ""),
+    answeredBy: safeString(row.answeredBy || row.answered_by || "", ""),
+    voicemailDetected: Boolean(row.voicemailDetected || row.voicemail_detected),
+    screeningDetected: Boolean(row.screeningDetected || row.screening_detected),
+    rerunEligible: Boolean(row.rerunEligible || row.rerun_eligible),
+    tags: normalizeTagList(row.tags),
+    scheduleId: safeString(row.scheduleId || row.schedule_id || "", "") || null,
+    campaignId: safeString(row.campaignId || row.campaign_id || "", "") || null,
     recordingAvailable: Boolean(
       row.recording_available ||
       row.recordingAvailable ||
@@ -378,6 +567,19 @@ const normalizeCallsResponse = (
               metricsRaw.averageDuration ||
               0,
           ) || 0,
+        answeredHuman:
+          Number(metricsRaw.answeredHuman || metricsRaw.answered_human || 0) ||
+          0,
+        voicemail: Number(metricsRaw.voicemail || 0) || 0,
+        noAnswer: Number(metricsRaw.noAnswer || metricsRaw.no_answer || 0) || 0,
+        screened: Number(metricsRaw.screened || 0) || 0,
+        rerunEligible:
+          Number(metricsRaw.rerunEligible || metricsRaw.rerun_eligible || 0) ||
+          0,
+        categories:
+          metricsRaw.categories && typeof metricsRaw.categories === "object"
+            ? (metricsRaw.categories as Record<string, number>)
+            : {},
       }
     : undefined;
   return {
@@ -437,7 +639,9 @@ const normalizeDetailResponse = (
 
 const CallLogs: React.FC<CallLogsProps> = ({
   calls: initialCalls = [],
+  org = null,
   onDownloadReport,
+  embedded = false,
 }) => {
   const location = useLocation();
   const [calls, setCalls] = useState<CallListItem[]>(() =>
@@ -450,6 +654,12 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [directionFilter, setDirectionFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [savingTag, setSavingTag] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(initialCalls.length);
   const [loading, setLoading] = useState(false);
@@ -462,6 +672,20 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [summarizing, setSummarizing] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<CallMetrics | null>(null);
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<string | null>(null);
+  const [rerunOpen, setRerunOpen] = useState(false);
+  const [rerunBusy, setRerunBusy] = useState(false);
+  const [rerunPreview, setRerunPreview] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [rerunForm, setRerunForm] = useState(() => {
+    const initial = defaultRerunDateTime();
+    return {
+      name: "Rerun campaign",
+      date: initial.date,
+      time: initial.time,
+    };
+  });
 
   const loadCalls = async (nextPage = page) => {
     setLoading(true);
@@ -473,6 +697,9 @@ const CallLogs: React.FC<CallLogsProps> = ({
       };
       if (directionFilter !== "all") params.direction = directionFilter;
       if (statusFilter !== "all") params.status = statusFilter;
+      if (categoryFilter !== "all") params.callCategory = categoryFilter;
+      if (agentFilter !== "all") params.voiceAgentId = agentFilter;
+      if (tagFilter !== "all") params.tag = tagFilter;
       const payload = await voiceCallsApi.calls.getCalls(params);
       const normalized = normalizeCallsResponse(payload);
       startTransition(() => {
@@ -493,7 +720,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   useEffect(() => {
     void loadCalls(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, directionFilter]);
+  }, [statusFilter, directionFilter, categoryFilter, agentFilter, tagFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -505,12 +732,26 @@ const CallLogs: React.FC<CallLogsProps> = ({
         call.summary,
         call.outcome,
         call.status,
+        call.callCategory,
+        call.categoryLabel,
+        call.disposition,
+        call.answeredBy,
+        extractAgentName(org, call.voiceAgentId),
+        ...(call.tags || []),
       ]
         .join(" ")
         .toLowerCase()
         .includes(q);
     });
-  }, [calls, search]);
+  }, [calls, org, search]);
+
+  const agentOptions = useMemo(() => org?.voiceAgents || [], [org]);
+
+  const tagOptions = useMemo(() => {
+    const tags = new Set<string>();
+    calls.forEach((call) => (call.tags || []).forEach((tag) => tags.add(tag)));
+    return Array.from(tags).sort();
+  }, [calls]);
 
   const stats = useMemo(() => {
     if (serverMetrics) return serverMetrics;
@@ -531,10 +772,57 @@ const CallLogs: React.FC<CallLogsProps> = ({
           calls.reduce((sum, call) => sum + call.duration, 0) / totalCalls,
         )
       : 0;
-    return { totalCalls, completed, failed, avg };
+    const categories = calls.reduce<Record<string, number>>((acc, call) => {
+      const category = call.callCategory || "unknown";
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
+    return {
+      totalCalls,
+      completed,
+      failed,
+      avg,
+      categories,
+      answeredHuman: categories.answered_human || 0,
+      voicemail: (categories.voicemail || 0) + (categories.left_voicemail || 0),
+      noAnswer: categories.no_answer || 0,
+      screened:
+        (categories.screened || 0) + (categories.screened_then_connected || 0),
+      rerunEligible: calls.filter((call) => call.rerunEligible).length,
+    };
   }, [calls, serverMetrics]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const filteredCallIds = useMemo(
+    () => filtered.map((call) => call.id),
+    [filtered],
+  );
+
+  const rerunEligibleVisible = useMemo(
+    () =>
+      filtered.filter((call) =>
+        RERUN_ELIGIBLE_CATEGORIES.has(call.callCategory || ""),
+      ),
+    [filtered],
+  );
+
+  const activeFilterSummary = useMemo(() => {
+    const labels: string[] = [];
+    if (directionFilter !== "all") labels.push(titleCase(directionFilter));
+    if (statusFilter !== "all") labels.push(titleCase(statusFilter));
+    if (categoryFilter !== "all") labels.push(categoryLabel(categoryFilter));
+    if (agentFilter !== "all") labels.push(extractAgentName(org, agentFilter));
+    if (tagFilter !== "all") labels.push(`#${tagFilter}`);
+    return labels.length ? labels.join(" · ") : "All calls";
+  }, [
+    agentFilter,
+    categoryFilter,
+    directionFilter,
+    org,
+    statusFilter,
+    tagFilter,
+  ]);
 
   const deepLinkedCallId = useMemo(
     () => new URLSearchParams(location.search).get("callId") || "",
@@ -714,8 +1002,16 @@ const CallLogs: React.FC<CallLogsProps> = ({
           "",
         "",
       );
+      const nextSummary =
+        summary ||
+        "No call summary was returned yet. Try again after the transcript is available.";
       setSelected((current) =>
-        current ? { ...current, summary: summary || current.summary } : current,
+        current ? { ...current, summary: nextSummary } : current,
+      );
+      setCalls((current) =>
+        current.map((call) =>
+          call.id === selected.id ? { ...call, summary: nextSummary } : call,
+        ),
       );
       await loadCalls(page);
     } catch (err) {
@@ -727,15 +1023,156 @@ const CallLogs: React.FC<CallLogsProps> = ({
     }
   };
 
+  const handleAddTagToSelected = async () => {
+    if (!selected) return;
+    const tags = normalizeTagList(tagDraft);
+    if (!tags.length) return;
+    setSavingTag(true);
+    setError("");
+    try {
+      const response = (await voiceCallsApi.calls.updateCallTags(selected.id, {
+        tags,
+        action: "add",
+      })) as Record<string, unknown>;
+      const updated = getRecordObject(
+        response.call || response.data || response,
+      );
+      const nextTags = normalizeTagList(
+        updated.tags || [...(selected.tags || []), ...tags],
+      );
+      setSelected((current) =>
+        current ? { ...current, tags: nextTags } : current,
+      );
+      setCalls((current) =>
+        current.map((call) =>
+          call.id === selected.id ? { ...call, tags: nextTags } : call,
+        ),
+      );
+      setTagDraft("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not update call tags.",
+      );
+    } finally {
+      setSavingTag(false);
+    }
+  };
+
+  const handleTagFilteredCalls = async () => {
+    const tags = normalizeTagList(tagDraft);
+    if (!tags.length || !filteredCallIds.length) return;
+    setSavingTag(true);
+    setError("");
+    try {
+      await voiceCallsApi.calls.bulkUpdateCallTags({
+        callIds: filteredCallIds,
+        tags,
+        action: "add",
+      });
+      setTagDraft("");
+      await loadCalls(page);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not tag filtered calls.",
+      );
+    } finally {
+      setSavingTag(false);
+    }
+  };
+
+  const buildRerunPayload = () => ({
+    name: rerunForm.name.trim() || "Rerun campaign",
+    callIds: filteredCallIds,
+    voiceAgentId: agentFilter !== "all" ? agentFilter : undefined,
+    callCategory: categoryFilter !== "all" ? categoryFilter : undefined,
+    direction: directionFilter !== "all" ? directionFilter : undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    tag: tagFilter !== "all" ? tagFilter : undefined,
+    startLocalDate: rerunForm.date,
+    startTime: rerunForm.time,
+    eligibleOnly: true,
+  });
+
+  const openRerunModal = async () => {
+    const initial = defaultRerunDateTime();
+    setRerunForm((current) => ({
+      ...current,
+      name:
+        categoryFilter !== "all"
+          ? `${categoryLabel(categoryFilter)} rerun campaign`
+          : "Rerun campaign",
+      date: current.date || initial.date,
+      time: current.time || initial.time,
+    }));
+    setRerunOpen(true);
+    setRerunPreview(null);
+    setRerunBusy(true);
+    setError("");
+    try {
+      const payload = await voiceCallsApi.outreach.previewRerunFromCalls({
+        ...buildRerunPayload(),
+        startLocalDate: initial.date,
+        startTime: initial.time,
+      });
+      setRerunPreview(payload as Record<string, unknown>);
+    } catch (err) {
+      setRerunPreview(null);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not preview this rerun group.",
+      );
+    } finally {
+      setRerunBusy(false);
+    }
+  };
+
+  const refreshRerunPreview = async () => {
+    setRerunBusy(true);
+    setError("");
+    try {
+      const payload =
+        await voiceCallsApi.outreach.previewRerunFromCalls(buildRerunPayload());
+      setRerunPreview(payload as Record<string, unknown>);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not preview this rerun group.",
+      );
+    } finally {
+      setRerunBusy(false);
+    }
+  };
+
+  const createRerunCampaign = async () => {
+    setRerunBusy(true);
+    setError("");
+    try {
+      await voiceCallsApi.outreach.createRerunFromCalls(buildRerunPayload());
+      setRerunOpen(false);
+      setRerunPreview(null);
+      await loadCalls(page);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not create the rerun campaign.",
+      );
+    } finally {
+      setRerunBusy(false);
+    }
+  };
+
   return (
-    <div className="space-y-5 animate-fade-up">
+    <div className={`space-y-4 animate-fade-up ${embedded ? "" : ""}`}>
       {error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
           {error}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
             label: "Total calls",
@@ -744,10 +1181,22 @@ const CallLogs: React.FC<CallLogsProps> = ({
             color: "bg-indigo-50 text-indigo-600",
           },
           {
-            label: "Completed",
-            value: stats.completed,
-            icon: "fa-circle-check",
+            label: "Answered",
+            value: stats.answeredHuman || 0,
+            icon: "fa-user-check",
             color: "bg-emerald-50 text-emerald-600",
+          },
+          {
+            label: "Voicemail",
+            value: stats.voicemail || 0,
+            icon: "fa-voicemail",
+            color: "bg-violet-50 text-violet-600",
+          },
+          {
+            label: "No answer",
+            value: stats.noAnswer || 0,
+            icon: "fa-phone-slash",
+            color: "bg-amber-50 text-amber-600",
           },
           {
             label: "Failed",
@@ -756,15 +1205,15 @@ const CallLogs: React.FC<CallLogsProps> = ({
             color: "bg-red-50 text-red-600",
           },
           {
-            label: "Avg duration",
-            value: formatDuration(stats.avg),
-            icon: "fa-stopwatch",
+            label: "Rerun ready",
+            value: stats.rerunEligible || 0,
+            icon: "fa-rotate-right",
             color: "bg-blue-50 text-blue-600",
           },
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
           >
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.color}`}
@@ -781,31 +1230,79 @@ const CallLogs: React.FC<CallLogsProps> = ({
         ))}
       </div>
 
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-[1.35rem] bg-white p-3 shadow-sm ring-1 ring-slate-100 sm:p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h2 className="text-xl font-black tracking-tight text-slate-900">
+          <div className="min-w-0">
+            <h2 className="text-base font-black tracking-tight text-slate-900 sm:text-lg">
               Call Logs
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Review calls, transcripts, recordings, summaries, and captured
-              questions.
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              Search first, then use agent or outcome filters only when you need
+              exact grouping.
             </p>
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:max-w-5xl xl:grid-cols-[minmax(0,1.7fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)_auto_auto]">
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search calls..."
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300 md:w-64"
+              placeholder="Search caller, phone, tag, agent, status, or outcome..."
+              className="min-w-0 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-300 md:col-span-2 xl:col-span-1"
             />
+            <select
+              value={agentFilter}
+              onChange={(event) => {
+                setAgentFilter(event.target.value);
+                setPage(1);
+              }}
+              className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider outline-none focus:border-amber-300"
+            >
+              <option value="all">All agents</option>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
+                setPage(1);
+              }}
+              className="min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider outline-none focus:border-amber-300"
+            >
+              {CATEGORY_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setAdvancedFiltersOpen((open) => !open)}
+              className="rounded-2xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300"
+            >
+              {advancedFiltersOpen ? "Hide" : "More"}
+            </button>
+            <button
+              onClick={() => void loadCalls(page)}
+              disabled={loading || isPending}
+              className="rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
+            >
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+        </div>
+
+        {advancedFiltersOpen ? (
+          <div className="mt-3 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 md:grid-cols-3">
             <select
               value={directionFilter}
               onChange={(event) => {
                 setDirectionFilter(event.target.value);
                 setPage(1);
               }}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+              className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-black uppercase tracking-wider outline-none"
             >
               <option value="all">All directions</option>
               <option value="inbound">Inbound</option>
@@ -817,7 +1314,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 setStatusFilter(event.target.value);
                 setPage(1);
               }}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+              className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-black uppercase tracking-wider outline-none"
             >
               <option value="all">All statuses</option>
               <option value="completed">Completed</option>
@@ -825,18 +1322,60 @@ const CallLogs: React.FC<CallLogsProps> = ({
               <option value="queued">Queued</option>
               <option value="in-progress">In progress</option>
             </select>
-            <button
-              onClick={() => void loadCalls(page)}
-              disabled={loading || isPending}
-              className="rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
+            <select
+              value={tagFilter}
+              onChange={(event) => {
+                setTagFilter(event.target.value);
+                setPage(1);
+              }}
+              className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-black uppercase tracking-wider outline-none"
             >
-              {loading ? "Loading..." : "Refresh"}
+              <option value="all">All tags</option>
+              {tagOptions.map((tag) => (
+                <option key={tag} value={tag}>
+                  #{tag}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[11px] font-bold text-slate-400">
+            {activeFilterSummary} · {filtered.length} visible ·{" "}
+            {rerunEligibleVisible.length} rerun-ready
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={tagDraft}
+              onChange={(event) => setTagDraft(event.target.value)}
+              placeholder="Tag visible calls"
+              className="min-w-0 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-300 sm:w-48"
+            />
+            <button
+              onClick={() => void handleTagFilteredCalls()}
+              disabled={
+                savingTag || !tagDraft.trim() || filteredCallIds.length === 0
+              }
+              className="rounded-2xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 disabled:opacity-50"
+            >
+              {savingTag ? "Saving..." : "Tag visible"}
+            </button>
+            <button
+              onClick={() => void openRerunModal()}
+              disabled={
+                rerunEligibleVisible.length === 0 ||
+                filteredCallIds.length === 0
+              }
+              className="rounded-2xl bg-amber-500 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-sm hover:bg-amber-600 disabled:opacity-50"
+            >
+              Rerun visible
             </button>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-100">
         {loading && !calls.length ? (
           <div className="py-16 text-center text-sm font-bold text-slate-400">
             Loading call logs...
@@ -853,12 +1392,13 @@ const CallLogs: React.FC<CallLogsProps> = ({
           <div className="divide-y divide-slate-100">
             {filtered.map((call) => {
               const statusKey = call.status.toLowerCase();
+              const categoryKey = call.callCategory || "unknown";
               return (
                 <button
                   key={call.id}
                   type="button"
                   onClick={() => void openDetail(call)}
-                  className="block w-full bg-white p-5 text-left transition-colors hover:bg-slate-50"
+                  className="block w-full bg-white p-4 text-left transition-colors hover:bg-slate-50 sm:p-5"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex min-w-0 items-center gap-4">
@@ -880,9 +1420,18 @@ const CallLogs: React.FC<CallLogsProps> = ({
                           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                             {titleCase(call.direction || "call")}
                           </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${CATEGORY_STYLE[categoryKey] || "border-slate-200 bg-slate-100 text-slate-600"}`}
+                          >
+                            {call.categoryLabel || categoryLabel(categoryKey)}
+                          </span>
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                           <span>{call.callerPhone || "No number"}</span>
+                          <span>·</span>
+                          <span>
+                            {extractAgentName(org, call.voiceAgentId)}
+                          </span>
                           <span>·</span>
                           <span>{formatDuration(call.duration)}</span>
                           <span>·</span>
@@ -890,6 +1439,18 @@ const CallLogs: React.FC<CallLogsProps> = ({
                             {new Date(call.timestamp).toLocaleString()}
                           </span>
                         </div>
+                        {call.tags?.length ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {call.tags.slice(0, 5).map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         {call.summary ? (
                           <p className="mt-2 line-clamp-1 text-sm text-slate-500">
                             {call.summary}
@@ -943,6 +1504,121 @@ const CallLogs: React.FC<CallLogsProps> = ({
       </div>
 
       <AppModal
+        open={rerunOpen}
+        onClose={() => setRerunOpen(false)}
+        title="Create rerun campaign"
+        description="Only rerun calls from the current visible filtered group that are safe to retry."
+        size="lg"
+        footer={
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={() => void refreshRerunPreview()}
+              disabled={rerunBusy}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:border-slate-300 disabled:opacity-50"
+            >
+              {rerunBusy ? "Checking..." : "Refresh preview"}
+            </button>
+            <button
+              onClick={() => void createRerunCampaign()}
+              disabled={rerunBusy || rerunEligibleVisible.length === 0}
+              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              {rerunBusy ? "Creating..." : "Create rerun"}
+            </button>
+            <button
+              onClick={() => setRerunOpen(false)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:border-slate-300"
+            >
+              Cancel
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-sm">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-amber-950">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">
+              Safety rule
+            </p>
+            <p className="mt-2 font-semibold leading-relaxed">
+              Agently excludes successful, transferred, opted-out, and
+              screened-then-connected calls. This rerun will use only eligible
+              outcomes such as voicemail, no answer, busy, failed, unavailable,
+              screened, callback, or follow-up.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="md:col-span-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Campaign name
+              </span>
+              <input
+                value={rerunForm.name}
+                onChange={(event) =>
+                  setRerunForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+              />
+            </label>
+            <label>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Date
+              </span>
+              <input
+                type="date"
+                value={rerunForm.date}
+                onChange={(event) =>
+                  setRerunForm((current) => ({
+                    ...current,
+                    date: event.target.value,
+                  }))
+                }
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+              />
+            </label>
+            <label>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Time
+              </span>
+              <input
+                type="time"
+                value={rerunForm.time}
+                onChange={(event) =>
+                  setRerunForm((current) => ({
+                    ...current,
+                    time: event.target.value,
+                  }))
+                }
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-amber-300"
+              />
+            </label>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Visible eligible
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {rerunEligibleVisible.length}
+              </p>
+            </div>
+          </div>
+
+          {rerunPreview ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Backend preview
+              </p>
+              <pre className="mt-3 max-h-64 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
+                {JSON.stringify(rerunPreview, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      </AppModal>
+
+      <AppModal
         open={!!selected}
         onClose={() => setSelected(null)}
         title={selected?.callerName || "Call details"}
@@ -960,7 +1636,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 disabled={summarizing}
                 className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:border-slate-300 disabled:opacity-50"
               >
-                {summarizing ? "Summarizing..." : "Summarize"}
+                {summarizing ? "Getting summary..." : "Get call summary"}
               </button>
               <button
                 onClick={(event) => void handleDownload(selected.id, event)}
@@ -989,10 +1665,25 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-4">
+            {selected.summary ? (
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  Call summary
+                </p>
+                <p className="mt-2 whitespace-pre-wrap">{selected.summary}</p>
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               {[
                 ["Direction", titleCase(selected.direction || "call")],
                 ["Status", titleCase(selected.status || selected.outcome)],
+                [
+                  "Outcome",
+                  selected.categoryLabel ||
+                    categoryLabel(selected.callCategory || "unknown"),
+                ],
+                ["Agent", extractAgentName(org, selected.voiceAgentId)],
                 ["From", selected.from || selected.callerPhone || "—"],
                 ["To", selected.to || "—"],
               ].map(([label, value]) => (
@@ -1005,15 +1696,6 @@ const CallLogs: React.FC<CallLogsProps> = ({
                   </p>
                 </div>
               ))}
-            </div>
-
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-                Summary
-              </p>
-              <p className="mt-2 text-sm font-medium text-amber-950">
-                {selected.summary || "No summary is available yet."}
-              </p>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
@@ -1064,10 +1746,18 @@ const CallLogs: React.FC<CallLogsProps> = ({
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Recording
-                  </p>
+                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Recording
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Load audio only when you need to audit the call.
+                      </p>
+                    </div>
+                    <i className="fa-sharp fa-solid fa-waveform-lines text-slate-300" />
+                  </div>
                   {selected.recording?.audioBase64 ? (
                     <audio
                       controls
@@ -1092,7 +1782,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     <button
                       onClick={loadRecording}
                       disabled={recordingLoading}
-                      className="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                      className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm ring-1 ring-slate-200 hover:ring-amber-200 disabled:opacity-50"
                     >
                       {recordingLoading
                         ? "Loading..."

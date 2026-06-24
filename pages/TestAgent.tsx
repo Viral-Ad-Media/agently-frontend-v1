@@ -218,17 +218,16 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
   const maxCalls = Number(limit?.maxCalls ?? 3);
   const usedCalls = Number(limit?.usedCalls ?? 0);
   const maxRecipients = Number(limit?.maxRecipientsPerRequest ?? 3);
-  const maxMinutes = Math.max(
-    1,
-    Math.ceil(Number(limit?.maxCallSeconds ?? 300) / 60),
-  );
+  const maxSeconds = Math.max(30, Number(limit?.maxCallSeconds ?? 100));
+  const totalTrialSeconds = maxSeconds * maxCalls;
+  const totalTrialMinutes = Math.max(1, Math.round(totalTrialSeconds / 60));
   const usagePercent = Math.min(100, (usedCalls / Math.max(1, maxCalls)) * 100);
   const configured = Boolean(status?.configured);
   const canUse = configured && remainingCalls > 0;
   const timezone =
     org.profile?.timezone ||
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    "America/New_York";
+    "America/Chicago";
 
   const defaultPurposeText = useMemo(
     () =>
@@ -502,15 +501,15 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
         <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_0.65fr] lg:p-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.36em] text-amber-300">
-              Test Your Agent
+              Try an Agent for Free
             </p>
             <h1 className="mt-3 font-display text-4xl leading-tight lg:text-5xl">
-              Test Your Agent Before Going Live
+              Try an Agent for Free Before Going Live
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
               Use this test area to experience how your agent handles real calls
               before setting up your own business number. You can make up to{" "}
-              {maxCalls} free trial calls to check your agent’s voice, greeting,
+              {maxCalls} free test calls to check your agent’s voice, greeting,
               call purpose, and overall conversation flow.
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.22em]">
@@ -542,9 +541,10 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
               />
             </div>
             <p className="mt-4 text-xs leading-6 text-slate-300">
-              Each test call can last up to {maxMinutes} minutes. After your
-              free trials are used, you’ll need to connect a dedicated business
-              number to continue making live calls.
+              Each free test call can last up to {maxSeconds} seconds. Your
+              total free test pool is {totalTrialMinutes} minutes (
+              {totalTrialSeconds} seconds). After the free test pool is used,
+              connect a dedicated business number to continue making live calls.
             </p>
           </div>
         </div>
@@ -553,8 +553,9 @@ const TestAgent: React.FC<{ org: Organization; onChanged?: () => void }> = ({
       <FeedbackModal feedback={feedback} onClose={() => setFeedback(null)} />
       {!configured ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
-          The shared test line is not ready yet. Please contact support before
-          placing a test call.
+          The free test line is not ready yet. Ask an admin to configure
+          PLATFORM_TEST_PHONE_NUMBER, AGENTLY_TEST_PHONE_NUMBER, or a platform
+          test number in the phone-number pool before placing a test call.
         </div>
       ) : null}
 

@@ -31,7 +31,15 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const resolveDefaultApiBaseUrl = () => {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+  if (!import.meta.env.DEV || !isLocalHost) return '';
+  return import.meta.env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
 
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
@@ -145,6 +153,12 @@ type MagicLinkResponse = {
   magicLinkUrl?: string | null;
 };
 
+type PasswordResetRequestResponse = {
+  message: string;
+  email: string;
+  resetUrl?: string | null;
+};
+
 type MessengerResponse = {
   userMessage: ChatMessage;
   assistantMessage: ChatMessage;
@@ -186,6 +200,22 @@ export const api = {
     });
   },
 
+  async requestPasswordReset(email: string) {
+    return request<PasswordResetRequestResponse>('/api/auth/password-reset/request', {
+      method: 'POST',
+      auth: false,
+      body: { email },
+    });
+  },
+
+  async confirmPasswordReset(token: string, password: string) {
+    return request<{ success: boolean; message: string }>('/api/auth/password-reset/confirm', {
+      method: 'POST',
+      auth: false,
+      body: { token, password },
+    });
+  },
+
   async logout() {
     return request<{ success: boolean }>('/api/auth/logout', {
       method: 'POST',
@@ -199,6 +229,49 @@ export const api = {
   async listKnowledgeBases() {
     const response = await request<{ knowledgeBases: KnowledgeBase[] }>('/api/knowledge-bases');
     return response.knowledgeBases;
+  },
+
+  async searchKnowledgeBase(id: string, query = "", limit = 12) {
+    return request<{
+      query: string;
+      knowledgeBaseId: string;
+      chunks: Array<Record<string, unknown>>;
+      faqs: FAQ[];
+      stats: { chunks: number; faqs: number };
+    }>(`/api/knowledge-bases/${id}/search`, {
+      method: 'POST',
+      body: { query, limit },
+    });
+  },
+
+  async listKnowledgeBaseFaqs(id: string) {
+    return request<{
+      knowledgeBaseId: string;
+      faqs: FAQ[];
+      manualFaqs: FAQ[];
+    }>(`/api/knowledge-bases/${id}/faqs`);
+  },
+
+  async replaceKnowledgeBaseFaqs(
+    id: string,
+    faqs: FAQ[],
+    options: { chatbotId?: string; voiceAgentId?: string } = {},
+  ) {
+    return request<{
+      success: boolean;
+      knowledgeBaseId: string;
+      faqs: FAQ[];
+      manualFaqs: FAQ[];
+    }>(`/api/knowledge-bases/${id}/faqs`, {
+      method: 'PUT',
+      body: {
+        faqs,
+        chatbotId: options.chatbotId,
+        chatbot_id: options.chatbotId,
+        voiceAgentId: options.voiceAgentId,
+        voice_agent_id: options.voiceAgentId,
+      },
+    });
   },
 
   async createKnowledgeBase(payload: {
@@ -225,8 +298,26 @@ export const api = {
     return response.knowledgeBase;
   },
 
+  async getKnowledgeBaseDeleteCheck(id: string) {
+    return request<{
+      knowledgeBase: KnowledgeBase;
+      canDelete: boolean;
+      blockerCount: number;
+      blockers: {
+        voiceAgents: Array<{ id: string; name: string; type?: string; assignmentType?: string }>;
+        chatbots: Array<{ id: string; name: string; type?: string; assignmentType?: string }>;
+      };
+      cleanup: { sources: number; chunks: number; products: number; faqs: number };
+    }>(`/api/knowledge-bases/${id}/delete-check`);
+  },
+
   async deleteKnowledgeBase(id: string) {
-    return request<{ success: boolean }>(`/api/knowledge-bases/${id}`, {
+    return request<{
+      success: boolean;
+      deletedId?: string;
+      cleanup?: { sources: number; chunks: number; products: number; faqs: number };
+      replacementPrimaryKnowledgeBaseId?: string | null;
+    }>(`/api/knowledge-bases/${id}`, {
       method: 'DELETE',
     });
   },
@@ -263,16 +354,27 @@ export const api = {
     });
   },
 
-  async syncKnowledgeSource(knowledgeBaseId: string, sourceId: string) {
+  async syncKnowledgeSource(
+    knowledgeBaseId: string,
+    sourceId: string,
+    options: { background?: boolean } = {},
+  ) {
     return request<{
       success: boolean;
-      chunksStored: number;
-      pagesScraped: number;
-      strategy: string;
+      accepted?: boolean;
+      background?: boolean;
+      message?: string;
+      chunksStored?: number;
+      pagesScraped?: number;
+      pagesDiscovered?: number;
+      productsFound?: number;
+      productsStored?: number;
+      scrapeReport?: Record<string, unknown> | null;
+      strategy?: string;
       source: KnowledgeSource;
     }>(`/api/knowledge-bases/${knowledgeBaseId}/sources/${sourceId}/sync`, {
       method: 'POST',
-      body: {},
+      body: options,
     });
   },
 
@@ -349,31 +451,53 @@ export const api = {
     });
   },
 
-  async createFaq(question: string, answer: string, voiceAgentId?: string) {
+  async createFaq(question: string, answer: string, voiceAgentId?: string, knowledgeBaseId?: string) {
     return request<FAQ>('/api/agent/faqs', {
       method: 'POST',
-      body: { question, answer, voiceAgentId, voice_agent_id: voiceAgentId },
+      body: {
+        question,
+        answer,
+        voiceAgentId,
+        voice_agent_id: voiceAgentId,
+        knowledgeBaseId,
+        knowledge_base_id: knowledgeBaseId,
+      },
     });
   },
 
-  async updateFaq(id: string, updates: Partial<FAQ>, voiceAgentId?: string) {
+  async updateFaq(id: string, updates: Partial<FAQ>, voiceAgentId?: string, knowledgeBaseId?: string) {
     return request<FAQ>(`/api/agent/faqs/${id}`, {
       method: 'PATCH',
-      body: { ...updates, voiceAgentId, voice_agent_id: voiceAgentId },
+      body: {
+        ...updates,
+        voiceAgentId,
+        voice_agent_id: voiceAgentId,
+        knowledgeBaseId,
+        knowledge_base_id: knowledgeBaseId,
+      },
     });
   },
 
-  async removeFaq(id: string, voiceAgentId?: string) {
-    const suffix = voiceAgentId ? `?voiceAgentId=${encodeURIComponent(voiceAgentId)}` : '';
+  async removeFaq(id: string, voiceAgentId?: string, knowledgeBaseId?: string) {
+    const params = new URLSearchParams();
+    if (voiceAgentId) params.set('voiceAgentId', voiceAgentId);
+    if (knowledgeBaseId) params.set('knowledgeBaseId', knowledgeBaseId);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
     return request<{ success: boolean }>(`/api/agent/faqs/${id}${suffix}`, {
       method: 'DELETE',
     });
   },
 
-  async syncFaqs(website?: string, voiceAgentId?: string) {
+  async syncFaqs(website?: string, voiceAgentId?: string, knowledgeBaseId?: string) {
     const response = await request<{ website: string; faqs: FAQ[] }>('/api/agent/faqs/sync', {
       method: 'POST',
-      body: { website, voiceAgentId, voice_agent_id: voiceAgentId },
+      body: {
+        website,
+        voiceAgentId,
+        voice_agent_id: voiceAgentId,
+        knowledgeBaseId,
+        knowledge_base_id: knowledgeBaseId,
+      },
     });
     return response.faqs;
   },

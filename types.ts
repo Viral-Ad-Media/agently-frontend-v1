@@ -89,6 +89,11 @@ export interface CallRecord {
   recording_status?: string;
   from?: string;
   to?: string;
+  callCategory?: string;
+  disposition?: string;
+  answeredBy?: string;
+  voicemailDetected?: boolean;
+  tags?: string[];
   lead?: { id: string; name: string; phone?: string; email?: string } | null;
 }
 
@@ -134,7 +139,7 @@ export type OutreachBatchMode =
   | 'all_recipients_each_time'
   | 'spread_recipients_across_times';
 
-export type VoicemailBehavior = 'hangup' | 'leave_voicemail' | 'skip';
+export type VoicemailBehavior = 'hangup' | 'leave_message' | 'callback_later' | 'manual_followup' | 'leave_voicemail' | 'skip';
 
 export interface DirectRecipient {
   name: string;
@@ -256,6 +261,20 @@ export type AgentVoice =
   | 'Polly-Joanna'
   | 'Polly-Matthew';
 
+
+export interface AgentVoicemailSettings {
+  action: 'hangup' | 'leave_message' | 'callback_later' | 'manual_followup';
+  message: string;
+  callbackDelayMinutes: number;
+  maxRedialAttempts: number;
+}
+
+export interface AgentCallScreeningSettings {
+  enabled: boolean;
+  responseMessage: string;
+  allowPurposeDisclosure: boolean;
+}
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -270,6 +289,14 @@ export interface AgentConfig {
   faqs: FAQ[];
   escalationPhone: string;
   voicemailFallback: boolean;
+  voicemailBehavior?: AgentVoicemailSettings['action'];
+  voicemailMessage?: string;
+  voicemailCallbackDelayMinutes?: number;
+  voicemailMaxRedialAttempts?: number;
+  voicemailSettings?: AgentVoicemailSettings;
+  callScreeningEnabled?: boolean;
+  callScreeningMessage?: string;
+  callScreeningSettings?: AgentCallScreeningSettings;
   dataCaptureFields: string[];
   isActive: boolean;
   knowledgeBaseId?: string | null;

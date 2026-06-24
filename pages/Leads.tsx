@@ -1237,7 +1237,7 @@ const Leads: React.FC<LeadsProps> = ({
             }}
             className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300"
           >
-            Export CSV
+            Tags / Export
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -1248,7 +1248,7 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
             label: "Total leads",
@@ -1257,55 +1257,74 @@ const Leads: React.FC<LeadsProps> = ({
               backendTotal != null
                 ? `${backendTotal} total`
                 : "Live lead count",
+            icon: "fa-users",
+            color: "bg-indigo-50 text-indigo-600",
           },
           {
             label: "New",
             value: leadMetrics.new,
             hint: "Needs first contact",
+            icon: "fa-user-plus",
+            color: "bg-amber-50 text-amber-600",
           },
           {
             label: "Contacted",
             value: leadMetrics.contacted,
             hint: "Already reached",
+            icon: "fa-user-check",
+            color: "bg-emerald-50 text-emerald-600",
           },
           {
             label: "Call leads",
             value: leadMetrics.callLeads,
             hint: "Captured from calls",
+            icon: "fa-phone-volume",
+            color: "bg-blue-50 text-blue-600",
           },
           {
             label: "Chatbot leads",
             value: leadMetrics.chatbotLeads,
             hint: "Captured from chat",
+            icon: "fa-comments",
+            color: "bg-violet-50 text-violet-600",
           },
           {
             label: "Manual leads",
             value: leadMetrics.manualLeads,
             hint: "Added by team",
+            icon: "fa-pen-to-square",
+            color: "bg-slate-50 text-slate-600",
           },
         ].map((metric) => (
           <div
             key={metric.label}
-            className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+            className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
           >
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              {metric.label}
-            </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">
-              {metric.value}
-            </p>
-            <p className="mt-1 truncate text-[10px] font-bold text-slate-400">
-              {metric.hint}
-            </p>
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${metric.color}`}
+            >
+              <i className={`fa-sharp fa-solid ${metric.icon} text-sm`} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {metric.label}
+              </p>
+              <p className="mt-1 text-base font-black text-slate-900">
+                {metric.value}
+              </p>
+              <p className="truncate text-[10px] font-bold text-slate-400">
+                {metric.hint}
+              </p>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Main grid */}
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.9fr)]">
+      <div className="grid min-w-0 gap-5">
         {/* LEFT */}
         <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative flex-1">
                 <svg
@@ -1348,8 +1367,8 @@ const Leads: React.FC<LeadsProps> = ({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-3">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-4 py-2.5">
               <p className="text-sm font-black text-slate-900">Leads</p>
               <p className="text-xs text-slate-400">
                 Page {page}/{totalPages} · {filteredLeads.length} matching
@@ -1367,7 +1386,7 @@ const Leads: React.FC<LeadsProps> = ({
                 pagedLeads.map((lead) => (
                   <div
                     key={lead.id}
-                    className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center"
+                    className="flex flex-col gap-2.5 px-3 py-2.5 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center"
                   >
                     <button
                       onClick={() => toggleSel(lead.id)}
@@ -1473,54 +1492,6 @@ const Leads: React.FC<LeadsProps> = ({
                   </button>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT */}
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 mb-0.5">
-              Tag collections
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Create call campaigns by tag.
-            </p>
-            {tagStats.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center text-sm font-semibold text-slate-400">
-                Tag leads to create collections.
-              </div>
-            ) : (
-              <>
-                {pagedTags.map(({ tag, count }) => (
-                  <div
-                    key={tag}
-                    className="mb-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-black text-slate-900 text-sm">
-                          #{tag}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {count} lead{count !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => openTagSchedule(tag)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700 sm:w-auto sm:py-1.5"
-                      >
-                        Create Campaign
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <Pager
-                  cur={tagPage}
-                  total={totalTagPages}
-                  onChange={setTagPage}
-                />
-              </>
             )}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BusinessProfile, FAQ, AgentConfig } from "../types";
 
 interface OnboardingProps {
@@ -6,7 +6,6 @@ interface OnboardingProps {
   onComplete: (profile: BusinessProfile, agent: AgentConfig) => Promise<void>;
 }
 
-// Comprehensive industry list
 const INDUSTRIES = [
   "Accounting & Bookkeeping",
   "Architecture",
@@ -71,12 +70,64 @@ const INDUSTRIES = [
 ];
 
 const TONE_OPTIONS = [
-  { id: "Professional" as const, desc: "Precise & formal" },
-  { id: "Friendly" as const, desc: "Warm & bubbly" },
-  { id: "Empathetic" as const, desc: "Caring & patient" },
+  {
+    id: "Professional" as const,
+    desc: "Precise and composed",
+    icon: "fa-briefcase",
+  },
+  {
+    id: "Friendly" as const,
+    desc: "Warm and conversational",
+    icon: "fa-face-smile",
+  },
+  {
+    id: "Empathetic" as const,
+    desc: "Patient and reassuring",
+    icon: "fa-heart",
+  },
 ];
 
-// Nominatim result type
+const CAPTURE_FIELDS = [
+  "name",
+  "phone",
+  "email",
+  "reason",
+  "budget",
+  "timeline",
+];
+
+const STEP_META = [
+  {
+    title: "Workspace",
+    description:
+      "Set the basic details your agents will use to introduce the organization.",
+    icon: "fa-building",
+  },
+  {
+    title: "Knowledge",
+    description:
+      "Connect a website so Agently can prepare the first Knowledge Base draft.",
+    icon: "fa-sparkles",
+  },
+  {
+    title: "Review",
+    description:
+      "Preview the starter answers before your agent begins using them.",
+    icon: "fa-list-check",
+  },
+  {
+    title: "Persona",
+    description:
+      "Choose the voice, tone, escalation hours, and captured caller details.",
+    icon: "fa-user-headset",
+  },
+  {
+    title: "Launch",
+    description: "Confirm the setup and enter the workspace.",
+    icon: "fa-rocket-launch",
+  },
+];
+
 interface NominatimResult {
   place_id: number;
   display_name: string;
@@ -88,8 +139,627 @@ interface NominatimResult {
     village?: string;
     state?: string;
     country?: string;
+    country_code?: string;
   };
 }
+
+const US_STATE_TIMEZONES: Record<string, string> = {
+  alabama: "America/Chicago",
+  alaska: "America/Anchorage",
+  arizona: "America/Phoenix",
+  arkansas: "America/Chicago",
+  california: "America/Los_Angeles",
+  colorado: "America/Denver",
+  connecticut: "America/New_York",
+  delaware: "America/New_York",
+  florida: "America/New_York",
+  georgia: "America/New_York",
+  hawaii: "Pacific/Honolulu",
+  idaho: "America/Denver",
+  illinois: "America/Chicago",
+  indiana: "America/New_York",
+  iowa: "America/Chicago",
+  kansas: "America/Chicago",
+  kentucky: "America/New_York",
+  louisiana: "America/Chicago",
+  maine: "America/New_York",
+  maryland: "America/New_York",
+  massachusetts: "America/New_York",
+  michigan: "America/New_York",
+  minnesota: "America/Chicago",
+  mississippi: "America/Chicago",
+  missouri: "America/Chicago",
+  montana: "America/Denver",
+  nebraska: "America/Chicago",
+  nevada: "America/Los_Angeles",
+  "new hampshire": "America/New_York",
+  "new jersey": "America/New_York",
+  "new mexico": "America/Denver",
+  "new york": "America/New_York",
+  "north carolina": "America/New_York",
+  "north dakota": "America/Chicago",
+  ohio: "America/New_York",
+  oklahoma: "America/Chicago",
+  oregon: "America/Los_Angeles",
+  pennsylvania: "America/New_York",
+  "rhode island": "America/New_York",
+  "south carolina": "America/New_York",
+  "south dakota": "America/Chicago",
+  tennessee: "America/Chicago",
+  texas: "America/Chicago",
+  utah: "America/Denver",
+  vermont: "America/New_York",
+  virginia: "America/New_York",
+  washington: "America/Los_Angeles",
+  "west virginia": "America/New_York",
+  wisconsin: "America/Chicago",
+  wyoming: "America/Denver",
+};
+
+const LOCATION_TIMEZONE_FALLBACKS: Array<[RegExp, string]> = [
+  [
+    /\b(houston|texas|dallas|austin|san antonio|fort worth)\b/i,
+    "America/Chicago",
+  ],
+  [
+    /\b(new york|brooklyn|queens|manhattan|new jersey|miami|florida|atlanta|boston|washington,?\s*dc|philadelphia)\b/i,
+    "America/New_York",
+  ],
+  [
+    /\b(los angeles|california|san francisco|seattle|oregon|portland|las vegas|nevada)\b/i,
+    "America/Los_Angeles",
+  ],
+  [/\b(denver|colorado|utah|wyoming|montana|new mexico)\b/i, "America/Denver"],
+  [/\b(phoenix|arizona)\b/i, "America/Phoenix"],
+  [/\b(london|england|united kingdom)\b/i, "Europe/London"],
+];
+
+const getConciseLocationLabel = (city: NominatimResult) => {
+  const address = city.address || {};
+  const locality =
+    address.city ||
+    address.town ||
+    address.village ||
+    city.display_name.split(",")[0];
+  return [locality, address.state, address.country].filter(Boolean).join(", ");
+};
+
+const inferTimezoneFromNominatim = (city: NominatimResult) => {
+  const address = city.address || {};
+  const state = String(address.state || "")
+    .trim()
+    .toLowerCase();
+  const countryCode = String(address.country_code || "")
+    .trim()
+    .toLowerCase();
+  if (countryCode === "us" && state && US_STATE_TIMEZONES[state])
+    return US_STATE_TIMEZONES[state];
+  const haystack = `${city.display_name || ""} ${address.city || ""} ${address.town || ""} ${address.state || ""} ${address.country || ""}`;
+  const match = LOCATION_TIMEZONE_FALLBACKS.find(([pattern]) =>
+    pattern.test(haystack),
+  );
+  return match?.[1] || "America/Chicago";
+};
+
+const inferTimezoneFromLocationText = (location: string) => {
+  const match = LOCATION_TIMEZONE_FALLBACKS.find(([pattern]) =>
+    pattern.test(location),
+  );
+  return match?.[1];
+};
+
+const CLIP_ARTS = [
+  {
+    label: "Workspace",
+    tone: "#FF5527",
+    caption: "Create the place your agents will work from.",
+  },
+  {
+    label: "Website scan",
+    tone: "#2563EB",
+    caption: "Scan pages, policies, services, and useful details.",
+  },
+  {
+    label: "Review answers",
+    tone: "#16A34A",
+    caption: "Approve the first answers before agents use them.",
+  },
+  {
+    label: "Agent persona",
+    tone: "#8B5CF6",
+    caption: "Tune voice, tone, hours, and caller details.",
+  },
+  {
+    label: "Launch",
+    tone: "#F59E0B",
+    caption: "Send your first agent into the control room.",
+  },
+];
+
+const OnboardingClipArt: React.FC<{ step: number; compact?: boolean }> = ({
+  step,
+  compact = false,
+}) => {
+  const art = CLIP_ARTS[Math.max(0, Math.min(CLIP_ARTS.length - 1, step - 1))];
+  const sizeClass = compact ? "h-20 w-28" : "h-44 w-full max-w-[300px]";
+
+  const shell = (children: React.ReactNode) => (
+    <div className={`relative mx-auto ${sizeClass}`} aria-hidden="true">
+      <div
+        className="absolute -left-3 top-4 h-12 w-12 rounded-[1.25rem] blur-xl"
+        style={{ backgroundColor: `${art.tone}26` }}
+      />
+      <div className="absolute -right-2 bottom-2 h-12 w-12 rounded-full bg-[#ffd166]/25 blur-xl" />
+      <svg
+        viewBox="0 0 320 230"
+        className="relative z-10 h-full w-full drop-shadow-sm"
+      >
+        {children}
+        {!compact && (
+          <g>
+            <rect
+              x="70"
+              y="197"
+              width="180"
+              height="25"
+              rx="12.5"
+              fill="#232F3E"
+              fillOpacity="0.08"
+            />
+            <text
+              x="160"
+              y="213"
+              textAnchor="middle"
+              fill="#232F3E"
+              fillOpacity="0.62"
+              fontSize="10.5"
+              fontWeight="500"
+            >
+              {art.caption}
+            </text>
+          </g>
+        )}
+      </svg>
+    </div>
+  );
+
+  if (step === 1) {
+    return shell(
+      <>
+        <rect
+          x="54"
+          y="48"
+          width="212"
+          height="132"
+          rx="30"
+          fill="#FBFAF4"
+          stroke="#232F3E"
+          strokeOpacity="0.12"
+        />
+        <rect
+          x="82"
+          y="75"
+          width="156"
+          height="74"
+          rx="24"
+          fill="#fff"
+          stroke="#232F3E"
+          strokeOpacity="0.1"
+        />
+        <circle cx="118" cy="111" r="20" fill={art.tone} fillOpacity="0.15" />
+        <path
+          d="M107 113c7 8 17 8 24 0"
+          stroke={art.tone}
+          strokeWidth="4"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <circle cx="111" cy="105" r="2.4" fill="#232F3E" />
+        <circle cx="125" cy="105" r="2.4" fill="#232F3E" />
+        <rect
+          x="153"
+          y="93"
+          width="60"
+          height="8"
+          rx="4"
+          fill="#232F3E"
+          fillOpacity="0.16"
+        />
+        <rect
+          x="153"
+          y="112"
+          width="74"
+          height="8"
+          rx="4"
+          fill="#232F3E"
+          fillOpacity="0.1"
+        />
+        <rect
+          x="153"
+          y="131"
+          width="45"
+          height="8"
+          rx="4"
+          fill={art.tone}
+          fillOpacity="0.3"
+        />
+        <rect
+          x="65"
+          y="158"
+          width="56"
+          height="22"
+          rx="11"
+          fill={art.tone}
+          fillOpacity="0.14"
+        />
+        <rect
+          x="132"
+          y="158"
+          width="56"
+          height="22"
+          rx="11"
+          fill="#232F3E"
+          fillOpacity="0.07"
+        />
+        <rect
+          x="199"
+          y="158"
+          width="56"
+          height="22"
+          rx="11"
+          fill="#232F3E"
+          fillOpacity="0.07"
+        />
+        <text
+          x="93"
+          y="172"
+          textAnchor="middle"
+          fill="#232F3E"
+          fontSize="9.5"
+          fontWeight="500"
+        >
+          Org
+        </text>
+        <text
+          x="160"
+          y="172"
+          textAnchor="middle"
+          fill="#232F3E"
+          fontSize="9.5"
+          fontWeight="500"
+        >
+          Team
+        </text>
+        <text
+          x="227"
+          y="172"
+          textAnchor="middle"
+          fill="#232F3E"
+          fontSize="9.5"
+          fontWeight="500"
+        >
+          Line
+        </text>
+        <circle cx="250" cy="62" r="17" fill={art.tone} />
+        <path
+          d="M242 62h16M250 54v16"
+          stroke="#fff"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
+        <rect x="42" y="29" width="98" height="29" rx="14.5" fill="#232F3E" />
+        <text x="60" y="47" fill="#fff" fontSize="10.5" fontWeight="500">
+          Workspace
+        </text>
+      </>,
+    );
+  }
+
+  if (step === 2) {
+    return shell(
+      <>
+        <rect
+          x="48"
+          y="50"
+          width="224"
+          height="138"
+          rx="28"
+          fill="#FBFAF4"
+          stroke="#232F3E"
+          strokeOpacity="0.12"
+        />
+        <rect
+          x="70"
+          y="73"
+          width="180"
+          height="95"
+          rx="18"
+          fill="#fff"
+          stroke="#232F3E"
+          strokeOpacity="0.1"
+        />
+        <rect
+          x="70"
+          y="73"
+          width="180"
+          height="24"
+          rx="18"
+          fill={art.tone}
+          fillOpacity="0.12"
+        />
+        <circle cx="89" cy="85" r="3" fill={art.tone} />
+        <circle cx="101" cy="85" r="3" fill="#232F3E" fillOpacity="0.24" />
+        <circle cx="113" cy="85" r="3" fill="#232F3E" fillOpacity="0.16" />
+        <rect
+          x="91"
+          y="114"
+          width="76"
+          height="7"
+          rx="3.5"
+          fill="#232F3E"
+          fillOpacity="0.18"
+        />
+        <rect
+          x="91"
+          y="132"
+          width="104"
+          height="7"
+          rx="3.5"
+          fill="#232F3E"
+          fillOpacity="0.1"
+        />
+        <rect
+          x="91"
+          y="150"
+          width="62"
+          height="7"
+          rx="3.5"
+          fill={art.tone}
+          fillOpacity="0.28"
+        />
+        <circle cx="211" cy="136" r="27" fill={art.tone} fillOpacity="0.14" />
+        <circle
+          cx="211"
+          cy="136"
+          r="15"
+          stroke={art.tone}
+          strokeWidth="5"
+          fill="none"
+        />
+        <path
+          d="M223 148l20 20"
+          stroke={art.tone}
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        <path
+          d="M44 44c22-22 59-26 84-9"
+          stroke={art.tone}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray="2 11"
+          fill="none"
+        />
+        <rect x="46" y="27" width="94" height="29" rx="14.5" fill="#232F3E" />
+        <text x="63" y="45" fill="#fff" fontSize="10.5" fontWeight="500">
+          Scan site
+        </text>
+      </>,
+    );
+  }
+
+  if (step === 3) {
+    return shell(
+      <>
+        <rect
+          x="72"
+          y="42"
+          width="176"
+          height="146"
+          rx="30"
+          fill="#FBFAF4"
+          stroke="#232F3E"
+          strokeOpacity="0.12"
+        />
+        <rect
+          x="95"
+          y="68"
+          width="130"
+          height="22"
+          rx="11"
+          fill={art.tone}
+          fillOpacity="0.14"
+        />
+        {[0, 1, 2].map((i) => (
+          <g key={i}>
+            <rect
+              x="94"
+              y={105 + i * 27}
+              width="132"
+              height="18"
+              rx="9"
+              fill="#fff"
+              stroke="#232F3E"
+              strokeOpacity="0.08"
+            />
+            <circle
+              cx="108"
+              cy={114 + i * 27}
+              r="6"
+              fill={art.tone}
+              fillOpacity="0.18"
+            />
+            <path
+              d={`M105 ${114 + i * 27}l3 3 6-7`}
+              stroke={art.tone}
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <rect
+              x="123"
+              y={110 + i * 27}
+              width={68 + i * 10}
+              height="7"
+              rx="3.5"
+              fill="#232F3E"
+              fillOpacity="0.14"
+            />
+          </g>
+        ))}
+        <circle cx="235" cy="62" r="18" fill={art.tone} />
+        <path
+          d="M225 62l7 7 15-17"
+          stroke="#fff"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        <rect x="54" y="25" width="108" height="29" rx="14.5" fill="#232F3E" />
+        <text x="73" y="43" fill="#fff" fontSize="10.5" fontWeight="500">
+          Review FAQ
+        </text>
+      </>,
+    );
+  }
+
+  if (step === 4) {
+    return shell(
+      <>
+        <rect
+          x="54"
+          y="52"
+          width="212"
+          height="128"
+          rx="32"
+          fill="#FBFAF4"
+          stroke="#232F3E"
+          strokeOpacity="0.12"
+        />
+        <circle cx="117" cy="112" r="34" fill={art.tone} fillOpacity="0.14" />
+        <circle
+          cx="117"
+          cy="101"
+          r="12"
+          fill="#fff"
+          stroke={art.tone}
+          strokeWidth="4"
+        />
+        <path
+          d="M92 139c12-23 38-23 50 0"
+          stroke={art.tone}
+          strokeWidth="6"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <path
+          d="M78 105c5-29 23-45 46-45 25 0 44 18 48 47"
+          stroke={art.tone}
+          strokeWidth="6"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <rect
+          x="164"
+          y="83"
+          width="68"
+          height="13"
+          rx="6.5"
+          fill="#232F3E"
+          fillOpacity="0.12"
+        />
+        <circle cx="206" cy="89.5" r="8" fill={art.tone} />
+        <rect
+          x="164"
+          y="116"
+          width="68"
+          height="13"
+          rx="6.5"
+          fill="#232F3E"
+          fillOpacity="0.12"
+        />
+        <circle cx="184" cy="122.5" r="8" fill={art.tone} />
+        <rect
+          x="164"
+          y="149"
+          width="68"
+          height="13"
+          rx="6.5"
+          fill="#232F3E"
+          fillOpacity="0.12"
+        />
+        <circle cx="218" cy="155.5" r="8" fill={art.tone} />
+        <rect x="52" y="28" width="112" height="29" rx="14.5" fill="#232F3E" />
+        <text x="70" y="46" fill="#fff" fontSize="10.5" fontWeight="500">
+          Tune agent
+        </text>
+      </>,
+    );
+  }
+
+  return shell(
+    <>
+      <rect
+        x="54"
+        y="122"
+        width="212"
+        height="45"
+        rx="22.5"
+        fill="#FBFAF4"
+        stroke="#232F3E"
+        strokeOpacity="0.12"
+      />
+      <path
+        d="M160 55c32 25 45 60 32 104-34-7-55-28-64-63 6-17 16-31 32-41z"
+        fill={art.tone}
+        fillOpacity="0.18"
+        stroke={art.tone}
+        strokeWidth="4"
+      />
+      <circle
+        cx="163"
+        cy="95"
+        r="12"
+        fill="#fff"
+        stroke={art.tone}
+        strokeWidth="4"
+      />
+      <path
+        d="M134 139l-25 23 35-6M186 139l25 23-35-6"
+        stroke={art.tone}
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path
+        d="M151 167c-2 17-11 28-28 33 5-15 12-25 23-31M171 167c2 17 11 28 28 33-5-15-12-25-23-31"
+        fill="#FFD166"
+        fillOpacity="0.75"
+      />
+      <path
+        d="M159 161c-1 20-8 34-20 45M164 161c1 20 8 34 20 45"
+        stroke="#FF5527"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <rect x="66" y="36" width="82" height="29" rx="14.5" fill="#232F3E" />
+      <text x="84" y="54" fill="#fff" fontSize="10.5" fontWeight="500">
+        Launch
+      </text>
+      <circle cx="232" cy="70" r="17" fill={art.tone} />
+      <path
+        d="M232 60l5 11-5 11-5-11 5-11z"
+        stroke="#fff"
+        strokeWidth="3"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </>,
+  );
+};
 
 const Onboarding: React.FC<OnboardingProps> = ({
   onGenerateFaqs,
@@ -100,6 +770,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [error, setError] = useState("");
 
   const TOTAL_STEPS = 5;
+  const currentStep = STEP_META[step - 1];
 
   const [profile, setProfile] = useState<BusinessProfile>({
     name: "",
@@ -107,7 +778,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
     website: "",
     location: "",
     onboarded: false,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    timezone: "America/Chicago",
   });
 
   const [agent, setAgent] = useState<AgentConfig>({
@@ -126,34 +797,28 @@ const Onboarding: React.FC<OnboardingProps> = ({
     voicemailFallback: true,
     isActive: false,
     dataCaptureFields: ["name", "phone", "email", "reason"],
-    rules: { autoBook: false, autoEscalate: true, captureAllLeads: true },
+    rules: { autoBook: false, autoEscalate: false, captureAllLeads: true },
   });
 
   const [hours, setHours] = useState({ start: "09:00", end: "17:00" });
-
-  // Industry search
   const [industrySearch, setIndustrySearch] = useState("");
   const [industryOpen, setIndustryOpen] = useState(false);
   const industryRef = useRef<HTMLDivElement>(null);
-
-  // City search (Nominatim)
   const [citySearch, setCitySearch] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<NominatimResult[]>([]);
   const [cityLoading, setCityLoading] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-update greeting when agent name or business name changes
   useEffect(() => {
-    const biz = profile.name || "our business";
-    const agentN = agent.name || "Maya";
+    const orgName = profile.name || "your team";
+    const agentName = agent.name || "Maya";
     setAgent((a) => ({
       ...a,
-      greeting: `Hello, thank you for calling ${biz}! This is ${agentN}. How can I help you today?`,
+      greeting: `Hello, thank you for calling ${orgName}. This is ${agentName}. How can I help you today?`,
     }));
   }, [agent.name, profile.name]);
 
-  // Close industry dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -167,16 +832,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // City search using Nominatim (free, no API key)
   useEffect(() => {
     if (citySearch.length < 3) {
       setCitySuggestions([]);
       setCityOpen(false);
       return;
     }
-    if (cityDebounce.current) {
-      clearTimeout(cityDebounce.current);
-    }
+    if (cityDebounce.current) clearTimeout(cityDebounce.current);
     cityDebounce.current = setTimeout(async () => {
       setCityLoading(true);
       try {
@@ -198,8 +860,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
     }, 400);
   }, [citySearch]);
 
-  const filteredIndustries = INDUSTRIES.filter((i) =>
-    i.toLowerCase().includes(industrySearch.toLowerCase()),
+  const filteredIndustries = useMemo(
+    () =>
+      INDUSTRIES.filter((i) =>
+        i.toLowerCase().includes(industrySearch.toLowerCase()),
+      ),
+    [industrySearch],
   );
 
   const handleNext = async () => {
@@ -239,427 +905,556 @@ const Onboarding: React.FC<OnboardingProps> = ({
     }));
   };
 
-  const inp =
-    "w-full px-5 py-4 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-medium text-base";
+  const inputClass =
+    "w-full rounded-[1.1rem] border border-[#232f3e]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#232f3e] outline-none transition-all placeholder:text-[#232f3e]/35 focus:border-[#ff5527]/60 focus:bg-white focus:ring-4 focus:ring-[#ff5527]/10";
+  const labelClass =
+    "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#232f3e]/55";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50/30 flex items-center justify-center p-4">
-      <div className="w-full max-w-xl">
-        {/* Progress */}
-        <div className="flex items-center gap-2 mb-6">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${step > i ? "bg-amber-500" : "bg-slate-200"}`}
+    <div className="min-h-screen overflow-x-hidden bg-[#f7f4eb] px-3 py-3 text-[#232f3e] sm:px-4 lg:px-5">
+      <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-6xl items-center gap-4 lg:grid-cols-[0.48fr_1.52fr]">
+        <aside className="relative hidden overflow-hidden rounded-[2rem] border border-[#232f3e]/10 bg-[#232f3e] p-5 text-white shadow-2xl lg:flex lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px] lg:flex-col">
+          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#ff5527]/30 blur-3xl" />
+          <div className="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+
+          <div className="relative z-10 flex items-center justify-between gap-4">
+            <img
+              src="/agently-wordmark-light.png"
+              alt="Agently"
+              className="h-7 w-auto object-contain"
             />
-          ))}
-        </div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-2">
-          Step {step} of {TOTAL_STEPS}
-        </p>
+            <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/75">
+              5 steps
+            </span>
+          </div>
 
-        <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 p-8 md:p-10 relative overflow-hidden">
-          {/* ── Step 1: Business Details ── */}
-          {step === 1 && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">
-                  Your Business
-                </h1>
-                <p className="text-slate-400 text-sm">
-                  Tell us about your workplace.
-                </p>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Bright Path Dental"
-                  className={inp}
-                  value={profile.name}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, name: e.target.value }))
-                  }
+          <div className="relative z-10 flex flex-1 flex-col items-center justify-center py-6 text-center">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.24em] text-white/55">
+              Welcome to Agently
+            </p>
+            <h1 className="max-w-[285px] text-[clamp(1.55rem,2.15vw,2.05rem)] font-medium leading-[1.04] tracking-[-0.048em] text-white">
+              Build your first agent without the clutter.
+            </h1>
+            <p className="mt-3 max-w-[285px] text-[12.5px] font-normal leading-[1.55] text-white/70">
+              Add the essentials, review knowledge, choose the tone, then enter
+              your control room.
+            </p>
+            <div className="mt-7 w-full">
+              <OnboardingClipArt step={step} />
+            </div>
+          </div>
+
+          <div className="relative z-10 rounded-[1.35rem] border border-white/10 bg-white/[0.07] px-4 py-3 text-center">
+            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/45">
+              Current step
+            </p>
+            <p className="mt-1 text-sm font-medium text-white">
+              {step} of {TOTAL_STEPS} · {currentStep.title}
+            </p>
+            <p className="mt-1 text-[12px] leading-4 text-white/55">
+              {currentStep.description}
+            </p>
+          </div>
+        </aside>
+
+        <main className="overflow-hidden rounded-[1.65rem] border border-[#232f3e]/10 bg-[#fbfaf4]/95 shadow-2xl shadow-[#232f3e]/10 backdrop-blur md:rounded-[2.25rem] lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px]">
+          <div className="border-b border-[#232f3e]/10 bg-white/55 px-4 py-3 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center lg:hidden">
+                <img
+                  src="/agently-wordmark-dark.png"
+                  alt="Agently"
+                  className="h-6 w-auto object-contain"
                 />
               </div>
-              {/* Industry dropdown */}
-              <div ref={industryRef}>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Industry
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder={profile.industry || "Search industry..."}
-                    className={inp + " cursor-pointer"}
-                    value={
-                      industryOpen ? industrySearch : profile.industry || ""
-                    }
-                    onFocus={() => {
-                      setIndustryOpen(true);
-                      setIndustrySearch("");
-                    }}
-                    onChange={(e) => {
-                      setIndustrySearch(e.target.value);
-                      setIndustryOpen(true);
-                    }}
+              <div className="hidden lg:block">
+                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#232f3e]/45">
+                  Step {step} of {TOTAL_STEPS}
+                </p>
+                <h2 className="mt-0.5 text-[1.35rem] font-medium leading-none tracking-[-0.045em] text-[#232f3e]">
+                  {currentStep.title}
+                </h2>
+              </div>
+              <div className="flex min-w-[170px] flex-1 items-center gap-1.5 lg:max-w-[260px]">
+                {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step > i ? "bg-[#ff5527]" : "bg-[#232f3e]/10"}`}
                   />
-                  <i className="fa-sharp fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none" />
-                  {industryOpen && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
-                      {filteredIndustries.length === 0 ? (
-                        <p className="text-sm text-slate-400 px-4 py-3">
-                          No match
-                        </p>
-                      ) : (
-                        filteredIndustries.map((ind) => (
-                          <button
-                            key={ind}
-                            type="button"
-                            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors ${profile.industry === ind ? "font-black text-amber-600 bg-amber-50" : "text-slate-700"}`}
-                            onClick={() => {
-                              setProfile((p) => ({ ...p, industry: ind }));
-                              setIndustryOpen(false);
-                              setIndustrySearch("");
-                            }}
-                          >
-                            {ind}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* City search with Nominatim */}
-              <div className="relative">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  City / Location
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Lagos, Nigeria"
-                  className={inp}
-                  value={citySearch || profile.location}
-                  onChange={(e) => {
-                    setCitySearch(e.target.value);
-                    setProfile((p) => ({ ...p, location: e.target.value }));
-                  }}
-                  onFocus={() => citySearch.length >= 3 && setCityOpen(true)}
-                />
-                {cityOpen && (citySuggestions.length > 0 || cityLoading) && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
-                    {cityLoading ? (
-                      <div className="px-4 py-3 text-sm text-slate-400">
-                        Loading...
-                      </div>
-                    ) : (
-                      citySuggestions.map((city) => (
-                        <button
-                          key={city.place_id}
-                          type="button"
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 text-slate-700 transition-colors"
-                          onClick={() => {
-                            const displayName = city.display_name.split(",")[0]; // first part is city/town
-                            setProfile((p) => ({
-                              ...p,
-                              location: displayName,
-                            }));
-                            setCitySearch(displayName);
-                            setCityOpen(false);
-                          }}
-                        >
-                          {city.display_name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Website{" "}
-                  <span className="text-slate-300">(for AI training)</span>
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://yourwebsite.com"
-                  className={inp}
-                  value={profile.website}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, website: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 2: Knowledge ── */}
-          {step === 2 && (
-            <div className="space-y-6 text-center">
-              <div className="w-16 h-16 bg-amber-100 rounded-3xl flex items-center justify-center mx-auto">
-                <i className="fa-sharp fa-solid fa-brain text-2xl text-amber-600" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 mb-1">
-                  Training Your Agent
-                </h1>
-                <p className="text-slate-400 text-sm">
-                  We'll scrape your website to build your agent's knowledge
-                  base.
-                </p>
-              </div>
-              <div className="bg-slate-50 rounded-2xl p-5 text-left space-y-2">
-                <p className="text-sm font-black text-slate-700">
-                  Website to scan:
-                </p>
-                <p className="text-sm text-slate-500 font-mono break-all">
-                  {profile.website || "Not set — you can skip"}
-                </p>
-              </div>
-              <p className="text-xs text-slate-400">
-                Click <strong>Next</strong> to scan your website and
-                auto-generate FAQs. This takes ~10 seconds.
-              </p>
-            </div>
-          )}
-
-          {/* ── Step 3: FAQ Review ── */}
-          {step === 3 && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 mb-1">
-                  Knowledge Base
-                </h1>
-                <p className="text-slate-400 text-sm">
-                  Review and edit the FAQs your agent will know.
-                </p>
-              </div>
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                {agent.faqs.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    No FAQs generated — you can add them later in Agent
-                    Settings.
-                  </div>
-                ) : (
-                  agent.faqs.map((faq, i) => (
-                    <div
-                      key={faq.id}
-                      className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2"
-                    >
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(e) =>
-                          setAgent((a) => ({
-                            ...a,
-                            faqs: a.faqs.map((f, j) =>
-                              j === i ? { ...f, question: e.target.value } : f,
-                            ),
-                          }))
-                        }
-                        className="w-full text-sm font-bold bg-transparent outline-none border-b border-slate-200 pb-1 focus:border-amber-400"
-                      />
-                      <textarea
-                        rows={2}
-                        value={faq.answer}
-                        onChange={(e) =>
-                          setAgent((a) => ({
-                            ...a,
-                            faqs: a.faqs.map((f, j) =>
-                              j === i ? { ...f, answer: e.target.value } : f,
-                            ),
-                          }))
-                        }
-                        className="w-full text-sm bg-transparent outline-none resize-none text-slate-600"
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 4: Agent Persona ── */}
-          {step === 4 && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 mb-1">
-                  Agent Persona
-                </h1>
-                <p className="text-slate-400 text-sm">
-                  Configure how your AI receptionist sounds.
-                </p>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Agent Name
-                </label>
-                <input
-                  type="text"
-                  className={inp}
-                  value={agent.name}
-                  onChange={(e) =>
-                    setAgent((a) => ({ ...a, name: e.target.value }))
-                  }
-                />
-              </div>
-              {/* Live greeting preview */}
-              <div className="bg-slate-900 rounded-2xl p-4 text-white text-sm">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1.5">
-                  Live Greeting Preview
-                </p>
-                <p className="italic text-white/80">
-                  {agent.greeting ||
-                    `Hello, thank you for calling ${profile.name || "your business"}! This is ${agent.name}. How can I help you today?`}
-                </p>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  Communication Tone
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {TONE_OPTIONS.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setAgent((a) => ({ ...a, tone: t.id }))}
-                      className={`p-4 rounded-2xl border-2 transition-all text-center ${agent.tone === t.id ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200"}`}
-                    >
-                      <p className="font-black text-sm">{t.id}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {t.desc}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                    Open
-                  </label>
-                  <input
-                    type="time"
-                    className={inp}
-                    value={hours.start}
-                    onChange={(e) =>
-                      setHours((h) => ({ ...h, start: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                    Close
-                  </label>
-                  <input
-                    type="time"
-                    className={inp}
-                    value={hours.end}
-                    onChange={(e) =>
-                      setHours((h) => ({ ...h, end: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Escalation Number{" "}
-                  <span className="text-slate-300">(optional)</span>
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+1 555 000 0000"
-                  className={inp}
-                  value={agent.escalationPhone}
-                  onChange={(e) =>
-                    setAgent((a) => ({ ...a, escalationPhone: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Capture from callers
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    "name",
-                    "phone",
-                    "email",
-                    "reason",
-                    "budget",
-                    "timeline",
-                  ].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => toggleField(f)}
-                      className={`px-4 py-2 rounded-full border-2 text-xs font-black uppercase tracking-wider transition-all ${agent.dataCaptureFields.includes(f) ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-100 text-slate-400 hover:border-slate-200"}`}
-                    >
-                      {agent.dataCaptureFields.includes(f) && "✓ "}
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 5: Confirm ── */}
-          {step === 5 && (
-            <div className="space-y-6 text-center">
-              <div className="w-20 h-20 bg-emerald-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-emerald-100">
-                <i className="fa-sharp fa-solid fa-check text-white text-3xl" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 mb-1">
-                  Ready to Deploy!
-                </h1>
-                <p className="text-slate-400 text-sm">
-                  Your AI agent is configured and ready.
-                </p>
-              </div>
-              <div className="bg-slate-50 rounded-2xl p-6 text-left space-y-4 border border-slate-100">
-                {[
-                  ["Business", profile.name],
-                  ["Industry", profile.industry || "—"],
-                  ["Agent", agent.name],
-                  ["Tone", agent.tone],
-                  ["Hours", `${hours.start} – ${hours.end}`],
-                  ["FAQs", `${agent.faqs.length} entries`],
-                ].map(([k, v]) => (
-                  <div
-                    key={k}
-                    className="flex justify-between items-center border-b border-slate-200 pb-3 last:border-0 last:pb-0"
-                  >
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {k}
-                    </span>
-                    <span className="font-black text-slate-900 text-sm">
-                      {v}
-                    </span>
-                  </div>
                 ))}
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Error */}
-          {error && (
-            <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 flex items-center gap-2">
-              <i className="fa-sharp fa-solid fa-circle-exclamation" /> {error}
+          <div className="px-4 py-4 sm:px-6 sm:py-5 lg:flex lg:h-[calc(100%-126px)] lg:flex-col lg:justify-center lg:overflow-hidden lg:px-8 lg:py-7">
+            <div className="mb-5 lg:hidden">
+              <div className="flex items-start justify-between gap-4 rounded-[1.35rem] border border-[#232f3e]/10 bg-white/65 p-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#232f3e]/45">
+                    Step {step} of {TOTAL_STEPS}
+                  </p>
+                  <h1 className="mt-1 text-[1.55rem] font-medium leading-[1] tracking-[-0.05em] text-[#232f3e]">
+                    {currentStep.title}
+                  </h1>
+                  <p className="mt-1.5 text-[13px] leading-[1.4] text-[#232f3e]/65">
+                    {currentStep.description}
+                  </p>
+                </div>
+                <OnboardingClipArt step={step} compact />
+              </div>
             </div>
-          )}
 
-          {/* Nav buttons */}
-          <div className="mt-8 flex gap-3">
+            {step === 1 && (
+              <section className="mx-auto w-full max-w-[860px] space-y-6">
+                <div className="hidden lg:block">
+                  <h1 className="text-[2.15rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#232f3e]">
+                    Tell us what your agents represent.
+                  </h1>
+                  <p className="mt-2 max-w-[520px] text-[14px] leading-[1.42] text-[#232f3e]/70">
+                    These details help Agently personalize greetings, routing,
+                    lead capture, and handoff context.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Organization name</label>
+                    <input
+                      type="text"
+                      placeholder="Your company name"
+                      className={inputClass}
+                      value={profile.name}
+                      onChange={(e) =>
+                        setProfile((p) => ({ ...p, name: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div ref={industryRef}>
+                    <label className={labelClass}>Industry</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={profile.industry || "Search industry"}
+                        className={`${inputClass} cursor-pointer pr-10`}
+                        value={
+                          industryOpen ? industrySearch : profile.industry || ""
+                        }
+                        onFocus={() => {
+                          setIndustryOpen(true);
+                          setIndustrySearch("");
+                        }}
+                        onChange={(e) => {
+                          setIndustrySearch(e.target.value);
+                          setIndustryOpen(true);
+                        }}
+                      />
+                      <i className="fa-sharp fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#232f3e]/35" />
+                      {industryOpen && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-56 overflow-y-auto rounded-[1.35rem] border border-[#232f3e]/10 bg-white p-1 shadow-xl">
+                          {filteredIndustries.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-[#232f3e]/45">
+                              No match
+                            </p>
+                          ) : (
+                            filteredIndustries.map((ind) => (
+                              <button
+                                key={ind}
+                                type="button"
+                                className={`w-full rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${profile.industry === ind ? "bg-[#ff5527]/10 font-medium text-[#ff5527]" : "text-[#232f3e]/75 hover:bg-[#f7f4eb]"}`}
+                                onClick={() => {
+                                  setProfile((p) => ({ ...p, industry: ind }));
+                                  setIndustryOpen(false);
+                                  setIndustrySearch("");
+                                }}
+                              >
+                                {ind}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="relative">
+                    <label className={labelClass}>City / Location</label>
+                    <input
+                      type="text"
+                      placeholder="City, country"
+                      className={inputClass}
+                      value={citySearch || profile.location}
+                      onChange={(e) => {
+                        const nextLocation = e.target.value;
+                        setCitySearch(nextLocation);
+                        const inferredTimezone =
+                          inferTimezoneFromLocationText(nextLocation);
+                        setProfile((p) => ({
+                          ...p,
+                          location: nextLocation,
+                          ...(inferredTimezone
+                            ? { timezone: inferredTimezone }
+                            : {}),
+                        }));
+                      }}
+                      onFocus={() =>
+                        citySearch.length >= 3 && setCityOpen(true)
+                      }
+                    />
+                    {cityOpen &&
+                      (citySuggestions.length > 0 || cityLoading) && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-52 overflow-y-auto rounded-[1.35rem] border border-[#232f3e]/10 bg-white p-1 shadow-xl">
+                          {cityLoading ? (
+                            <div className="px-4 py-3 text-sm text-[#232f3e]/45">
+                              Searching...
+                            </div>
+                          ) : (
+                            citySuggestions.map((city) => (
+                              <button
+                                key={city.place_id}
+                                type="button"
+                                className="w-full rounded-2xl px-4 py-2.5 text-left text-sm text-[#232f3e]/75 transition-colors hover:bg-[#f7f4eb]"
+                                onClick={() => {
+                                  const displayName =
+                                    getConciseLocationLabel(city);
+                                  const inferredTimezone =
+                                    inferTimezoneFromNominatim(city);
+                                  setProfile((p) => ({
+                                    ...p,
+                                    location: displayName,
+                                    timezone: inferredTimezone,
+                                  }));
+                                  setCitySearch(displayName);
+                                  setCityOpen(false);
+                                }}
+                              >
+                                {city.display_name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      Website for Knowledge Base
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://yourwebsite.com"
+                      className={inputClass}
+                      value={profile.website}
+                      onChange={(e) =>
+                        setProfile((p) => ({ ...p, website: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 rounded-[1.6rem] border border-[#232f3e]/10 bg-white/70 p-4 sm:grid-cols-3">
+                  {[
+                    ["Greeting", "Personalized caller welcome"],
+                    ["Routing", "Cleaner handoff context"],
+                    ["Knowledge", "Website-backed answers"],
+                  ].map(([title, copy]) => (
+                    <div key={title}>
+                      <p className="text-sm font-medium text-[#232f3e]">
+                        {title}
+                      </p>
+                      <p className="mt-1 text-[12px] leading-4 text-[#232f3e]/55">
+                        {copy}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {step === 2 && (
+              <section className="mx-auto grid w-full max-w-[860px] gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
+                <div>
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.5rem] bg-[#ff5527]/10 text-[#ff5527]">
+                    <i className="fa-sharp fa-solid fa-brain text-xl" />
+                  </div>
+                  <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#232f3e]">
+                    Prepare your agent knowledge.
+                  </h1>
+                  <p className="mt-2 text-[14px] leading-[1.42] text-[#232f3e]/70">
+                    Agently can scan your website and generate starter FAQs. You
+                    can edit everything before launch.
+                  </p>
+                </div>
+                <div className="rounded-[1.65rem] border border-[#232f3e]/10 bg-white p-4 shadow-xl shadow-[#232f3e]/5">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#232f3e]/45">
+                    Website to scan
+                  </p>
+                  <p className="mt-3 break-all rounded-[1.35rem] bg-[#f7f4eb] px-4 py-4 font-mono text-sm text-[#232f3e]/75">
+                    {profile.website ||
+                      "No website added. You can continue and add knowledge later."}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ["Pages", "Discover"],
+                      ["FAQs", "Draft"],
+                      ["Answers", "Review"],
+                    ].map(([top, bottom]) => (
+                      <div
+                        key={top}
+                        className="rounded-[1.25rem] bg-[#fbfaf4] p-3 text-center"
+                      >
+                        <p className="text-sm font-medium text-[#232f3e]">
+                          {top}
+                        </p>
+                        <p className="text-[12px] text-[#232f3e]/50">
+                          {bottom}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[13px] leading-5 text-[#232f3e]/55">
+                    Continue to generate the starter Knowledge Base. This may
+                    take a few seconds.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {step === 3 && (
+              <section className="mx-auto w-full max-w-[860px] space-y-5">
+                <div>
+                  <h1 className="text-[1.95rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#232f3e]">
+                    Review starter answers.
+                  </h1>
+                  <p className="mt-2 text-[14px] leading-[1.42] text-[#232f3e]/70">
+                    These FAQs become the first draft your agent can use. You
+                    can keep improving them later.
+                  </p>
+                </div>
+                <div className="max-h-[330px] space-y-2.5 overflow-y-auto pr-1">
+                  {agent.faqs.length === 0 ? (
+                    <div className="rounded-[2rem] border border-dashed border-[#232f3e]/15 bg-white/65 px-5 py-8 text-center text-sm text-[#232f3e]/55">
+                      No FAQs were generated yet. You can add Knowledge Base
+                      content later inside the workspace.
+                    </div>
+                  ) : (
+                    agent.faqs.map((faq, i) => (
+                      <div
+                        key={faq.id}
+                        className="rounded-[1.35rem] border border-[#232f3e]/10 bg-white p-3 shadow-sm"
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[#ff5527]/10 text-xs font-medium text-[#ff5527]">
+                            {i + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={faq.question}
+                            onChange={(e) =>
+                              setAgent((a) => ({
+                                ...a,
+                                faqs: a.faqs.map((f, j) =>
+                                  j === i
+                                    ? { ...f, question: e.target.value }
+                                    : f,
+                                ),
+                              }))
+                            }
+                            className="w-full bg-transparent text-sm font-medium text-[#232f3e] outline-none"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={faq.answer}
+                          onChange={(e) =>
+                            setAgent((a) => ({
+                              ...a,
+                              faqs: a.faqs.map((f, j) =>
+                                j === i ? { ...f, answer: e.target.value } : f,
+                              ),
+                            }))
+                          }
+                          className="w-full resize-none rounded-[1rem] bg-[#f7f4eb] px-3 py-2 text-[13px] leading-5 text-[#232f3e]/70 outline-none focus:ring-4 focus:ring-[#ff5527]/10"
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            )}
+
+            {step === 4 && (
+              <section className="mx-auto w-full max-w-[860px] space-y-5">
+                <div>
+                  <h1 className="text-[1.95rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#232f3e]">
+                    Shape your agent persona.
+                  </h1>
+                  <p className="mt-2 text-[14px] leading-[1.42] text-[#232f3e]/70">
+                    Set the name, tone, escalation window, and caller details
+                    the agent should capture.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-[0.86fr_1.14fr]">
+                  <div>
+                    <label className={labelClass}>Agent name</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={agent.name}
+                      onChange={(e) =>
+                        setAgent((a) => ({ ...a, name: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="rounded-[1.35rem] bg-[#232f3e] p-3.5 text-white">
+                    <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">
+                      Live greeting
+                    </p>
+                    <p className="text-sm leading-5 text-white/78">
+                      {agent.greeting}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Communication tone</label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {TONE_OPTIONS.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setAgent((a) => ({ ...a, tone: t.id }))}
+                        className={`rounded-[1.25rem] border p-3 text-left transition-all ${agent.tone === t.id ? "border-[#ff5527]/35 bg-[#ff5527]/10 text-[#232f3e]" : "border-[#232f3e]/10 bg-white text-[#232f3e]/70 hover:border-[#232f3e]/18"}`}
+                      >
+                        <span
+                          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-2xl ${agent.tone === t.id ? "bg-[#ff5527] text-white" : "bg-[#f7f4eb] text-[#232f3e]/65"}`}
+                        >
+                          <i className={`fa-sharp fa-solid ${t.icon}`} />
+                        </span>
+                        <span className="block text-[12px] font-medium">
+                          {t.id}
+                        </span>
+                        <span className="mt-1 block text-[12px] leading-4 text-[#232f3e]/55">
+                          {t.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className={labelClass}>Manager opens</label>
+                    <input
+                      type="time"
+                      className={inputClass}
+                      value={hours.start}
+                      onChange={(e) =>
+                        setHours((h) => ({ ...h, start: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Manager closes</label>
+                    <input
+                      type="time"
+                      className={inputClass}
+                      value={hours.end}
+                      onChange={(e) =>
+                        setHours((h) => ({ ...h, end: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Escalation number</label>
+                    <input
+                      type="tel"
+                      placeholder="Optional"
+                      className={inputClass}
+                      value={agent.escalationPhone}
+                      onChange={(e) =>
+                        setAgent((a) => ({
+                          ...a,
+                          escalationPhone: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Capture from callers</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CAPTURE_FIELDS.map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => toggleField(f)}
+                        className={`rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "border-[#ff5527]/35 bg-[#ff5527]/10 text-[#ff5527]" : "border-[#232f3e]/10 bg-white text-[#232f3e]/55 hover:border-[#232f3e]/20"}`}
+                      >
+                        {agent.dataCaptureFields.includes(f) && "✓ "}
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {step === 5 && (
+              <section className="mx-auto grid w-full max-w-[860px] gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
+                <div>
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.65rem] bg-emerald-500 text-white shadow-xl shadow-emerald-500/20">
+                    <i className="fa-sharp fa-solid fa-check text-2xl" />
+                  </div>
+                  <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#232f3e]">
+                    Ready to launch your workspace.
+                  </h1>
+                  <p className="mt-2 text-[14px] leading-[1.42] text-[#232f3e]/70">
+                    Everything is prepared. You can adjust agents, knowledge,
+                    phone numbers, and campaigns after entering the dashboard.
+                  </p>
+                </div>
+                <div className="rounded-[1.65rem] border border-[#232f3e]/10 bg-white p-4 shadow-xl shadow-[#232f3e]/5">
+                  {[
+                    ["Organization", profile.name || "Not set"],
+                    ["Industry", profile.industry || "Not set"],
+                    ["Agent", agent.name],
+                    ["Tone", agent.tone],
+                    ["Escalation hours", `${hours.start} - ${hours.end}`],
+                    ["Starter FAQs", `${agent.faqs.length} entries`],
+                  ].map(([k, v]) => (
+                    <div
+                      key={k}
+                      className="flex items-center justify-between gap-4 border-b border-[#232f3e]/8 py-3 first:pt-0 last:border-0 last:pb-0"
+                    >
+                      <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#232f3e]/45">
+                        {k}
+                      </span>
+                      <span className="max-w-[55%] truncate text-right text-sm font-medium text-[#232f3e]">
+                        {v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {error && (
+              <div className="mt-5 flex items-center gap-2 rounded-[1.35rem] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                <i className="fa-sharp fa-solid fa-circle-exclamation" />{" "}
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 border-t border-[#232f3e]/10 bg-white/55 px-4 py-3 sm:px-6">
             {step > 1 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
                 disabled={loading}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-slate-400 border-2 border-slate-100 hover:bg-slate-50 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                className="flex-1 rounded-[1.1rem] border border-[#232f3e]/10 bg-white px-4 py-2.5 text-sm font-medium text-[#232f3e]/65 transition-all hover:border-[#232f3e]/20 hover:text-[#232f3e] disabled:opacity-60"
               >
                 Back
               </button>
@@ -667,22 +1462,22 @@ const Onboarding: React.FC<OnboardingProps> = ({
             <button
               onClick={handleNext}
               disabled={loading}
-              className="flex-[2] bg-slate-900 text-white px-6 py-4 rounded-2xl font-black hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs uppercase tracking-widest disabled:opacity-60"
+              className="flex-[2] rounded-[1.1rem] bg-[#232f3e] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#ff5527] disabled:opacity-60"
             >
               {loading ? (
-                <>
+                <span className="inline-flex items-center gap-2">
                   <i className="fa-sharp fa-solid fa-spinner fa-spin" />{" "}
-                  Processing…
-                </>
+                  Processing...
+                </span>
               ) : (
-                <>
-                  {step === TOTAL_STEPS ? "Launch Agent" : "Continue"}{" "}
+                <span className="inline-flex items-center gap-2">
+                  {step === TOTAL_STEPS ? "Launch workspace" : "Continue"}
                   <i className="fa-sharp fa-solid fa-arrow-right" />
-                </>
+                </span>
               )}
             </button>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );

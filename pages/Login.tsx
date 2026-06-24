@@ -1,37 +1,95 @@
-
-import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { ApiError, NETWORK_OFFLINE_MESSAGE } from "../services/api";
 
 interface LoginProps {
   onLogin: (email: string, password: string) => Promise<void>;
-  onRegister: (payload: { name: string; companyName: string; email: string; password: string }) => Promise<void>;
-  onSendMagicLink: (email: string) => Promise<{ magicLinkToken: string; magicLinkUrl?: string | null }>;
+  onRegister: (payload: {
+    name: string;
+    companyName: string;
+    email: string;
+    password: string;
+  }) => Promise<void>;
+  onSendMagicLink: (
+    email: string,
+  ) => Promise<{ magicLinkToken: string; magicLinkUrl?: string | null }>;
   onVerifyMagicLink: (token: string) => Promise<void>;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onSendMagicLink, onVerifyMagicLink }) => {
+const AccessIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 3v18" />
+    <path d="M7 7v10" />
+    <path d="M17 7v10" />
+    <path d="M3 10v4" />
+    <path d="M21 10v4" />
+  </svg>
+);
+
+const formatAuthError = (error: unknown) => {
+  console.error("[auth] login/register submission failed:", error);
+
+  if (error instanceof ApiError) {
+    if (error.status === 0 || error.message === NETWORK_OFFLINE_MESSAGE) {
+      return "Agently cannot reach the backend right now. Check your internet connection, confirm the backend is running, and try again.";
+    }
+    if (error.status === 401) {
+      return "Sign-in failed. Check the email/password, or confirm this frontend is connected to the correct backend database.";
+    }
+    if (error.status >= 500) {
+      return "The backend had trouble signing you in. Please check the server terminal logs and try again.";
+    }
+    return error.message || "Unable to complete authentication.";
+  }
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return NETWORK_OFFLINE_MESSAGE;
+  }
+
+  return error instanceof Error
+    ? error.message
+    : "Something went wrong. Please try again.";
+};
+
+const Login: React.FC<LoginProps> = ({
+  onLogin,
+  onRegister,
+  onSendMagicLink,
+  onVerifyMagicLink,
+}) => {
   const location = useLocation();
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [method, setMethod] = useState<'password' | 'magic'>('password');
-  const [name, setName] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [magicLinkToken, setMagicLinkToken] = useState('');
-  const [magicLinkUrl, setMagicLinkUrl] = useState('');
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [method, setMethod] = useState<"password" | "magic">("password");
+  const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [magicLinkToken, setMagicLinkToken] = useState("");
+  const [magicLinkUrl, setMagicLinkUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const attemptedMagicTokenRef = useRef<string | null>(null);
 
   const verifyMagicLink = async (token: string) => {
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await onVerifyMagicLink(token);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to verify that sign-in link.');
+      setError(formatAuthError(submitError));
       setSent(true);
     } finally {
       setLoading(false);
@@ -40,7 +98,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onSendMagicLink, onV
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const token = params.get('magicToken');
+    const token = params.get("magic") || params.get("magicToken");
 
     if (!token || attemptedMagicTokenRef.current === token) {
       return;
@@ -53,10 +111,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onSendMagicLink, onV
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      if (authMode === 'signup') {
+      if (authMode === "signup") {
         await onRegister({
           name,
           companyName,
@@ -66,258 +124,383 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onSendMagicLink, onV
         return;
       }
 
-      if (method === 'password') {
+      if (method === "password") {
         await onLogin(email, password);
       } else {
         const response = await onSendMagicLink(email);
         setMagicLinkToken(response.magicLinkToken);
-        setMagicLinkUrl(response.magicLinkUrl || '');
+        setMagicLinkUrl(response.magicLinkUrl || "");
         setSent(true);
       }
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Something went wrong.');
+      setError(formatAuthError(submitError));
     } finally {
       setLoading(false);
     }
   };
 
+  const heading =
+    authMode === "signup" ? "Create your workspace" : "Welcome back";
+  const description =
+    authMode === "signup"
+      ? "Launch a workspace for voice agents, chatbots, follow-ups, and customer conversation intelligence."
+      : "Sign in to manage agents, numbers, knowledge bases, campaigns, and live customer conversations.";
+
   return (
-    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-7xl overflow-hidden rounded-[2.75rem] border border-white/70 bg-white/72 shadow-[0_32px_100px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,153,0,0.2),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(20,184,166,0.16),transparent_26%)]" />
-          <div className="relative">
-            <p className="text-[10px] font-black uppercase tracking-[0.36em] text-white/45">Workspace Access</p>
-            <h1 className="font-display mt-6 text-5xl leading-[0.96]">Run voice agents, chatbots, and call ops from one place.</h1>
-            <p className="mt-6 max-w-xl text-base font-medium leading-relaxed text-white/68">
-              Agently gives every team a cleaner control surface for multi-agent voice, embeddable chatbot experiences, lead capture, and Twilio-backed call routing.
-            </p>
-          </div>
+    <main className="auth-page min-h-svh lg:h-svh lg:overflow-hidden">
+      <div className="mx-auto flex min-h-svh w-full max-w-[1160px] flex-col px-2.5 py-2.5 sm:px-4 lg:h-svh lg:min-h-0 lg:py-3">
+        <div className="mb-2 flex h-11 items-center justify-between rounded-full border border-[#232f3e]/10 bg-white/78 px-4 shadow-[0_10px_28px_rgba(35,47,62,0.055)] backdrop-blur-xl">
+          <Link
+            to="/"
+            className="flex items-center"
+            aria-label="Go to Agently home"
+          >
+            <img
+              src="/agently-wordmark-dark.png"
+              alt="Agently"
+              className="h-7 w-auto object-contain sm:h-8"
+            />
+          </Link>
+          <Link
+            to="/"
+            className="rounded-full border border-[#232f3e]/12 px-4 py-2 text-[12px] font-medium text-[#232f3e]/72 transition hover:border-[#ff5527]/40 hover:text-[#ff5527]"
+          >
+            Back to site
+          </Link>
+        </div>
 
-          <div className="relative space-y-4">
-            {[
-              {
-                label: 'Voice Agent Fleet',
-                copy: 'Manage inbound and outbound agents with their own numbers, direction, and training.',
-              },
-              {
-                label: 'Chatbot Studio',
-                copy: 'Style each chatbot, import website knowledge, and deploy with embeddable scripts.',
-              },
-              {
-                label: 'Operations Visibility',
-                copy: 'Track leads, transcripts, billing, and usage from the same workspace.',
-              },
-            ].map((item) => (
-              <div key={item.label} className="rounded-[1.9rem] border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/45">{item.label}</p>
-                <p className="mt-3 text-sm font-medium leading-relaxed text-white/72">{item.copy}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="flex items-center justify-center p-6 sm:p-10 lg:p-12">
-          <div className="w-full max-w-md">
-            <div className="mb-8 text-center lg:text-left">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.26)] lg:mx-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
-              </div>
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-indigo-500">Agently Access</p>
-              <h1 className="font-display mt-3 text-4xl text-slate-900">Welcome back</h1>
-              <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                Sign in to manage your voice agents, chatbots, knowledge base, and live call operations.
+        <div className="grid flex-1 overflow-hidden rounded-[2rem] border border-white/70 bg-white/74 shadow-[0_26px_78px_rgba(35,47,62,0.11)] backdrop-blur-xl lg:min-h-0 lg:grid-cols-[0.86fr_1.14fr]">
+          <section className="relative hidden overflow-hidden bg-[#232f3e] p-6 text-white lg:flex lg:flex-col lg:justify-between xl:p-6">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(255,85,39,0.42),transparent_28%),radial-gradient(circle_at_95%_15%,rgba(255,255,255,0.12),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.06),transparent_42%)]" />
+            <div className="relative">
+              <img
+                src="/agently-wordmark-light.png"
+                alt="Agently"
+                className="h-7 w-auto object-contain"
+              />
+              <p className="mt-4 text-[9px] font-medium uppercase tracking-[0.24em] text-white/50">
+                Reception ops control room
+              </p>
+              <h1 className="font-display mt-3 max-w-[470px] text-[clamp(1.86rem,2.9vw,2.55rem)] font-medium leading-[1.02] tracking-[-0.055em] text-white">
+                Run every agent from one calm workspace.
+              </h1>
+              <p className="mt-2.5 max-w-[440px] text-[13px] font-normal leading-[18px] text-white/70">
+                Answer calls, qualify leads, recover missed opportunities, and
+                hand off cleanly to CRM without jumping between tools.
               </p>
             </div>
 
-            <div className="overflow-hidden rounded-[2.2rem] border border-white/70 bg-white/88 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-          {sent ? (
-            <div className="text-center py-8 animate-in fade-in zoom-in">
-              <div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-              </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">Sign-In Link Ready</h2>
-              <p className="text-slate-500 mb-6">Your secure sign-in link is ready. Continue to your workspace when you are ready.</p>
-              {error && (
-                <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                  {error}
+            <div className="relative space-y-2.5">
+              {[
+                [
+                  "Inbound ready",
+                  "Route calls, capture intent, and escalate when a human should step in.",
+                ],
+                [
+                  "Outbound follow-up",
+                  "Run recovery, confirmations, and reactivation from the same workspace.",
+                ],
+              ].map(([label, copy], index) => (
+                <div
+                  key={label}
+                  className="group rounded-[1.25rem] border border-white/10 bg-white/[0.065] p-3 backdrop-blur transition hover:bg-white/[0.09]"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-[10px] font-medium text-[#232f3e]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <p className="text-[13px] font-medium tracking-[-0.02em] text-white">
+                        {label}
+                      </p>
+                      <p className="mt-0.5 text-[12px] font-normal leading-[16px] text-white/62">
+                        {copy}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    if (magicLinkToken) {
-                      void verifyMagicLink(magicLinkToken);
-                    }
-                  }}
-                  disabled={loading || !magicLinkToken}
-                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    'Continue to Workspace'
-                  )}
-                </button>
-                {magicLinkUrl && (
-                  <a
-                    href={magicLinkUrl}
-                    className="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
-                  >
-                    Open Secure Link
-                  </a>
+              ))}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {["Knowledge grounded", "CRM handoff", "Call summaries"].map(
+                  (item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[11px] font-medium text-white/68"
+                    >
+                      {item}
+                    </span>
+                  ),
                 )}
-                <button 
-                  onClick={() => {
-                    setSent(false);
-                    setMethod('password');
-                    setMagicLinkToken('');
-                    setMagicLinkUrl('');
-                    setError('');
-                  }}
-                  className="text-indigo-600 font-bold hover:underline"
-                >
-                  Try another method
-                </button>
               </div>
             </div>
-          ) : (
-            <>
-              <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
-                <button
-                  onClick={() => {
-                    setAuthMode('signin');
-                    setError('');
-                  }}
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authMode === 'signin' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => {
-                    setAuthMode('signup');
-                    setMethod('password');
-                    setError('');
-                  }}
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-                >
-                  Create Account
-                </button>
+          </section>
+
+          <section className="flex min-h-0 items-center justify-center p-3.5 sm:p-4 lg:p-5 xl:p-5">
+            <div className="w-full max-w-[430px]">
+              <div className="mb-3 text-center lg:text-left">
+                <div className="mb-2 flex items-center justify-center gap-2 lg:justify-start">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ff5527] text-white shadow-[0_10px_24px_rgba(255,85,39,0.2)]">
+                    <AccessIcon />
+                  </span>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-[#ff5527]">
+                    Agently access
+                  </p>
+                </div>
+                <h1 className="font-display text-[clamp(1.82rem,3vw,2.35rem)] font-medium leading-[1.02] tracking-[-0.055em] text-[#232f3e]">
+                  {heading}
+                </h1>
+                <p className="mt-2 text-[13px] font-normal leading-[18px] text-[#232f3e]/70">
+                  {description}
+                </p>
               </div>
 
-              {authMode === 'signin' && (
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
-                  <button 
-                    onClick={() => setMethod('password')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${method === 'password' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-                  >
-                    Password
-                  </button>
-                  <button 
-                    onClick={() => setMethod('magic')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${method === 'magic' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-                  >
-                    Secure Link
-                  </button>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {authMode === 'signup' && (
+              <div className="rounded-[1.45rem] border border-[#232f3e]/10 bg-[#fbfaf4]/94 p-3.5 shadow-[0_14px_42px_rgba(35,47,62,0.09)] backdrop-blur-xl sm:p-3.5">
+                {sent ? (
+                  <div className="py-5 text-center animate-in fade-in zoom-in">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#ff5527]/10 text-[#ff5527]">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="28"
+                        height="28"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect width="20" height="16" x="2" y="4" rx="2" />
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                      </svg>
+                    </div>
+                    <h2 className="text-xl font-medium tracking-[-0.035em] text-[#232f3e]">
+                      Secure link ready
+                    </h2>
+                    <p className="mx-auto mt-2 max-w-sm text-[15px] font-normal leading-[21px] text-[#232f3e]/68">
+                      Continue to your workspace with the secure link generated
+                      for this session.
+                    </p>
+                    {error && (
+                      <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                        {error}
+                      </div>
+                    )}
+                    <div className="mt-5 space-y-3">
+                      <button
+                        onClick={() => {
+                          if (magicLinkToken) {
+                            void verifyMagicLink(magicLinkToken);
+                          }
+                        }}
+                        disabled={loading || !magicLinkToken}
+                        className="flex w-full items-center justify-center gap-2 rounded-full bg-[#232f3e] px-5 py-2.5 text-[13px] font-medium text-white shadow-[0_18px_40px_rgba(35,47,62,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
+                      >
+                        {loading ? (
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        ) : (
+                          "Continue to workspace"
+                        )}
+                      </button>
+                      {magicLinkUrl && (
+                        <a
+                          href={magicLinkUrl}
+                          className="block w-full rounded-full border border-[#232f3e]/12 px-4 py-3 text-sm font-medium text-[#232f3e]/72 transition hover:border-[#ff5527]/40 hover:text-[#ff5527]"
+                        >
+                          Open secure link
+                        </a>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSent(false);
+                          setMethod("password");
+                          setMagicLinkToken("");
+                          setMagicLinkUrl("");
+                          setError("");
+                        }}
+                        className="text-sm font-medium text-[#ff5527] hover:underline"
+                      >
+                        Try another method
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Alex Johnson"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                      />
+                    <div className="mb-2.5 grid grid-cols-2 rounded-full border border-[#232f3e]/8 bg-white p-1">
+                      <button
+                        onClick={() => {
+                          setAuthMode("signin");
+                          setError("");
+                        }}
+                        type="button"
+                        className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${authMode === "signin" ? "bg-[#232f3e] text-white shadow-sm" : "text-[#232f3e]/58 hover:text-[#232f3e]"}`}
+                      >
+                        Sign in
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAuthMode("signup");
+                          setMethod("password");
+                          setError("");
+                        }}
+                        type="button"
+                        className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${authMode === "signup" ? "bg-[#232f3e] text-white shadow-sm" : "text-[#232f3e]/58 hover:text-[#232f3e]"}`}
+                      >
+                        Create account
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Company Name</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Bright Path Dental"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        value={companyName}
-                        onChange={e => setCompanyName(e.target.value)}
-                      />
-                    </div>
+
+                    {authMode === "signin" && (
+                      <div className="mb-2.5 grid grid-cols-2 rounded-full border border-[#232f3e]/8 bg-white p-1">
+                        <button
+                          onClick={() => setMethod("password")}
+                          type="button"
+                          className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${method === "password" ? "bg-[#ff5527] text-white shadow-sm" : "text-[#232f3e]/58 hover:text-[#232f3e]"}`}
+                        >
+                          Password
+                        </button>
+                        <button
+                          onClick={() => setMethod("magic")}
+                          type="button"
+                          className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${method === "magic" ? "bg-[#ff5527] text-white shadow-sm" : "text-[#232f3e]/58 hover:text-[#232f3e]"}`}
+                        >
+                          Secure link
+                        </button>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-2.5">
+                      {authMode === "signup" && (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-[12px] font-medium text-[#232f3e]">
+                              Full name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Your name"
+                              className="auth-input"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[12px] font-medium text-[#232f3e]">
+                              Workspace name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Company or team"
+                              className="auth-input"
+                              value={companyName}
+                              onChange={(e) => setCompanyName(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="mb-1 block text-[12px] font-medium text-[#232f3e]">
+                          Email address
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="name@company.com"
+                          className="auth-input"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+
+                      {(authMode === "signup" || method === "password") && (
+                        <div>
+                          <div className="mb-1 flex justify-between">
+                            <label className="block text-[12px] font-medium text-[#232f3e]">
+                              Password
+                            </label>
+                            {authMode === "signin" && (
+                              <Link
+                                to="/forgot-password"
+                                className="text-xs font-medium text-[#ff5527] hover:underline"
+                              >
+                                Forgot?
+                              </Link>
+                            )}
+                          </div>
+                          <input
+                            type="password"
+                            required={
+                              authMode === "signup" || method === "password"
+                            }
+                            placeholder="••••••••"
+                            className="auth-input"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      {error && (
+                        <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-red-600">
+                          {error}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="flex w-full items-center justify-center gap-2 rounded-full bg-[#232f3e] px-5 py-2.5 text-[13px] font-medium text-white shadow-[0_18px_40px_rgba(35,47,62,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
+                      >
+                        {loading ? (
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        ) : authMode === "signup" ? (
+                          "Create workspace"
+                        ) : method === "password" ? (
+                          "Sign in"
+                        ) : (
+                          "Send secure link"
+                        )}
+                      </button>
+                    </form>
                   </>
                 )}
+              </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-                  <input 
-                    type="email" 
-                    required
-                    placeholder="name@company.com"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                  />
-                </div>
-
-                {(authMode === 'signup' || method === 'password') && (
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <label className="block text-sm font-bold text-slate-700">Password</label>
-                      {authMode === 'signin' && (
-                        <button type="button" className="text-xs text-indigo-600 font-bold hover:underline">Forgot?</button>
-                      )}
-                    </div>
-                    <input 
-                      type="password" 
-                      required={authMode === 'signup' || method === 'password'}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                {error && (
-                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                    {error}
-                  </div>
-                )}
-
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              {!sent && (
+                <p className="mt-2 text-center text-[12px] font-normal text-[#232f3e]/60">
+                  {authMode === "signup" ? (
+                    <>
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("signin")}
+                        className="font-medium text-[#ff5527] hover:underline"
+                      >
+                        Sign in
+                      </button>
+                    </>
                   ) : (
-                    authMode === 'signup'
-                      ? 'Create Account'
-                      : method === 'password'
-                        ? 'Sign In'
-                        : 'Send Magic Link'
+                    <>
+                      New to Agently?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("signup")}
+                        className="font-medium text-[#ff5527] hover:underline"
+                      >
+                        Create an account
+                      </button>
+                    </>
                   )}
-                </button>
-              </form>
-            </>
-          )}
-            </div>
-            
-            <p className="mt-8 text-center text-sm text-slate-400">
-              {authMode === 'signup' ? (
-                <>Already have an account? <button onClick={() => setAuthMode('signin')} className="text-indigo-600 font-bold hover:underline">Sign in</button></>
-              ) : (
-                <>Don&apos;t have an account? <button onClick={() => setAuthMode('signup')} className="text-indigo-600 font-bold hover:underline">Create one</button></>
+                </p>
               )}
-            </p>
-          </div>
-        </section>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
+    </main>
   );
 };
 

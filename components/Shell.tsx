@@ -35,12 +35,6 @@ const NAV_ITEMS: Array<{
     description: "Widget design and chatbot knowledge",
   },
   {
-    to: "/calls",
-    icon: "fa-solid fa-phone-volume",
-    label: "Call Logs",
-    description: "Transcripts, outcomes, and reports",
-  },
-  {
     to: "/leads",
     icon: "fa-solid fa-users",
     label: "Lead CRM",
@@ -76,8 +70,8 @@ const getPageMeta = (pathname: string, org: Organization) => {
     { eyebrow: string; title: string; description: string }
   > = {
     "/dashboard": {
-      eyebrow: "Operations Overview",
-      title: "Command Center",
+      eyebrow: "Dashboard",
+      title: "Workspace analytics",
       description: `Track calls, leads, and efficiency for ${org.profile.name} in one place.`,
     },
     "/agent": {
@@ -109,12 +103,6 @@ const getPageMeta = (pathname: string, org: Organization) => {
       title: "Chatbot Agent Studio",
       description:
         "Customize every chatbot, sync knowledge, and control how your website assistant behaves.",
-    },
-    "/knowledge-bases": {
-      eyebrow: "Business Intelligence",
-      title: "Business Knowledge Bases",
-      description:
-        "Separate each business website, source library, FAQs, and agent assignments without data mixing.",
     },
     "/calls": {
       eyebrow: "Conversation Records",
@@ -158,7 +146,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
     pageMap[pathname] || {
       eyebrow: org.profile.name,
       title: "Workspace",
-      description: "Manage your receptionist system from a single place.",
+      description: "Manage your AI agent workspace from a single place.",
     }
   );
 };
@@ -190,23 +178,43 @@ const MenuButtonIcon: React.FC<{ open?: boolean }> = ({ open = false }) => (
   </svg>
 );
 
+const PublicBrand: React.FC<{ inverted?: boolean; compact?: boolean }> = ({
+  inverted = false,
+  compact = false,
+}) => {
+  const src = inverted
+    ? "/agently-wordmark-light.png"
+    : "/agently-wordmark-dark.png";
+  return (
+    <div className="flex items-center">
+      <img
+        src={src}
+        alt="Agently"
+        className={`${compact ? "h-8 sm:h-9" : "h-10 sm:h-11"} w-auto object-contain`}
+        loading="eager"
+      />
+    </div>
+  );
+};
+
 const AppLoading: React.FC = () => (
-  <div className="min-h-screen bg-transparent px-3 py-6 sm:px-6 sm:py-10">
-    <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center">
-      <div className="w-full rounded-[1.5rem] border border-white/70 bg-white/85 p-5 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:rounded-[2rem] sm:p-8">
-        <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)] sm:h-14 sm:w-14">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
-        </div>
-        <p className="text-[9px] font-black uppercase tracking-[0.24em] text-indigo-500 sm:text-[10px] sm:tracking-[0.35em]">
-          Launching Workspace
-        </p>
-        <h1 className="font-display mt-3 text-xl text-slate-900 sm:text-2xl">
-          Loading Agently
-        </h1>
-        <p className="mt-2 text-sm font-medium text-slate-500">
-          Preparing your agents, dashboards, and conversations.
-        </p>
+  <div className="agently-loader-screen">
+    <div className="agently-loader-frame" role="status" aria-live="polite">
+      <div className="agently-loader-orbit" aria-hidden="true">
+        <img src="/agently-mark.png" alt="" className="agently-loader-mark" />
+        <span className="agently-loader-wave wave-one" />
+        <span className="agently-loader-wave wave-two" />
+        <span className="agently-loader-wave wave-three" />
       </div>
+      <img
+        src="/agently-wordmark-dark.png"
+        alt="Agently"
+        className="agently-loader-wordmark"
+      />
+      <div className="agently-loader-line" aria-hidden="true">
+        <span />
+      </div>
+      <p className="agently-loader-copy">Preparing your workspace</p>
     </div>
   </div>
 );
@@ -244,26 +252,28 @@ const SidebarLink: React.FC<{
       href={`#${to}`}
       title={description}
       onClick={handleNavigate}
-      className={`group flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors duration-150 ${
+      className={`group flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all duration-200 ${
         isActive
-          ? "border-amber-200 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-[0_18px_40px_rgba(255,153,0,0.18)]"
-          : "border-transparent bg-transparent text-slate-500 hover:border-white/70 hover:bg-white/70 hover:text-slate-900"
+          ? "border-[#ff5527]/20 bg-[#ff5527] text-white shadow-[0_16px_34px_rgba(255,85,39,0.2)]"
+          : "border-transparent bg-transparent text-[#232f3e]/62 hover:border-[#232f3e]/10 hover:bg-white/70 hover:text-[#232f3e]"
       }`}
     >
       <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-150 ${
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200 ${
           isActive
             ? "bg-white/18 text-white"
-            : "bg-slate-100 text-slate-700 group-hover:bg-white"
+            : "bg-[#232f3e]/[0.055] text-[#232f3e]/72 group-hover:bg-[#ff5527]/10 group-hover:text-[#ff5527]"
         }`}
       >
         <i className={`${icon} text-sm`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-black tracking-tight">{label}</p>
+        <p className="truncate text-[13px] font-medium tracking-[-0.02em]">
+          {label}
+        </p>
       </div>
       <div
-        className={`h-2 w-2 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-300"}`}
+        className={`h-2 w-2 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-[#232f3e]/14 group-hover:bg-[#ff5527]"}`}
       />
     </a>
   );
@@ -474,7 +484,7 @@ const NotificationBell: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-amber-200 hover:text-indigo-600"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#232f3e]/10 bg-white/72 text-[#232f3e]/68 transition hover:border-[#ff5527]/25 hover:text-[#ff5527]"
         aria-label="Open notifications"
       >
         <i className="fa-solid fa-bell text-sm" />
@@ -490,7 +500,7 @@ const NotificationBell: React.FC = () => {
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-sm font-black text-slate-900">Notifications</p>
-              <p className="text-[11px] font-semibold text-slate-400">
+              <p className="text-[11px] font-semibold text-[#232f3e]/44">
                 Latest workspace alerts
               </p>
             </div>
@@ -603,8 +613,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,153,0,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(15,118,110,0.12),transparent_26%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#f7f4eb] text-[#232f3e]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,85,39,0.14),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(35,47,62,0.08),transparent_28%)]" />
       <div className="relative flex min-h-screen">
         <div
           className={`fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
@@ -616,20 +626,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         />
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[16.5rem] md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[17rem] md:translate-x-0 ${
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="m-2 flex h-[calc(100vh-1rem)] flex-col rounded-2xl border border-white/70 bg-white/90 p-3 shadow-[0_18px_52px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:m-3 sm:h-[calc(100vh-1.5rem)] sm:p-3.5">
+          <div className="flex h-full flex-col border-r border-[#232f3e]/10 bg-[#f7f4eb] p-4 shadow-none">
             <div className="flex items-center justify-between">
-              <Link to="/dashboard" className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)]">
-                  <i className="fa-solid fa-robot text-base" />
-                </div>
-                <div>
-                  <p className="font-display text-lg text-slate-900">Agently</p>
-                  <p className="text-[9px] font-black uppercase tracking-[0.24em] text-indigo-500">
-                    Reception Ops
+              <Link
+                to="/dashboard"
+                className="flex min-w-0 items-center rounded-2xl bg-white/72 px-3 py-2 shadow-[0_12px_28px_rgba(35,47,62,0.06)]"
+              >
+                <div className="min-w-0">
+                  <img
+                    src="/agently-wordmark-dark.png"
+                    alt="Agently"
+                    className="h-7 w-auto object-contain"
+                    loading="eager"
+                  />
+                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[#ff5527]">
+                    Agent control room
                   </p>
                 </div>
               </Link>
@@ -643,7 +658,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </button>
             </div>
 
-            <nav className="mt-4 flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1">
+            <nav className="mt-6 flex-1 space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
               {NAV_ITEMS.map((item) => (
                 <SidebarLink
                   key={item.to}
@@ -653,8 +668,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               ))}
             </nav>
 
-            <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="mt-5 space-y-2 border-t border-[#232f3e]/10 pt-4">
+              <div className="rounded-2xl border border-[#232f3e]/10 bg-white/72 p-3 shadow-[0_10px_26px_rgba(35,47,62,0.055)]">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
                     Plan Usage
@@ -672,7 +687,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 </p>
                 <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-amber-400 to-emerald-400"
+                    className="h-full rounded-full bg-gradient-to-r from-[#ff5527] via-[#ff9b5f] to-[#232f3e]"
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
@@ -682,8 +697,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 to="/test-agent"
                 className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] shadow-sm transition ${
                   isTestAgentPage
-                    ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white ring-2 ring-amber-200/70"
-                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                    ? "bg-[#232f3e] text-white ring-2 ring-[#ff5527]/25"
+                    : "bg-[#232f3e] text-white hover:bg-[#1b2531]"
                 }`}
                 onClick={() => setMobileNavOpen(false)}
               >
@@ -716,16 +731,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex-1 md:ml-[16.5rem] md:min-w-0">
+        <div className="flex-1 md:ml-[17rem] md:min-w-0">
           <div className="flex h-screen min-h-0 flex-col px-3 pb-0 pt-3 sm:px-5 sm:pt-4 lg:px-6 xl:px-8">
             <header className="relative z-20 shrink-0">
-              <div className="rounded-[1.35rem] border border-white/70 bg-white/84 px-3 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:rounded-[1.6rem] sm:px-5 sm:py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="app-shell-titlebar-flat">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setMobileNavOpen(true)}
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm md:hidden"
+                      className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#232f3e]/10 bg-white/80 text-[#232f3e] shadow-sm md:hidden"
                       aria-label="Open navigation"
                     >
                       <MenuButtonIcon />
@@ -734,21 +749,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                       {settingsSubpageBack ? (
                         <Link
                           to="/settings"
-                          className="mb-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-amber-200 hover:text-indigo-600"
+                          className="mb-1.5 inline-flex items-center gap-2 rounded-full border border-[#232f3e]/10 bg-white/70 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#232f3e]/62 transition hover:border-[#ff5527]/30 hover:text-[#ff5527]"
                         >
                           <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
                           Settings
                         </Link>
                       ) : null}
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-indigo-600">
+                        <span className="rounded-full bg-[#ff5527]/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-[#ff5527]">
                           {pageMeta.eyebrow}
                         </span>
                         <span className="hidden text-xs font-semibold text-slate-400 sm:inline">
                           {org.profile.name}
                         </span>
                       </div>
-                      <h1 className="font-display mt-2 truncate text-xl tracking-tight text-slate-900 sm:text-[2rem]">
+                      <h1 className="font-display mt-1.5 truncate text-xl font-medium tracking-[-0.045em] text-[#232f3e] sm:text-[1.85rem]">
                         {pageMeta.title}
                       </h1>
                     </div>
@@ -761,14 +776,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                         {activeVoiceAgent.name}
                       </span>
                       <span className="ml-1.5 text-slate-400">active</span>
-                    </div>
-                    <div className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-                      <span className="font-black text-slate-900">
-                        {org.subscription.usage.calls}
-                      </span>
-                      <span className="ml-1.5 text-slate-400">
-                        calls this cycle
-                      </span>
                     </div>
                     <Link
                       to="/settings"
@@ -794,7 +801,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             </header>
 
-            <main className="custom-scrollbar mx-auto mt-4 w-full min-w-0 max-w-full flex-1 overflow-y-auto pb-8 pr-1 md:mt-5 md:pb-10 xl:max-w-[88%] 2xl:max-w-[88%]">
+            <main className="custom-scrollbar mx-auto mt-4 w-full min-w-0 max-w-full flex-1 overflow-y-auto pb-8 pr-1 md:mt-5 md:pb-10">
               {user.role === "Viewer" &&
               [
                 "/agent",
@@ -859,55 +866,54 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
   }, [location.pathname]);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-slate-900">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,153,0,0.1),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(20,184,166,0.1),transparent_24%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#f7f4eb] text-[#232f3e]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(35,47,62,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(255,85,39,0.12),transparent_25%)]" />
 
-      <header className="sticky top-0 z-40 px-4 pt-4 sm:px-6">
-        <div className="mx-auto max-w-7xl rounded-full border border-white/70 bg-white/82 px-5 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.1)] backdrop-blur-xl">
+      <header className="sticky top-0 z-40 px-3 py-3 sm:px-5">
+        <div className="mx-auto max-w-7xl rounded-full border border-[#232f3e]/10 bg-[#fbfaf4]/88 px-3 py-2 shadow-[0_14px_46px_rgba(35,47,62,0.08)] backdrop-blur-xl sm:px-4">
           <div className="flex items-center justify-between gap-4">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-[0_18px_40px_rgba(255,153,0,0.28)]">
-                <ICONS.Robot />
-              </div>
-              <div>
-                <p className="font-display text-lg text-slate-900">Agently</p>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">
-                  AI Receptionist SaaS
-                </p>
-              </div>
+            <Link to="/" aria-label="Agently home" className="shrink-0">
+              <PublicBrand compact />
             </Link>
 
-            <nav className="hidden items-center gap-8 lg:flex">
-              {PUBLIC_NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className="text-sm font-black text-slate-600 transition-colors hover:text-indigo-600"
-                >
-                  {item.label}
-                </Link>
-              ))}
+            <nav className="hidden items-center gap-1 lg:flex">
+              {PUBLIC_NAV_ITEMS.map((item) => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={`rounded-full px-3.5 py-2 text-[13px] font-normal leading-none transition ${
+                      isActive
+                        ? "bg-[#232f3e] text-[#fbfaf4]"
+                        : "text-[#232f3e]/66 hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
 
-            <div className="hidden items-center gap-3 lg:flex">
+            <div className="hidden items-center gap-2 lg:flex">
               <Link
                 to="/login"
-                className="rounded-full px-4 py-2 text-sm font-black text-slate-700 transition hover:text-indigo-600"
+                className="rounded-full px-4 py-2 text-[13px] font-normal leading-none text-[#232f3e]/66 transition hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
               >
-                Sign In
+                Login
               </Link>
               <Link
                 to="/login"
-                className="rounded-full bg-slate-950 px-5 py-3 text-[11px] font-black uppercase tracking-[0.28em] text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] transition hover:bg-slate-800"
+                className="rounded-full bg-[#ff5527] px-4 py-2.5 text-[13px] font-medium leading-none text-white shadow-[0_12px_26px_rgba(255,85,39,0.22)] transition hover:bg-[#e94b21]"
               >
-                Start Trial
+                Get Started
               </Link>
             </div>
 
             <button
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#232f3e]/10 bg-white/70 text-[#232f3e]/72 shadow-sm lg:hidden"
               aria-label="Toggle navigation"
             >
               <MenuButtonIcon open={mobileNavOpen} />
@@ -916,30 +922,30 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         {mobileNavOpen && (
-          <div className="mx-auto mt-3 max-w-7xl rounded-[2rem] border border-white/70 bg-white/88 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden">
-            <nav className="space-y-2">
+          <div className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#232f3e]/10 bg-[#fbfaf4]/96 p-4 shadow-[0_24px_80px_rgba(35,47,62,0.12)] backdrop-blur-xl lg:hidden">
+            <nav className="grid gap-2">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="block rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:border-indigo-200 hover:text-indigo-600"
+                  className="rounded-2xl px-4 py-3 text-sm font-normal text-[#232f3e]/72 transition hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
                 >
                   {item.label}
                 </Link>
               ))}
             </nav>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <Link
                 to="/login"
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-center text-sm font-black text-slate-700"
+                className="rounded-2xl border border-[#232f3e]/10 px-4 py-3 text-center text-sm font-normal text-[#232f3e]/72"
               >
-                Sign In
+                Login
               </Link>
               <Link
                 to="/login"
-                className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.24em] text-white"
+                className="rounded-2xl bg-[#ff5527] px-4 py-3 text-center text-sm font-medium text-white"
               >
-                Start Trial
+                Get Started
               </Link>
             </div>
           </div>
@@ -948,120 +954,114 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
 
       <main className="relative">{children}</main>
 
-      <footer className="relative mt-16 px-4 pb-8 sm:px-6">
-        <div className="mx-auto max-w-7xl rounded-[2.75rem] bg-slate-950 px-6 py-12 text-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:px-10">
-          <div className="grid gap-10 lg:grid-cols-[1.3fr_repeat(3,0.7fr)]">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white">
-                  <ICONS.Robot />
-                </div>
-                <div>
-                  <p className="font-display text-xl text-white">Agently</p>
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/45">
-                    Always Answered
-                  </p>
-                </div>
-              </div>
-              <p className="mt-5 max-w-md text-sm font-medium leading-relaxed text-white/65">
-                Voice agents, chatbots, and call intelligence for teams that
-                want every customer conversation answered with speed and
-                consistency.
+      <footer className="relative px-3 pb-5 pt-4 sm:px-5 sm:pb-6">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-[#232f3e] text-[#fbfaf4] shadow-[0_28px_90px_rgba(35,47,62,0.25)]">
+          <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[1.1fr_1.35fr] lg:px-10 lg:py-10">
+            <div className="max-w-md">
+              <PublicBrand inverted />
+              <h2 className="font-display mt-8 max-w-sm text-[clamp(2.25rem,4vw,3.6rem)] font-medium leading-[0.96] tracking-[-0.06em] text-[#fbfaf4]">
+                Everyday conversations. Extraordinary outcomes.
+              </h2>
+              <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#fbfaf4]/68">
+                AI voice agents, chatbots, follow-up workflows, and call
+                intelligence in one warm, reliable control room.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-white/70">
-                  Inbound Voice
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-white/70">
-                  Outbound Calls
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-white/70">
-                  Embedded Chatbots
-                </span>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {["Inbound", "Outbound", "Chat", "CRM handoff"].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[#fbfaf4]/12 bg-[#fbfaf4]/[0.07] px-3 py-1.5 text-xs font-normal text-[#fbfaf4]/72"
+                  >
+                    {item}
+                  </span>
+                ))}
               </div>
             </div>
 
-            <div>
-              <h4 className="text-[10px] font-black uppercase tracking-[0.34em] text-white/45">
-                Product
-              </h4>
-              <div className="mt-5 space-y-3">
-                <Link
-                  to="/features"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Features
-                </Link>
-                <Link
-                  to="/pricing"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Pricing
-                </Link>
-                <Link
-                  to="/login"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Workspace
-                </Link>
+            <div className="grid gap-7 sm:grid-cols-3">
+              <div>
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                  Product
+                </h4>
+                <div className="mt-4 space-y-3">
+                  <Link
+                    to="/features"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Features
+                  </Link>
+                  <Link
+                    to="/pricing"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Pricing
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Workspace
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Start Trial
+                  </Link>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <h4 className="text-[10px] font-black uppercase tracking-[0.34em] text-white/45">
-                Company
-              </h4>
-              <div className="mt-5 space-y-3">
-                <Link
-                  to="/about"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  About
-                </Link>
-                <Link
-                  to="/contact"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Contact
-                </Link>
-                <Link
-                  to="/faqs"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  FAQs
-                </Link>
+              <div>
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                  Company
+                </h4>
+                <div className="mt-4 space-y-3">
+                  <Link
+                    to="/about"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    About
+                  </Link>
+                  <Link
+                    to="/contact"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Contact
+                  </Link>
+                  <Link
+                    to="/faqs"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    FAQs
+                  </Link>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <h4 className="text-[10px] font-black uppercase tracking-[0.34em] text-white/45">
-                Legal
-              </h4>
-              <div className="mt-5 space-y-3">
-                <Link
-                  to="/privacy"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Privacy Policy
-                </Link>
-                <Link
-                  to="/terms"
-                  className="block text-sm font-semibold text-white/70 transition hover:text-white"
-                >
-                  Terms of Service
-                </Link>
+              <div>
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                  Legal
+                </h4>
+                <div className="mt-4 space-y-3">
+                  <Link
+                    to="/privacy"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Privacy Policy
+                  </Link>
+                  <Link
+                    to="/terms"
+                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                  >
+                    Terms of Service
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs font-medium text-white/45 md:flex-row md:items-center md:justify-between">
-            <p>
-              © {currentYear} Agently. Built for teams that never want to miss a
-              customer.
-            </p>
-            <p>
-              Voice, chat, CRM, and call intelligence in one operating system.
-            </p>
+          <div className="flex flex-col gap-3 border-t border-[#fbfaf4]/12 px-5 py-4 text-xs font-normal text-[#fbfaf4]/48 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+            <p>© {currentYear} Agently. All rights reserved.</p>
+            <p>Voice, chat, CRM, and call intelligence for modern teams.</p>
           </div>
         </div>
       </footer>

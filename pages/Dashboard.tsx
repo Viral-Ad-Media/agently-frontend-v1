@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -410,7 +411,11 @@ const normalizeDashboardMetrics = (
     leads.totalCaptured ||
       leads.total_captured ||
       leads.total ||
-      metrics.totalLeadsCaptured,
+      leads.totalLeads ||
+      leads.total_leads ||
+      metrics.totalLeadsCaptured ||
+      metrics.totalLeads ||
+      metrics.total_leads,
     0,
   );
   const convertedLeads = safeNumber(
@@ -445,11 +450,21 @@ const normalizeDashboardMetrics = (
         chatbot.leads_captured ||
         leads.chatbotLeadsCaptured ||
         leads.chatbot_leads_captured ||
+        leads.chatbotLeads ||
+        leads.chatbot_leads ||
+        metrics.chatbotLeads ||
+        metrics.chatbot_leads ||
         0,
       0,
     ),
     callLeadsCaptured: safeNumber(
-      leads.callLeadsCaptured || leads.call_leads_captured || 0,
+      leads.callLeadsCaptured ||
+        leads.call_leads_captured ||
+        leads.callLeads ||
+        leads.call_leads ||
+        metrics.callLeads ||
+        metrics.call_leads ||
+        0,
       0,
     ),
     totalLeadsCaptured,
@@ -475,25 +490,39 @@ const normalizeDashboardMetrics = (
   };
 };
 
+const MarqueeText: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = "" }) => (
+  <span className={`ag-marquee-text ${className}`}>
+    <span>{children}</span>
+  </span>
+);
+
 const StatCard: React.FC<{
   label: string;
   value: string;
   sub?: string;
   icon: string;
-}> = React.memo(({ label, value, sub, icon }) => (
-  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <div className="flex items-center justify-between gap-2">
-      <p className="truncate text-[9px] font-black uppercase tracking-widest text-slate-400">
-        {label}
+  tone?: "orange" | "blue" | "mint" | "gold" | "rose" | "slate";
+}> = React.memo(({ label, value, sub, icon, tone = "orange" }) => (
+  <div className="ag-dashboard-stat group">
+    <span className={`ag-dashboard-icon ag-dashboard-icon-${tone}`}>
+      <i className={`${icon} text-[15px]`} aria-hidden="true" />
+    </span>
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+        <MarqueeText>{label}</MarqueeText>
       </p>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-xs">
-        {icon}
-      </span>
+      <p className="mt-1 text-[1.35rem] font-medium leading-none tracking-[-0.04em] text-[#232f3e]">
+        <MarqueeText>{value}</MarqueeText>
+      </p>
+      {sub && (
+        <p className="mt-1 text-[11px] font-normal text-[#6b7484]">
+          <MarqueeText>{sub}</MarqueeText>
+        </p>
+      )}
     </div>
-    <p className="mt-2 truncate text-2xl font-black tracking-tight text-slate-900">
-      {value}
-    </p>
-    {sub && <p className="mt-1 truncate text-[11px] text-slate-400">{sub}</p>}
   </div>
 ));
 StatCard.displayName = "StatCard";
@@ -507,11 +536,20 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
     remainingMinutes: minuteLimitFromOrg,
   });
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
+  const agentBadgeRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [chartsReady, setChartsReady] = useState(false);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    agentBadgeRefs.current[selectedAgentId]?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [selectedAgentId]);
 
   useEffect(() => {
     const run = () => setChartsReady(true);
@@ -755,34 +793,21 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
   }, [live.calls, selectedAgentId]);
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-            Dashboard
-          </p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-            Workspace overview
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Live voice, chatbot, lead, and usage metrics from your backend.
-          </p>
-        </div>
-        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:w-auto sm:flex sm:flex-wrap sm:items-center">
-          {lastUpdated && (
-            <span className="rounded-full bg-slate-100 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              Updated {formatDateTime(lastUpdated)}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => void loadDashboard()}
-            disabled={isLoading}
-            className="rounded-2xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
-          >
-            {isLoading ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
+    <div className="agently-dashboard-page animate-fade-up space-y-4">
+      <div className="ag-page-inline-actions justify-end">
+        {lastUpdated && (
+          <span className="ag-pill-muted">
+            Updated {formatDateTime(lastUpdated)}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => void loadDashboard()}
+          disabled={isLoading}
+          className="ag-button-dark"
+        >
+          {isLoading ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
       {error && (
@@ -791,23 +816,26 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Total calls"
           value={String(selectedStats.totalCalls)}
-          icon="☎️"
+          icon="fa-sharp fa-solid fa-phone-volume"
+          tone="orange"
           sub="All call records"
         />
         <StatCard
           label="Completed"
           value={String(selectedStats.completedCalls)}
-          icon="✅"
+          icon="fa-sharp fa-solid fa-check"
+          tone="mint"
           sub="Finished calls"
         />
         <StatCard
           label="Failed"
           value={String(selectedStats.failedCalls)}
-          icon="⚠️"
+          icon="fa-sharp fa-solid fa-triangle-exclamation"
+          tone="rose"
           sub="Failed/cancelled"
         />
         <StatCard
@@ -815,52 +843,63 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           value={formatUsageMinutes(
             selectedStats.totalDuration / 60 || live.totalCallMinutes,
           )}
-          icon="⏱️"
+          icon="fa-sharp fa-solid fa-chart-line"
+          tone="blue"
           sub={`of ${formatUsageMinutes(live.minuteLimit)} limit`}
         />
         <StatCard
           label="Chatbot answers"
           value={String(live.chatbotMessagesAnswered)}
-          icon="💬"
+          icon="fa-sharp fa-solid fa-comments"
+          tone="gold"
           sub={`${live.chatbotTotalMessages} messages`}
         />
         <StatCard
           label="Leads captured"
           value={String(live.totalLeadsCaptured)}
-          icon="🧲"
+          icon="fa-sharp fa-solid fa-bullseye"
+          tone="slate"
           sub={`${live.chatbotLeadsCaptured} bot · ${live.callLeadsCaptured} call`}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="min-w-0 ag-panel p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
                 Call flow
               </p>
-              <h2 className="text-base font-black text-slate-900">
+              <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
                 Last 7 days
               </h2>
             </div>
-            <div className="flex max-h-28 w-full flex-wrap gap-2 overflow-y-auto pr-1 sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setSelectedAgentId("all")}
-                className={`rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-              >
-                All agents
-              </button>
-              {org.voiceAgents.map((agent) => (
+            <div className="relative w-full overflow-hidden sm:max-w-[32rem]">
+              <div className="hide-scrollbar flex w-full snap-x items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap pr-10">
                 <button
-                  key={agent.id}
+                  ref={(node) => {
+                    agentBadgeRefs.current.all = node;
+                  }}
                   type="button"
-                  onClick={() => setSelectedAgentId(agent.id)}
-                  className={`rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === agent.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                  onClick={() => setSelectedAgentId("all")}
+                  className={`snap-center shrink-0 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === "all" ? "bg-[#232f3e] text-white" : "bg-[#f4efe5] text-[#687386] hover:bg-[#efe6d7]"}`}
                 >
-                  {agent.name}
+                  All agents
                 </button>
-              ))}
+                {org.voiceAgents.map((agent) => (
+                  <button
+                    ref={(node) => {
+                      agentBadgeRefs.current[agent.id] = node;
+                    }}
+                    key={agent.id}
+                    type="button"
+                    onClick={() => setSelectedAgentId(agent.id)}
+                    className={`snap-center shrink-0 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === agent.id ? "bg-[#232f3e] text-white" : "bg-[#f4efe5] text-[#687386] hover:bg-[#efe6d7]"}`}
+                  >
+                    <MarqueeText>{agent.name}</MarqueeText>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="h-56 sm:h-64">
@@ -896,8 +935,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                     type="monotone"
                     dataKey="calls"
                     name="Calls"
-                    stroke="#6366f1"
-                    fill="#6366f1"
+                    stroke="#ff5527"
+                    fill="#ff5527"
                     fillOpacity={0.12}
                     strokeWidth={2}
                   />
@@ -905,8 +944,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                     type="monotone"
                     dataKey="completed"
                     name="Completed"
-                    stroke="#10b981"
-                    fill="#10b981"
+                    stroke="#3b7f72"
+                    fill="#3b7f72"
                     fillOpacity={0.12}
                     strokeWidth={2}
                   />
@@ -920,8 +959,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="min-w-0 ag-panel p-4 sm:p-5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
             Agent performance
           </p>
           <div className="mt-4 max-h-[23rem] space-y-3 overflow-y-auto pr-1">
@@ -930,10 +969,12 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                 key={agent.agentId}
                 type="button"
                 onClick={() => setSelectedAgentId(agent.agentId)}
-                className={`w-full rounded-2xl border p-4 text-left transition-colors ${selectedAgentId === agent.agentId ? "border-slate-900 bg-slate-900 text-white" : "border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-200"}`}
+                className={`w-full rounded-2xl border p-4 text-left transition-colors ${selectedAgentId === agent.agentId ? "border-slate-900 bg-[#232f3e] text-white" : "border-[#efe5d6] bg-[#fbfaf4] text-[#232f3e] hover:border-[#ffb26b] hover:bg-white"}`}
               >
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                  <p className="text-sm font-black">{agent.agentName}</p>
+                  <p className="text-sm font-black">
+                    <MarqueeText>{agent.agentName}</MarqueeText>
+                  </p>
                   <span className="text-[10px] font-black uppercase tracking-widest opacity-70">
                     {agent.totalCalls} calls
                   </span>
@@ -955,8 +996,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="min-w-0 ag-panel p-4 sm:p-5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
             Direction mix
           </p>
           <div className="mt-4 h-64 sm:h-[21rem]">
@@ -995,7 +1036,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                   <Bar
                     dataKey="calls"
                     name="Calls"
-                    fill="#0f172a"
+                    fill="#ff7a3d"
                     radius={[10, 10, 0, 0]}
                   />
                 </BarChart>
@@ -1008,13 +1049,13 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="min-w-0 ag-panel p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
                 Recent calls
               </p>
-              <h2 className="text-base font-black text-slate-900">
+              <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
                 Latest 5 activities
               </h2>
             </div>
@@ -1055,13 +1096,13 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="ag-panel p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
               Minute usage
             </p>
-            <h2 className="text-base font-black text-slate-900">
+            <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
               {org.subscription.plan} plan
             </h2>
           </div>
@@ -1072,7 +1113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
         <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="h-full rounded-full bg-slate-900 transition-[width] duration-700"
+            className="h-full rounded-full bg-gradient-to-r from-[#ff5527] via-[#ff9f43] to-[#232f3e] transition-[width] duration-700"
             style={{ width: `${live.usagePercent}%` }}
           />
         </div>
