@@ -10,12 +10,37 @@ interface BillingProps {
   onContactSales: () => Promise<void>;
 }
 
+type WalletTransaction = {
+  id: string;
+  type: string;
+  amountUsd: number;
+  balanceBeforeUsd?: number | null;
+  balanceAfterUsd?: number | null;
+  source?: string;
+  createdAt: string;
+};
+
+type BillingWallet = {
+  enabled?: boolean;
+  currency?: string;
+  balanceUsd?: number;
+  minimumRechargeUsd?: number;
+  status?: string;
+  totalCreditsUsd?: number;
+  totalDebitsUsd?: number;
+  latestTransactionAt?: string | null;
+  recentTransactions?: WalletTransaction[];
+  demoTopUpEnabled?: boolean;
+  warning?: string;
+};
+
 type BillingMetrics = {
   plan: Subscription["plan"];
   status: Subscription["status"];
   currentPeriodEnd: string;
   usage: Subscription["usage"];
   invoices: Invoice[];
+  wallet?: BillingWallet;
   totals: {
     paidAmount: number;
     pendingAmount: number;
@@ -52,6 +77,15 @@ const Billing: React.FC<BillingProps> = ({
     currentPeriodEnd: org.subscription.currentPeriodEnd,
     usage: org.subscription.usage,
     invoices: org.invoices || [],
+    wallet: {
+      enabled: true,
+      currency: "USD",
+      balanceUsd: 0,
+      minimumRechargeUsd: 30,
+      status: "not_created",
+      recentTransactions: [],
+      demoTopUpEnabled: false,
+    },
     totals: {
       paidAmount: (org.invoices || [])
         .filter((invoice) => invoice.status === "Paid")
@@ -127,6 +161,19 @@ const Billing: React.FC<BillingProps> = ({
   };
 
   const invoices = billing.invoices || [];
+  const wallet = billing.wallet || {};
+  const walletBalance = Number(wallet.balanceUsd || 0);
+  const minimumRecharge = Number(wallet.minimumRechargeUsd || 30);
+  const walletTransactions = wallet.recentTransactions || [];
+
+  const handleDemoTopUp = async () => {
+    await runAction(
+      async () => {
+        await api.demoTopUpWallet(minimumRecharge || 30);
+      },
+      `${money(minimumRecharge || 30)} demo credit added to wallet.`,
+    );
+  };
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -248,6 +295,121 @@ const Billing: React.FC<BillingProps> = ({
                 >
                   Cancel Plan
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-[#ff5527]/15 bg-[linear-gradient(135deg,#fffaf1_0%,#ffffff_52%,#f7f4eb_100%)] shadow-sm">
+            <div className="flex flex-col gap-5 border-b border-[#232f3e]/8 p-6 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#ff5527]">
+                  Usage Wallet
+                </p>
+                <h3 className="mt-2 text-3xl font-medium tracking-[-0.045em] text-[#232f3e]">
+                  {money(walletBalance)}
+                </h3>
+                <p className="mt-1 text-sm text-[#232f3e]/60">
+                  Customer-facing prepaid usage credit. Internal provider cost
+                  and profit stay backend-only.
+                </p>
+                {wallet.warning && (
+                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                    {wallet.warning}
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-[#232f3e]/8 bg-white/80 px-4 py-3 text-sm text-[#232f3e]">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#232f3e]/40">
+                  Minimum recharge
+                </p>
+                <p className="mt-1 text-xl font-black">
+                  {money(minimumRecharge)}
+                </p>
+                {wallet.demoTopUpEnabled ? (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleDemoTopUp()}
+                    className="mt-3 w-full rounded-xl bg-[#232f3e] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#ff5527] disabled:opacity-50"
+                  >
+                    Add demo credit
+                  </button>
+                ) : (
+                  <p className="mt-2 text-xs font-semibold text-[#232f3e]/45">
+                    Demo top-up hidden until backend enables it.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
+              {[
+                ["Wallet status", wallet.status || "not created"],
+                ["Total credits", money(Number(wallet.totalCreditsUsd || 0))],
+                [
+                  "Total debits",
+                  money(Math.abs(Number(wallet.totalDebitsUsd || 0))),
+                ],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-2xl bg-white/75 p-4 ring-1 ring-[#232f3e]/6"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/40">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-base font-black text-[#232f3e]">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-[#232f3e]/8 px-6 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-black text-[#232f3e]">
+                  Recent wallet activity
+                </h4>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#232f3e]/35">
+                  Frontend-safe view
+                </p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {walletTransactions.slice(0, 5).map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-white/80 px-4 py-3 text-sm ring-1 ring-[#232f3e]/6"
+                  >
+                    <div>
+                      <p className="font-black capitalize text-[#232f3e]">
+                        {(tx.source || tx.type || "wallet").replace(/_/g, " ")}
+                      </p>
+                      <p className="text-xs text-[#232f3e]/45">
+                        {tx.createdAt
+                          ? new Date(tx.createdAt).toLocaleString()
+                          : "Just now"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`font-black ${Number(tx.amountUsd || 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}
+                      >
+                        {Number(tx.amountUsd || 0) >= 0 ? "+" : ""}
+                        {money(Number(tx.amountUsd || 0))}
+                      </p>
+                      {tx.balanceAfterUsd !== undefined &&
+                        tx.balanceAfterUsd !== null && (
+                          <p className="text-xs text-[#232f3e]/45">
+                            Balance {money(tx.balanceAfterUsd)}
+                          </p>
+                        )}
+                    </div>
+                  </div>
+                ))}
+                {!walletTransactions.length && (
+                  <p className="rounded-2xl border border-dashed border-[#232f3e]/12 bg-white/60 px-4 py-5 text-center text-sm text-[#232f3e]/45">
+                    No wallet transactions yet. Add demo credit after enabling
+                    test mode.
+                  </p>
+                )}
               </div>
             </div>
           </div>

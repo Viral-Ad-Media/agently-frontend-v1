@@ -788,6 +788,13 @@ export const api = {
     return request('/api/billing/summary');
   },
 
+  async demoTopUpWallet(amountUsd = 30) {
+    return request('/api/billing/wallet/demo-top-up', {
+      method: 'POST',
+      body: { amountUsd },
+    });
+  },
+
   async updatePlan(plan: Extract<Organization['subscription']['plan'], 'Starter' | 'Pro'>) {
     return request<Organization['subscription']>('/api/billing/plan', {
       method: 'PATCH',
