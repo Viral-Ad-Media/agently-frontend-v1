@@ -20,6 +20,18 @@ type WalletTransaction = {
   createdAt: string;
 };
 
+type WalletUsageCharge = {
+  id: string;
+  provider: string;
+  service: string;
+  eventType?: string;
+  unit: string;
+  quantity: number;
+  customerChargeUsd: number;
+  walletTransactionId?: string | null;
+  createdAt: string;
+};
+
 type BillingWallet = {
   enabled?: boolean;
   currency?: string;
@@ -28,8 +40,10 @@ type BillingWallet = {
   status?: string;
   totalCreditsUsd?: number;
   totalDebitsUsd?: number;
+  totalUsageChargesUsd?: number;
   latestTransactionAt?: string | null;
   recentTransactions?: WalletTransaction[];
+  recentUsageCharges?: WalletUsageCharge[];
   demoTopUpEnabled?: boolean;
   warning?: string;
 };
@@ -84,6 +98,7 @@ const Billing: React.FC<BillingProps> = ({
       minimumRechargeUsd: 30,
       status: "not_created",
       recentTransactions: [],
+      recentUsageCharges: [],
       demoTopUpEnabled: false,
     },
     totals: {
@@ -122,6 +137,10 @@ const Billing: React.FC<BillingProps> = ({
 
   useEffect(() => {
     void loadBilling();
+    const timer = window.setInterval(() => {
+      void loadBilling();
+    }, 10000);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org.id]);
 
@@ -165,6 +184,7 @@ const Billing: React.FC<BillingProps> = ({
   const walletBalance = Number(wallet.balanceUsd || 0);
   const minimumRecharge = Number(wallet.minimumRechargeUsd || 30);
   const walletTransactions = wallet.recentTransactions || [];
+  const walletUsageCharges = wallet.recentUsageCharges || [];
 
   const handleDemoTopUp = async () => {
     await runAction(
@@ -309,8 +329,8 @@ const Billing: React.FC<BillingProps> = ({
                   {money(walletBalance)}
                 </h3>
                 <p className="mt-1 text-sm text-[#232f3e]/60">
-                  Customer-facing prepaid usage credit. Internal provider cost
-                  and profit stay backend-only.
+                  Customer-facing prepaid usage credit. Backend/admin credits
+                  and real usage deductions refresh here automatically.
                 </p>
                 {wallet.warning && (
                   <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
@@ -349,6 +369,10 @@ const Billing: React.FC<BillingProps> = ({
                   "Total debits",
                   money(Math.abs(Number(wallet.totalDebitsUsd || 0))),
                 ],
+                [
+                  "Usage charges",
+                  money(Number(wallet.totalUsageChargesUsd || 0)),
+                ],
               ].map(([label, value]) => (
                 <div
                   key={String(label)}
@@ -362,6 +386,47 @@ const Billing: React.FC<BillingProps> = ({
                   </p>
                 </div>
               ))}
+            </div>
+            <div className="border-t border-[#232f3e]/8 px-6 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-black text-[#232f3e]">
+                  Recent usage deductions
+                </h4>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#232f3e]/35">
+                  Auto-refreshes every 10s
+                </p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {walletUsageCharges.slice(0, 5).map((charge) => (
+                  <div
+                    key={charge.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-white/80 px-4 py-3 text-sm ring-1 ring-[#232f3e]/6"
+                  >
+                    <div>
+                      <p className="font-black capitalize text-[#232f3e]">
+                        {(charge.provider || "usage").replace(/_/g, " ")} ·{" "}
+                        {(charge.service || "service").replace(/_/g, " ")}
+                      </p>
+                      <p className="text-xs text-[#232f3e]/45">
+                        {Number(charge.quantity || 0)} {charge.unit || "units"}{" "}
+                        ·{" "}
+                        {charge.createdAt
+                          ? new Date(charge.createdAt).toLocaleString()
+                          : "Just now"}
+                      </p>
+                    </div>
+                    <p className="font-black text-red-500">
+                      -{money(Number(charge.customerChargeUsd || 0))}
+                    </p>
+                  </div>
+                ))}
+                {!walletUsageCharges.length && (
+                  <p className="rounded-2xl border border-dashed border-[#232f3e]/12 bg-white/60 px-4 py-5 text-center text-sm text-[#232f3e]/45">
+                    No usage deductions yet. Backend/manual service usage will
+                    appear here after wallet charging is enabled.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="border-t border-[#232f3e]/8 px-6 py-4">
               <div className="flex items-center justify-between gap-3">
