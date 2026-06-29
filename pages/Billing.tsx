@@ -45,6 +45,14 @@ type BillingWallet = {
   recentTransactions?: WalletTransaction[];
   recentUsageCharges?: WalletUsageCharge[];
   demoTopUpEnabled?: boolean;
+  creditEnforcementMode?: string;
+  autoChargeWalletEnabled?: boolean;
+  minimums?: {
+    callUsd?: number;
+    chatUsd?: number;
+    voicePreviewUsd?: number;
+    knowledgeSyncUsd?: number;
+  };
   warning?: string;
 };
 
@@ -114,6 +122,10 @@ const Billing: React.FC<BillingProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [topUpAmount, setTopUpAmount] = useState("10");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "card" | "bank" | "invoice"
+  >("card");
 
   const usagePercent = useMemo(() => {
     const limit = Number(billing.usage.minuteLimit || 0);
@@ -187,11 +199,16 @@ const Billing: React.FC<BillingProps> = ({
   const walletUsageCharges = wallet.recentUsageCharges || [];
 
   const handleDemoTopUp = async () => {
+    const amount = Number(topUpAmount || minimumRecharge || 30);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter a valid top-up amount.");
+      return;
+    }
     await runAction(
       async () => {
-        await api.demoTopUpWallet(minimumRecharge || 30);
+        await api.demoTopUpWallet(amount);
       },
-      `${money(minimumRecharge || 30)} demo credit added to wallet.`,
+      `${money(amount)} sandbox credit added to wallet.`,
     );
   };
 
@@ -345,20 +362,10 @@ const Billing: React.FC<BillingProps> = ({
                 <p className="mt-1 text-xl font-black">
                   {money(minimumRecharge)}
                 </p>
-                {wallet.demoTopUpEnabled ? (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => void handleDemoTopUp()}
-                    className="mt-3 w-full rounded-xl bg-[#232f3e] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#ff5527] disabled:opacity-50"
-                  >
-                    Add demo credit
-                  </button>
-                ) : (
-                  <p className="mt-2 text-xs font-semibold text-[#232f3e]/45">
-                    Demo top-up hidden until backend enables it.
-                  </p>
-                )}
+                <p className="mt-2 text-xs font-semibold text-[#232f3e]/45">
+                  Enforcement: {wallet.creditEnforcementMode || "observe"} ·
+                  Auto-deduct: {wallet.autoChargeWalletEnabled ? "on" : "off"}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
@@ -387,6 +394,101 @@ const Billing: React.FC<BillingProps> = ({
                 </div>
               ))}
             </div>
+            <div className="border-t border-[#232f3e]/8 p-6">
+              <div className="rounded-[1.75rem] border border-[#232f3e]/10 bg-white/80 p-5 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-black text-[#232f3e]">
+                      Add usage credit
+                    </h4>
+                    <p className="mt-1 text-xs text-[#232f3e]/55">
+                      Sandbox payment UI for testing. Real card processing will
+                      connect later through Stripe, Paystack, Flutterwave, or
+                      another gateway.
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-[#ff5527]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#ff5527]">
+                    Gateway not connected
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {[
+                    ["card", "Card"],
+                    ["bank", "Bank transfer"],
+                    ["invoice", "Invoice"],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setPaymentMethod(key as "card" | "bank" | "invoice")
+                      }
+                      className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${paymentMethod === key ? "border-[#ff5527] bg-[#fffaf1] text-[#ff5527]" : "border-[#232f3e]/10 bg-white text-[#232f3e]/70"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-[0.7fr_1.3fr]">
+                  <label className="block">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/45">
+                      Amount
+                    </span>
+                    <input
+                      value={topUpAmount}
+                      onChange={(event) => setTopUpAmount(event.target.value)}
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      className="mt-2 w-full rounded-2xl border border-[#232f3e]/10 bg-white px-4 py-3 text-lg font-black text-[#232f3e] outline-none focus:border-[#ff5527]"
+                    />
+                  </label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/45">
+                        Card number
+                      </span>
+                      <input
+                        disabled
+                        placeholder="4242 4242 4242 4242"
+                        className="mt-2 w-full rounded-2xl border border-[#232f3e]/10 bg-[#f7f4eb] px-4 py-3 text-sm text-[#232f3e]/50"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/45">
+                        Expiry / CVC
+                      </span>
+                      <input
+                        disabled
+                        placeholder="MM/YY · CVC"
+                        className="mt-2 w-full rounded-2xl border border-[#232f3e]/10 bg-[#f7f4eb] px-4 py-3 text-sm text-[#232f3e]/50"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {wallet.demoTopUpEnabled ? (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleDemoTopUp()}
+                    className="mt-5 w-full rounded-2xl bg-[#232f3e] px-4 py-3 text-[11px] font-black uppercase tracking-[0.18em] text-white transition hover:bg-[#ff5527] disabled:opacity-50"
+                  >
+                    Add sandbox credit
+                  </button>
+                ) : (
+                  <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700">
+                    Sandbox credit button is hidden until
+                    BILLING_DEMO_TOPUP_ENABLED=true. Customers can see the
+                    payment UI, but real top-up will wait for the payment
+                    gateway.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div className="border-t border-[#232f3e]/8 px-6 py-4">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-sm font-black text-[#232f3e]">

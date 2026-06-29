@@ -64,6 +64,13 @@ const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [creditAlert, setCreditAlert] = useState<{
+    message: string;
+    balanceUsd?: number;
+    minimumRequiredUsd?: number;
+    action?: string;
+    topUpPath?: string;
+  } | null>(null);
 
   const user = workspace?.user ?? null;
   const org = workspace?.organization ?? null;
@@ -103,6 +110,29 @@ const App: React.FC = () => {
     // Use replace() instead of history.replaceState so HashRouter reliably re-hydrates
     // into the reset route even when the email client opened /?resetToken=... first.
     window.location.replace(nextUrl);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      setCreditAlert({
+        message:
+          detail.message || "Usage credit is required before you can continue.",
+        balanceUsd: Number(detail.balanceUsd || 0),
+        minimumRequiredUsd: Number(detail.minimumRequiredUsd || 0),
+        action: detail.action || "usage",
+        topUpPath: detail.topUpPath || "#/billing",
+      });
+    };
+    window.addEventListener(
+      "agently:billing-credit-required",
+      handler as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        "agently:billing-credit-required",
+        handler as EventListener,
+      );
   }, []);
 
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
@@ -861,6 +891,60 @@ const App: React.FC = () => {
             onCallFinished={handleSimulatorFinished}
           />
         </Suspense>
+      )}
+
+      {creditAlert && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#232f3e]/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-[#ff5527]/20 bg-[#fffaf1] shadow-[0_30px_90px_rgba(35,47,62,0.28)]">
+            <div className="border-b border-[#232f3e]/10 bg-white/70 px-6 py-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#ff5527]">
+                Usage credit required
+              </p>
+              <h3 className="mt-2 text-2xl font-medium tracking-[-0.045em] text-[#232f3e]">
+                Top up your wallet to continue
+              </h3>
+            </div>
+            <div className="space-y-4 px-6 py-5 text-[#232f3e]">
+              <p className="text-sm leading-6 text-[#232f3e]/70">
+                {creditAlert.message}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-[#232f3e]/8">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/40">
+                    Balance
+                  </p>
+                  <p className="mt-1 text-xl font-black">
+                    ${Number(creditAlert.balanceUsd || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-[#232f3e]/8">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#232f3e]/40">
+                    Required
+                  </p>
+                  <p className="mt-1 text-xl font-black">
+                    ${Number(creditAlert.minimumRequiredUsd || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <a
+                  href={creditAlert.topUpPath || "#/billing"}
+                  onClick={() => setCreditAlert(null)}
+                  className="flex-1 rounded-2xl bg-[#ff5527] px-4 py-3 text-center text-sm font-black text-white shadow-[0_16px_36px_rgba(255,85,39,0.24)]"
+                >
+                  Go to billing
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setCreditAlert(null)}
+                  className="rounded-2xl border border-[#232f3e]/12 bg-white px-4 py-3 text-sm font-black text-[#232f3e]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </Router>
   );
