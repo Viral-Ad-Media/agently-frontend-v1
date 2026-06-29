@@ -346,8 +346,8 @@ const Billing: React.FC<BillingProps> = ({
                   {money(walletBalance)}
                 </h3>
                 <p className="mt-1 text-sm text-[#232f3e]/60">
-                  Customer-facing prepaid usage credit. Backend/admin credits
-                  and real usage deductions refresh here automatically.
+                  Available usage credit for calls, chat, voice, and knowledge
+                  sync.
                 </p>
                 {wallet.warning && (
                   <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
@@ -524,8 +524,8 @@ const Billing: React.FC<BillingProps> = ({
                 ))}
                 {!walletUsageCharges.length && (
                   <p className="rounded-2xl border border-dashed border-[#232f3e]/12 bg-white/60 px-4 py-5 text-center text-sm text-[#232f3e]/45">
-                    No usage deductions yet. Backend/manual service usage will
-                    appear here after wallet charging is enabled.
+                    No usage deductions yet. Service usage will appear here once
+                    calls, chat, or knowledge sync consume credit.
                   </p>
                 )}
               </div>

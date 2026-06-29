@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
 import { voiceCallsApi } from "../services/voiceCallsApi";
+import { api } from "../services/api";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -55,6 +56,52 @@ const PUBLIC_NAV_ITEMS = [
   { to: "/faqs", label: "FAQs" },
   { to: "/contact", label: "Contact" },
 ];
+
+type WalletMini = {
+  balanceUsd: number;
+  minimumRechargeUsd?: number;
+  status?: string;
+  creditEnforcementMode?: string;
+  autoChargeWalletEnabled?: boolean;
+  minimums?: {
+    callUsd?: number;
+    chatUsd?: number;
+    hardStopBalanceUsd?: number;
+    maxNegativeBalanceUsd?: number;
+  };
+};
+
+const formatWalletMoney = (value: number) => {
+  const amount = Number.isFinite(value) ? value : 0;
+  return `${amount < 0 ? "-" : ""}$${Math.abs(amount).toFixed(2)}`;
+};
+
+const WalletCreditBadge: React.FC<{
+  wallet: WalletMini | null;
+  compact?: boolean;
+}> = ({ wallet, compact = false }) => {
+  const balance = Number(wallet?.balanceUsd || 0);
+  const isNegative = balance < 0;
+  const isLow = !isNegative && balance < Number(wallet?.minimums?.callUsd || 1);
+  const tone = isNegative
+    ? "border-red-200 bg-red-50 text-red-700"
+    : isLow
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return (
+    <Link
+      to="/billing"
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-black transition hover:shadow-sm ${tone} ${compact ? "w-full justify-between" : ""}`}
+      title="Usage credit balance"
+    >
+      <span className="inline-flex items-center gap-2">
+        <i className="fa-solid fa-wallet text-[12px]" />
+        <span className="hidden sm:inline">Credit</span>
+      </span>
+      <span>{formatWalletMoney(balance)}</span>
+    </Link>
+  );
+};
 
 const getUsagePercent = (minutes: number, minuteLimit: number) => {
   if (minuteLimit <= 0) {
@@ -596,6 +643,34 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [walletMini, setWalletMini] = useState<WalletMini | null>(null);
+
+  const refreshWalletMini = async () => {
+    try {
+      const summary = (await api.getBillingSummary()) as {
+        wallet?: WalletMini;
+      };
+      if (summary?.wallet) {
+        setWalletMini({
+          ...summary.wallet,
+          balanceUsd: Number(summary.wallet.balanceUsd || 0),
+        });
+      }
+    } catch {
+      // Billing should not break the app shell.
+    }
+  };
+
+  useEffect(() => {
+    void refreshWalletMini();
+    const interval = window.setInterval(() => void refreshWalletMini(), 15000);
+    const handler = () => void refreshWalletMini();
+    window.addEventListener("agently:wallet-refresh", handler);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("agently:wallet-refresh", handler);
+    };
+  }, [org.id]);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -669,6 +744,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </nav>
 
             <div className="mt-5 space-y-2 border-t border-[#232f3e]/10 pt-4">
+              <WalletCreditBadge wallet={walletMini} compact />
               <div className="rounded-2xl border border-[#232f3e]/10 bg-white/72 p-3 shadow-[0_10px_26px_rgba(35,47,62,0.055)]">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
@@ -770,6 +846,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   </div>
 
                   <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    <WalletCreditBadge wallet={walletMini} />
                     <NotificationBell />
                     <div className="max-w-full rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 sm:max-w-[16rem]">
                       <span className="inline-block max-w-[9rem] truncate align-bottom font-black text-slate-900 sm:max-w-[12rem]">
