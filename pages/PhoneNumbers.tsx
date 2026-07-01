@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { AgentConfig, CallRecord, Organization } from "../types";
 import {
@@ -190,6 +196,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
 }) => {
   const orgId = org.id;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isTabPending, startTabTransition] = useTransition();
   const [tab, setTab] = useState<Tab>(
     () => parseTabParam(searchParams.get("tab")) || initialTab,
   );
@@ -220,14 +227,16 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
 
   const updateTab = useCallback(
     (nextTab: Tab) => {
-      setTab(nextTab);
-      const nextParams = new URLSearchParams(searchParams);
-      if (nextTab === "numbers") {
-        nextParams.delete("tab");
-      } else {
-        nextParams.set("tab", nextTab);
-      }
-      setSearchParams(nextParams, { replace: true });
+      startTabTransition(() => {
+        setTab(nextTab);
+        const nextParams = new URLSearchParams(searchParams);
+        if (nextTab === "numbers") {
+          nextParams.delete("tab");
+        } else {
+          nextParams.set("tab", nextTab);
+        }
+        setSearchParams(nextParams, { replace: true });
+      });
     },
     [searchParams, setSearchParams],
   );
@@ -721,6 +730,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                 Call Logs
               </button>
             </div>
+            {isTabPending && (
+              <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                Loading view…
+              </span>
+            )}
             <button
               onClick={() => void loadNumbers()}
               disabled={busy === "load"}
