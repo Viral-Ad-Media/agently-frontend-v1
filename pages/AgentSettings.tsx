@@ -225,6 +225,38 @@ const Sel = (
     {p.children}
   </select>
 );
+const BufferedTextarea: React.FC<
+  Omit<
+    React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+    "value" | "onChange"
+  > & {
+    value?: string;
+    onBufferedChange: (value: string, options?: { flush?: boolean }) => void;
+  }
+> = ({ value = "", onBufferedChange, onBlur, ...props }) => {
+  const [localValue, setLocalValue] = useState(value || "");
+
+  useEffect(() => {
+    setLocalValue(value || "");
+  }, [value]);
+
+  return (
+    <textarea
+      {...props}
+      value={localValue}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setLocalValue(nextValue);
+        onBufferedChange(nextValue);
+      }}
+      onBlur={(event) => {
+        onBufferedChange(event.currentTarget.value, { flush: true });
+        onBlur?.(event);
+      }}
+    />
+  );
+};
+
 const Label = ({ children }: { children: React.ReactNode }) => (
   <p className="text-[10px] font-black text-[#7a8493] uppercase tracking-widest mb-1.5">
     {children}
@@ -269,6 +301,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const deletedFaqIdsRef = useRef(deletedFaqIds);
   const agentDraftCacheRef = useRef(agentDraftCache);
   const autoSaveOnLeaveRef = useRef<null | (() => Promise<void>)>(null);
+  const bufferedDraftTimersRef = useRef<
+    Partial<Record<keyof AgentConfig, number>>
+  >({});
 
   // Agent detail modal
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
@@ -351,6 +386,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   useEffect(() => {
     agentDraftCacheRef.current = agentDraftCache;
   }, [agentDraftCache]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(bufferedDraftTimersRef.current).forEach((timer) => {
+        if (timer) window.clearTimeout(timer);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -869,6 +912,33 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     val: AgentConfig[K],
   ) => {
     setDraft((d) => ({ ...d, [key]: val }));
+  };
+
+  const updateDraftFieldBuffered = <K extends keyof AgentConfig>(
+    key: K,
+    val: AgentConfig[K],
+    options: { flush?: boolean } = {},
+  ) => {
+    draftRef.current = { ...draftRef.current, [key]: val };
+    const existingTimer = bufferedDraftTimersRef.current[key];
+    if (existingTimer) window.clearTimeout(existingTimer);
+
+    const commit = () => {
+      delete bufferedDraftTimersRef.current[key];
+      const latest = draftRef.current[key];
+      setDraft((current) =>
+        Object.is(current[key], latest)
+          ? current
+          : { ...current, [key]: latest },
+      );
+    };
+
+    if (options.flush) {
+      commit();
+      return;
+    }
+
+    bufferedDraftTimersRef.current[key] = window.setTimeout(commit, 280);
   };
 
   const readAgentWorkspaceValue = (
@@ -2328,11 +2398,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
             <div>
               <Label>Greeting Message</Label>
-              <textarea
+              <BufferedTextarea
                 rows={2}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all resize-none"
                 value={draft.greeting}
-                onChange={(e) => updateDraftField("greeting", e.target.value)}
+                onBufferedChange={(value, options) =>
+                  updateDraftFieldBuffered("greeting", value, options)
+                }
               />
             </div>
 

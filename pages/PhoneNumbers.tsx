@@ -1,6 +1,8 @@
 import React, {
   useCallback,
   useEffect,
+  lazy,
+  Suspense,
   useMemo,
   useState,
   useTransition,
@@ -12,7 +14,7 @@ import {
   AvailableTwilioNumber,
   voiceCallsApi,
 } from "../services/voiceCallsApi";
-import CallLogs from "./CallLogs";
+const CallLogs = lazy(() => import("./CallLogs"));
 
 const FLAG_MAP: Record<string, string> = {
   US: "🇺🇸",
@@ -807,12 +809,23 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       )}
 
       {tab === "calls" && (
-        <CallLogs
-          calls={calls}
-          org={org}
-          onDownloadReport={onDownloadReport}
-          embedded
-        />
+        <Suspense
+          fallback={
+            <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-card">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <p className="text-sm font-bold text-slate-500">
+                Loading call logs…
+              </p>
+            </div>
+          }
+        >
+          <CallLogs
+            calls={calls}
+            org={org}
+            onDownloadReport={onDownloadReport}
+            embedded
+          />
+        </Suspense>
       )}
 
       {tab === "search" && (
