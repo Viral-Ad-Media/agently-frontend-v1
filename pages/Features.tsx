@@ -106,7 +106,7 @@ const Features: React.FC = () => {
                 <h3 className="text-lg font-medium leading-tight tracking-[-0.055em]">
                   {feature.title}
                 </h3>
-                <p className="mt-2 text-sm font-normal leading-relaxed text-[#232f3e]/72">
+                <p className="mt-2 text-sm font-normal leading-relaxed text-[#0F172A]/72">
                   {feature.desc}
                 </p>
               </article>
@@ -115,7 +115,7 @@ const Features: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#fbfaf4]">
+      <section className="bg-[#F8FAFC]">
         <div className="marketing-shell py-12 lg:py-14">
           <div className="grid items-center gap-8 rounded-[2rem] border border-black/12 bg-white p-6 shadow-[0_20px_70px_rgba(5,8,23,0.08)] lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
             <div>
@@ -131,22 +131,22 @@ const Features: React.FC = () => {
               </p>
             </div>
             <div className="relative grid gap-3 sm:grid-cols-2">
-              <div className="pointer-events-none absolute left-5 top-6 hidden h-[calc(100%-3rem)] w-px bg-gradient-to-b from-[#ff5527]/40 via-[#f6b94d]/40 to-[#232f3e]/10 sm:block" />
+              <div className="pointer-events-none absolute left-5 top-6 hidden h-[calc(100%-3rem)] w-px bg-gradient-to-b from-[#F59E0B]/40 via-[#f6b94d]/40 to-[#0F172A]/10 sm:block" />
               {PIPELINE.map((item, index) => (
                 <div
                   key={item.step}
-                  className="group relative overflow-hidden rounded-[1.45rem] border border-[#232f3e]/12 bg-[#fbfaf4] p-4 shadow-[0_12px_34px_rgba(35,47,62,0.06)] transition-transform duration-200 hover:-translate-y-0.5"
+                  className="group relative overflow-hidden rounded-[1.45rem] border border-[#0F172A]/12 bg-[#F8FAFC] p-4 shadow-[0_12px_34px_rgba(15,23,42,0.06)] transition-transform duration-200 hover:-translate-y-0.5"
                 >
-                  <div className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#ff5527]/10 blur-2xl transition-opacity group-hover:opacity-80" />
+                  <div className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#F59E0B]/10 blur-2xl transition-opacity group-hover:opacity-80" />
                   <div className="relative flex items-start gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#ff5527] text-[12px] font-medium text-white shadow-[0_12px_24px_rgba(255,85,39,0.22)]">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#F59E0B] text-[12px] font-medium text-white shadow-[0_12px_24px_rgba(245,158,11,0.22)]">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <div>
-                      <p className="text-base font-medium tracking-[-0.045em] text-[#232f3e]">
+                      <p className="text-base font-medium tracking-[-0.045em] text-[#0F172A]">
                         {item.step}
                       </p>
-                      <p className="mt-1 text-sm font-normal leading-snug text-[#232f3e]/68">
+                      <p className="mt-1 text-sm font-normal leading-snug text-[#0F172A]/68">
                         {item.detail}
                       </p>
                     </div>

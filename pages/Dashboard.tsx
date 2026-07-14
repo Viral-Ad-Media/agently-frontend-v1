@@ -200,6 +200,28 @@ const formatDateTime = (value: string): string => {
   }).format(date);
 };
 
+const getLocalDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const startOfMondayWeek = (date: Date): Date => {
+  const weekStart = new Date(date);
+  weekStart.setHours(0, 0, 0, 0);
+  const day = weekStart.getDay();
+  const diffFromMonday = (day + 6) % 7;
+  weekStart.setDate(weekStart.getDate() - diffFromMonday);
+  return weekStart;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 const normalizeDirection = (
   row: Record<string, unknown>,
 ): CallRow["direction"] => {
@@ -506,19 +528,19 @@ const StatCard: React.FC<{
   icon: string;
   tone?: "orange" | "blue" | "mint" | "gold" | "rose" | "slate";
 }> = React.memo(({ label, value, sub, icon, tone = "orange" }) => (
-  <div className="ag-dashboard-stat group">
+  <div className="ag-dashboard-stat group min-w-0">
     <span className={`ag-dashboard-icon ag-dashboard-icon-${tone}`}>
-      <i className={`${icon} text-[15px]`} aria-hidden="true" />
+      <i className={`${icon} text-[13px] sm:text-[15px]`} aria-hidden="true" />
     </span>
     <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+      <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#687386] sm:text-[10px] sm:tracking-[0.18em]">
         <MarqueeText>{label}</MarqueeText>
       </p>
-      <p className="mt-1 text-[1.35rem] font-medium leading-none tracking-[-0.04em] text-[#232f3e]">
+      <p className="mt-1 text-[1.08rem] font-medium leading-none tracking-[-0.04em] text-[#232f3e] sm:text-[1.35rem]">
         <MarqueeText>{value}</MarqueeText>
       </p>
       {sub && (
-        <p className="mt-1 text-[11px] font-normal text-[#6b7484]">
+        <p className="mt-1 text-[10px] font-normal text-[#6b7484] sm:text-[11px]">
           <MarqueeText>{sub}</MarqueeText>
         </p>
       )}
@@ -526,6 +548,155 @@ const StatCard: React.FC<{
   </div>
 ));
 StatCard.displayName = "StatCard";
+
+const AgentFilterToolbar: React.FC<{
+  agents: Organization["voiceAgents"];
+  selectedAgentId: string;
+  onSelectAgent: (agentId: string) => void;
+  agentBadgeRefs: React.MutableRefObject<
+    Record<string, HTMLButtonElement | null>
+  >;
+}> = ({ agents, selectedAgentId, onSelectAgent, agentBadgeRefs }) => {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const node = scrollerRef.current;
+    if (!node) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+
+    const maxScrollLeft = node.scrollWidth - node.clientWidth;
+    setCanScrollLeft(node.scrollLeft > 4);
+    setCanScrollRight(node.scrollLeft < maxScrollLeft - 4);
+  }, []);
+
+  useEffect(() => {
+    const node = scrollerRef.current;
+    updateScrollState();
+    node?.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    const raf = window.requestAnimationFrame(updateScrollState);
+
+    return () => {
+      node?.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+      window.cancelAnimationFrame(raf);
+    };
+  }, [agents.length, updateScrollState]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(updateScrollState, 120);
+    return () => window.clearTimeout(timer);
+  }, [selectedAgentId, updateScrollState]);
+
+  const scrollAgents = (direction: "left" | "right") => {
+    scrollerRef.current?.scrollBy({
+      left: direction === "left" ? -220 : 220,
+      behavior: "smooth",
+    });
+  };
+
+  const chipClass = (active: boolean) =>
+    `flex h-8 shrink-0 snap-center items-center justify-center rounded-full border px-3 text-[13px] font-medium leading-none tracking-[-0.02em] transition-colors ${
+      active
+        ? "border-[#F59E0B] bg-[#F59E0B] text-white"
+        : "border-[#e2e8f0] bg-[#f8fafc] text-[#475569] hover:border-[#F59E0B]/35 hover:bg-white hover:text-[#0F172A]"
+    }`;
+
+  const chevronClass = (visible: boolean) =>
+    `h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[#64748b] transition hover:border-[#F59E0B]/40 hover:text-[#0F172A] ${
+      visible ? "hidden md:inline-flex" : "hidden"
+    }`;
+
+  return (
+    <section className="rounded-[1.35rem] border border-[#e2e8f0] bg-white px-2 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.035)] sm:px-3 md:px-3 md:py-6">
+      <div className="flex flex-col gap-3 md:gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="md:hidden">
+          <label className="mb-1.5 block text-[11px] font-medium text-[#64748b]">
+            Agent
+          </label>
+          <select
+            value={selectedAgentId}
+            onChange={(event) => onSelectAgent(event.target.value)}
+            className="h-10 w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 text-[13px] font-normal text-[#0F172A] outline-none transition focus:border-[#F59E0B] focus:bg-white"
+          >
+            <option value="all">All Agents</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+          <button
+            type="button"
+            onClick={() => scrollAgents("left")}
+            className={chevronClass(canScrollLeft)}
+            aria-label="Scroll agents left"
+          >
+            <i className="fa-solid fa-chevron-left text-[11px]" />
+          </button>
+
+          <div
+            ref={scrollerRef}
+            className="hide-scrollbar flex min-w-0 flex-1 snap-x items-center gap-2 overflow-x-auto overflow-y-hidden scroll-smooth whitespace-nowrap pl-0 pr-1"
+          >
+            <button
+              ref={(node) => {
+                agentBadgeRefs.current.all = node;
+              }}
+              type="button"
+              onClick={() => onSelectAgent("all")}
+              className={chipClass(selectedAgentId === "all")}
+            >
+              All Agents
+            </button>
+            {agents.map((agent) => (
+              <button
+                ref={(node) => {
+                  agentBadgeRefs.current[agent.id] = node;
+                }}
+                key={agent.id}
+                type="button"
+                onClick={() => onSelectAgent(agent.id)}
+                className={chipClass(selectedAgentId === agent.id)}
+              >
+                <MarqueeText>{agent.name}</MarqueeText>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => scrollAgents("right")}
+            className={chevronClass(canScrollRight)}
+            aria-label="Scroll agents right"
+          >
+            <i className="fa-solid fa-chevron-right text-[11px]" />
+          </button>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
+          <span className="text-[13px] font-medium text-[#64748b]">
+            Time Range:
+          </span>
+          <button
+            type="button"
+            className="h-9 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 text-[13px] font-medium text-[#0F172A] transition hover:border-[#F59E0B]/40 hover:bg-white"
+          >
+            Last 7 days
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
   const minuteLimitFromOrg =
@@ -761,9 +932,29 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
   }, [agentStats, live, selectedAgentId]);
 
   const flowData = useMemo<FlowPoint[]>(() => {
+    const source =
+      selectedAgentId === "all"
+        ? live.calls
+        : live.calls.filter((call) => call.agentId === selectedAgentId);
+
+    const validCallDates = source
+      .map((call) => new Date(call.createdAt))
+      .filter((date) => !Number.isNaN(date.getTime()));
+    const currentWeekStart = startOfMondayWeek(new Date());
+    const currentWeekEnd = addDays(currentWeekStart, 6);
+    const hasCurrentWeekCalls = validCallDates.some(
+      (date) => date >= currentWeekStart && date <= currentWeekEnd,
+    );
+    const latestCallDate = validCallDates.length
+      ? new Date(Math.max(...validCallDates.map((date) => date.getTime())))
+      : null;
+    const weekStart =
+      hasCurrentWeekCalls || !latestCallDate
+        ? currentWeekStart
+        : startOfMondayWeek(latestCallDate);
+
     const days: FlowPoint[] = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - index));
+      const date = addDays(weekStart, index);
       return {
         name: new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(
           date,
@@ -772,18 +963,14 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         completed: 0,
       };
     });
-    const dayKeys = days.map((_, index) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - index));
-      return date.toISOString().slice(0, 10);
-    });
-    const source =
-      selectedAgentId === "all"
-        ? live.calls
-        : live.calls.filter((call) => call.agentId === selectedAgentId);
+    const dayKeys = Array.from({ length: 7 }, (_, index) =>
+      getLocalDateKey(addDays(weekStart, index)),
+    );
+
     source.forEach((call) => {
-      const key = new Date(call.createdAt).toISOString().slice(0, 10);
-      const index = dayKeys.indexOf(key);
+      const date = new Date(call.createdAt);
+      if (Number.isNaN(date.getTime())) return;
+      const index = dayKeys.indexOf(getLocalDateKey(date));
       if (index >= 0) {
         days[index].calls += 1;
         if (call.status === "completed") days[index].completed += 1;
@@ -792,8 +979,35 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
     return days;
   }, [live.calls, selectedAgentId]);
 
+  const flowYAxisMax = useMemo(() => {
+    const largestPoint = Math.max(
+      0,
+      ...flowData.flatMap((point) => [point.calls, point.completed]),
+    );
+    return Math.max(6, Math.ceil(largestPoint * 1.25));
+  }, [flowData]);
+
+  const flowYAxisTicks = useMemo(() => {
+    const safeMax = Math.max(1, Math.ceil(flowYAxisMax));
+    if (safeMax <= 12) {
+      return Array.from({ length: safeMax + 1 }, (_, index) => index);
+    }
+
+    const roughStep = Math.ceil(safeMax / 6);
+    const step =
+      roughStep <= 2 ? 2 : roughStep <= 5 ? 5 : Math.ceil(roughStep / 5) * 5;
+    const roundedMax = Math.ceil(safeMax / step) * step;
+    return Array.from(
+      { length: roundedMax / step + 1 },
+      (_, index) => index * step,
+    );
+  }, [flowYAxisMax]);
+
+  const flowYAxisDomainMax =
+    flowYAxisTicks[flowYAxisTicks.length - 1] || flowYAxisMax;
+
   return (
-    <div className="agently-dashboard-page animate-fade-up space-y-4">
+    <div className="agently-dashboard-page animate-fade-up space-y-6">
       <div className="ag-page-inline-actions justify-end">
         {lastUpdated && (
           <span className="ag-pill-muted">
@@ -816,7 +1030,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Total calls"
           value={String(selectedStats.totalCalls)}
@@ -863,70 +1077,62 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+      <AgentFilterToolbar
+        agents={org.voiceAgents}
+        selectedAgentId={selectedAgentId}
+        onSelectAgent={setSelectedAgentId}
+        agentBadgeRefs={agentBadgeRefs}
+      />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
         <div className="min-w-0 ag-panel p-4 sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
                 Call flow
               </p>
-              <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
-                Last 7 days
+              <h2 className="mt-1 text-lg font-medium tracking-[-0.03em] text-[#232f3e]">
+                Usage volume trend
               </h2>
             </div>
-            <div className="relative w-full overflow-hidden sm:max-w-[32rem]">
-              <div className="hide-scrollbar flex w-full snap-x items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap pr-10">
-                <button
-                  ref={(node) => {
-                    agentBadgeRefs.current.all = node;
-                  }}
-                  type="button"
-                  onClick={() => setSelectedAgentId("all")}
-                  className={`snap-center shrink-0 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === "all" ? "bg-[#232f3e] text-white" : "bg-[#f4efe5] text-[#687386] hover:bg-[#efe6d7]"}`}
-                >
-                  All agents
-                </button>
-                {org.voiceAgents.map((agent) => (
-                  <button
-                    ref={(node) => {
-                      agentBadgeRefs.current[agent.id] = node;
-                    }}
-                    key={agent.id}
-                    type="button"
-                    onClick={() => setSelectedAgentId(agent.id)}
-                    className={`snap-center shrink-0 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedAgentId === agent.id ? "bg-[#232f3e] text-white" : "bg-[#f4efe5] text-[#687386] hover:bg-[#efe6d7]"}`}
-                  >
-                    <MarqueeText>{agent.name}</MarqueeText>
-                  </button>
-                ))}
-              </div>
+            <div className="hidden items-center gap-1.5 text-[13px] font-medium text-[#64748b] sm:flex">
+              <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
+              Calls
             </div>
           </div>
-          <div className="h-56 sm:h-64">
+          <div className="h-[22rem] sm:h-[25rem]">
             {chartsReady ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={flowData}>
+                <AreaChart
+                  data={flowData}
+                  margin={{ top: 14, right: 18, left: 0, bottom: 18 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#f1f5f9"
+                    stroke="#e2e8f0"
                   />
                   <XAxis
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                    dy={10}
+                    height={34}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 600 }}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                    tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 600 }}
                     allowDecimals={false}
+                    domain={[0, flowYAxisDomainMax]}
+                    ticks={flowYAxisTicks}
+                    width={34}
                   />
                   <Tooltip
                     contentStyle={{
                       borderRadius: "14px",
-                      border: "none",
+                      border: "1px solid #e2e8f0",
                       boxShadow: "0 12px 35px rgba(15, 23, 42, 0.12)",
                       fontSize: "12px",
                     }}
@@ -935,19 +1141,25 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                     type="monotone"
                     dataKey="calls"
                     name="Calls"
-                    stroke="#ff5527"
-                    fill="#ff5527"
-                    fillOpacity={0.12}
-                    strokeWidth={2}
+                    stroke="#F59E0B"
+                    fill="#F59E0B"
+                    fillOpacity={0.14}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, strokeWidth: 2 }}
+                    activeDot={{ r: 5, strokeWidth: 2 }}
+                    isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
                     dataKey="completed"
                     name="Completed"
-                    stroke="#3b7f72"
-                    fill="#3b7f72"
-                    fillOpacity={0.12}
+                    stroke="#10B981"
+                    fill="#10B981"
+                    fillOpacity={0.08}
                     strokeWidth={2}
+                    dot={{ r: 2.5, strokeWidth: 2 }}
+                    activeDot={{ r: 4, strokeWidth: 2 }}
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -963,26 +1175,28 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
             Agent performance
           </p>
-          <div className="mt-4 max-h-[23rem] space-y-3 overflow-y-auto pr-1">
+          <div className="mt-4 max-h-[25rem] space-y-3 overflow-y-auto pr-1">
             {agentStats.map((agent) => (
               <button
                 key={agent.agentId}
                 type="button"
                 onClick={() => setSelectedAgentId(agent.agentId)}
-                className={`w-full rounded-2xl border p-4 text-left transition-colors ${selectedAgentId === agent.agentId ? "border-slate-900 bg-[#232f3e] text-white" : "border-[#efe5d6] bg-[#fbfaf4] text-[#232f3e] hover:border-[#ffb26b] hover:bg-white"}`}
+                className={`w-full rounded-2xl border p-3 text-left transition-colors sm:p-4 ${selectedAgentId === agent.agentId ? "border-[#F59E0B]/45 bg-[#fff7ed] text-[#0F172A]" : "border-[#e2e8f0] bg-[#f8fafc] text-[#232f3e] hover:border-[#F59E0B]/35 hover:bg-white"}`}
               >
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                  <p className="text-sm font-black">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 flex-1 text-[12px] font-medium tracking-[-0.02em] sm:text-[13px]">
                     <MarqueeText>{agent.agentName}</MarqueeText>
                   </p>
-                  <span className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                  <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.1em] text-[#94a3b8] sm:text-[10px] sm:tracking-widest">
                     {agent.totalCalls} calls
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 text-[10px] font-bold uppercase tracking-widest opacity-80 min-[420px]:grid-cols-3">
-                  <span>{agent.completedCalls} done</span>
-                  <span>{agent.outboundCalls} out</span>
-                  <span>{formatDuration(agent.totalDuration)}</span>
+                <div className="mt-3 grid grid-cols-3 gap-1.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#475569] sm:gap-2 sm:text-[10px] sm:tracking-widest">
+                  <span className="truncate">{agent.completedCalls} done</span>
+                  <span className="truncate">{agent.outboundCalls} out</span>
+                  <span className="truncate">
+                    {formatDuration(agent.totalDuration)}
+                  </span>
                 </div>
               </button>
             ))}
@@ -995,7 +1209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="min-w-0 ag-panel p-4 sm:p-5">
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
             Direction mix

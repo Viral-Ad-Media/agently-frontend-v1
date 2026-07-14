@@ -749,18 +749,22 @@ const App: React.FC = () => {
           <Route
             path="/leads"
             element={
-              <ProtectedRoute>
-                <Leads
-                  leads={leads}
-                  org={org || undefined}
-                  onRefresh={refreshWorkspace}
-                  onUpdateLead={handleUpdateLead}
-                  onDeleteLead={handleDeleteLead}
-                  onBulkDeleteLeads={handleBulkDeleteLeads}
-                  onCreateLead={handleCreateLead}
-                  onExport={handleExportLeads}
-                />
-              </ProtectedRoute>
+              org ? (
+                <ProtectedRoute>
+                  <Leads
+                    leads={leads}
+                    org={org}
+                    onRefresh={refreshWorkspace}
+                    onUpdateLead={handleUpdateLead}
+                    onDeleteLead={handleDeleteLead}
+                    onBulkDeleteLeads={handleBulkDeleteLeads}
+                    onCreateLead={handleCreateLead}
+                    onExport={handleExportLeads}
+                  />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" />
+              )
             }
           />
           <Route

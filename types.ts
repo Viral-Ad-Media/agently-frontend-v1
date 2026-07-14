@@ -49,6 +49,25 @@ export interface Lead {
   tags?: string[];
   voiceAgentId?: string;
   assignmentContext?: string;
+  crmStage?: string;
+  leadTemperature?: string;
+  aiScore?: number;
+  aiSummary?: string;
+  aiIntent?: string;
+  aiConfidence?: number;
+  nextAction?: string;
+  nextActionDueAt?: string;
+  estimatedValueCents?: number;
+  currency?: string;
+  ownerUserId?: string;
+  needsHumanReview?: boolean;
+  humanReviewReason?: string;
+  lostReason?: string;
+  lastActivityAt?: string;
+  lastContactedAt?: string;
+  appointmentAt?: string;
+  sourceDetail?: string;
+  crmMetadata?: Record<string, unknown>;
 }
 
 export interface LeadOutreachWindow {

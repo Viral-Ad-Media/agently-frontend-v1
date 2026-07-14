@@ -13,37 +13,43 @@ const NAV_ITEMS: Array<{
 }> = [
   {
     to: "/dashboard",
-    icon: "fa-solid fa-chart-line",
+    icon: "/nav/dashboard.png",
     label: "Dashboard",
     description: "Live performance and workload",
   },
   {
     to: "/agent",
-    icon: "fa-solid fa-microphone",
+    icon: "/nav/voice-agent.png",
     label: "Voice Agent",
     description: "Configure lines, scripts, and knowledge",
   },
   {
     to: "/phone-numbers",
-    icon: "fa-solid fa-mobile-screen",
+    icon: "/nav/phone-numbers.png",
     label: "Phone Numbers",
     description: "Search, purchase, and assign numbers",
   },
   {
     to: "/messenger",
-    icon: "fa-solid fa-robot",
+    icon: "/nav/chatbot-agent.png",
     label: "Chatbot Agent",
     description: "Widget design and chatbot knowledge",
   },
   {
+    to: "/calls",
+    icon: "/nav/call-logs.png",
+    label: "Call Logs",
+    description: "Review transcripts, outcomes, and recordings",
+  },
+  {
     to: "/leads",
-    icon: "fa-solid fa-users",
+    icon: "/nav/lead-crm.png",
     label: "Lead CRM",
     description: "Pipeline health and contact capture",
   },
   {
     to: "/settings",
-    icon: "fa-solid fa-gear",
+    icon: "/nav/settings.png",
     label: "Settings",
     description: "Workspace, team, billing, and phone setup",
   },
@@ -91,14 +97,19 @@ const WalletCreditBadge: React.FC<{
   return (
     <Link
       to="/billing"
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-black transition hover:shadow-sm ${tone} ${compact ? "w-full justify-between" : ""}`}
+      className={`group inline-flex h-10 items-center justify-between gap-3 rounded-xl border px-3 text-[12px] font-normal leading-none transition hover:-translate-y-0.5 hover:shadow-sm sm:h-10 sm:px-3.5 ${tone} ${compact ? "w-full" : "min-w-[8.75rem]"}`}
       title="Usage credit balance"
     >
-      <span className="inline-flex items-center gap-2">
-        <i className="fa-solid fa-wallet text-[12px]" />
-        <span className="hidden sm:inline">Credit</span>
+      <span className="inline-flex min-w-0 items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/70">
+          <i className="fa-solid fa-wallet text-[11px]" />
+        </span>
+        <span className="hidden truncate md:inline">Usage credit</span>
+        <span className="truncate md:hidden">Credit</span>
       </span>
-      <span>{formatWalletMoney(balance)}</span>
+      <span className="shrink-0 tabular-nums">
+        {formatWalletMoney(balance)}
+      </span>
     </Link>
   );
 };
@@ -117,9 +128,9 @@ const getPageMeta = (pathname: string, org: Organization) => {
     { eyebrow: string; title: string; description: string }
   > = {
     "/dashboard": {
-      eyebrow: "Dashboard",
-      title: "Workspace analytics",
-      description: `Track calls, leads, and efficiency for ${org.profile.name} in one place.`,
+      eyebrow: "Operations Overview",
+      title: "Command Center",
+      description: "Track calls, leads, and efficiency from one place.",
     },
     "/agent": {
       eyebrow: "Voice Operations",
@@ -191,7 +202,7 @@ const getPageMeta = (pathname: string, org: Organization) => {
 
   return (
     pageMap[pathname] || {
-      eyebrow: org.profile.name,
+      eyebrow: "Workspace",
       title: "Workspace",
       description: "Manage your AI agent workspace from a single place.",
     }
@@ -230,8 +241,8 @@ const PublicBrand: React.FC<{ inverted?: boolean; compact?: boolean }> = ({
   compact = false,
 }) => {
   const src = inverted
-    ? "/agently-wordmark-light.png"
-    : "/agently-wordmark-dark.png";
+    ? "/agently-reception-wordmark-light.png"
+    : "/agently-reception-wordmark-dark.png";
   return (
     <div className="flex items-center">
       <img
@@ -248,14 +259,15 @@ const AppLoading: React.FC = () => (
   <div className="agently-loader-screen">
     <div className="agently-loader-frame" role="status" aria-live="polite">
       <div className="agently-loader-orbit" aria-hidden="true">
-        <img src="/agently-mark.png" alt="" className="agently-loader-mark" />
-        <span className="agently-loader-wave wave-one" />
-        <span className="agently-loader-wave wave-two" />
-        <span className="agently-loader-wave wave-three" />
+        <img
+          src="/agently-reception-mark.png"
+          alt=""
+          className="agently-loader-mark"
+        />
       </div>
       <img
-        src="/agently-wordmark-dark.png"
-        alt="Agently"
+        src="/agently-reception-wordmark-light.png"
+        alt="Agently Reception Ops"
         className="agently-loader-wordmark"
       />
       <div className="agently-loader-line" aria-hidden="true">
@@ -294,34 +306,33 @@ const SidebarLink: React.FC<{
     }, 0);
   };
 
+  const isImageIcon = icon.startsWith("/");
+
   return (
     <a
       href={`#${to}`}
       title={description}
       onClick={handleNavigate}
-      className={`group flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all duration-200 ${
+      className={`group relative flex h-10 items-center gap-3 px-7 text-[13px] font-normal tracking-[0.001em] transition-all duration-200 ${
         isActive
-          ? "border-[#ff5527]/20 bg-[#ff5527] text-white shadow-[0_16px_34px_rgba(255,85,39,0.2)]"
-          : "border-transparent bg-transparent text-[#232f3e]/62 hover:border-[#232f3e]/10 hover:bg-white/70 hover:text-[#232f3e]"
+          ? "bg-[#1E293B] text-[#CBD5E1] before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-[#F59E0B]"
+          : "text-[#94A3B8] hover:bg-[#1E293B]/65 hover:text-[#E2E8F0]"
       }`}
     >
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200 ${
-          isActive
-            ? "bg-white/18 text-white"
-            : "bg-[#232f3e]/[0.055] text-[#232f3e]/72 group-hover:bg-[#ff5527]/10 group-hover:text-[#ff5527]"
-        }`}
-      >
-        <i className={`${icon} text-sm`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium tracking-[-0.02em]">
-          {label}
-        </p>
-      </div>
-      <div
-        className={`h-2 w-2 rounded-full transition-colors duration-150 ${isActive ? "bg-white" : "bg-[#232f3e]/14 group-hover:bg-[#ff5527]"}`}
-      />
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center opacity-95 transition duration-200 group-hover:opacity-100">
+        {isImageIcon ? (
+          <img
+            src={icon}
+            alt=""
+            aria-hidden="true"
+            className="h-5 w-5 object-contain"
+            loading="eager"
+          />
+        ) : (
+          <i className={`${icon} text-base`} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
     </a>
   );
 });
@@ -531,12 +542,12 @@ const NotificationBell: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#232f3e]/10 bg-white/72 text-[#232f3e]/68 transition hover:border-[#ff5527]/25 hover:text-[#ff5527]"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] text-[#475569] shadow-sm transition hover:border-[#F59E0B]/35 hover:text-[#F59E0B] sm:h-11 sm:w-11"
         aria-label="Open notifications"
       >
         <i className="fa-solid fa-bell text-sm" />
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+          <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white ring-2 ring-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
@@ -547,7 +558,7 @@ const NotificationBell: React.FC = () => {
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-sm font-black text-slate-900">Notifications</p>
-              <p className="text-[11px] font-semibold text-[#232f3e]/44">
+              <p className="text-[11px] font-semibold text-[#0F172A]/44">
                 Latest workspace alerts
               </p>
             </div>
@@ -688,8 +699,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f7f4eb] text-[#232f3e]">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,85,39,0.14),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(35,47,62,0.08),transparent_28%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.06),transparent_28%)]" />
       <div className="relative flex min-h-screen">
         <div
           className={`fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
@@ -701,39 +712,31 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         />
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[min(18.75rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[17rem] md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-[min(16.25rem,calc(100vw-1rem))] transform transition-transform duration-300 md:w-[16.25rem] md:translate-x-0 ${
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="flex h-full flex-col border-r border-[#232f3e]/10 bg-[#f7f4eb] p-4 shadow-none">
-            <div className="flex items-center justify-between">
-              <Link
-                to="/dashboard"
-                className="flex min-w-0 items-center rounded-2xl bg-white/72 px-3 py-2 shadow-[0_12px_28px_rgba(35,47,62,0.06)]"
-              >
-                <div className="min-w-0">
-                  <img
-                    src="/agently-wordmark-dark.png"
-                    alt="Agently"
-                    className="h-7 w-auto object-contain"
-                    loading="eager"
-                  />
-                  <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[#ff5527]">
-                    Agent control room
-                  </p>
-                </div>
+          <div className="flex h-full min-h-0 flex-col overflow-hidden border-r border-[#1E293B] bg-[#0F172A] shadow-[12px_0_40px_rgba(15,23,42,0.16)]">
+            <div className="flex items-center justify-between px-7 pb-5 pt-7">
+              <Link to="/dashboard" className="flex min-w-0 items-center">
+                <img
+                  src="/agently-reception-wordmark-light.png"
+                  alt="Agently Reception Ops"
+                  className="h-auto w-[10.5rem] max-w-full object-contain"
+                  loading="eager"
+                />
               </Link>
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 md:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#334155] text-[#94A3B8] md:hidden"
                 aria-label="Close navigation"
               >
                 <MenuButtonIcon open />
               </button>
             </div>
 
-            <nav className="mt-6 flex-1 space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
+            <nav className="shrink-0 space-y-1 overflow-visible">
               {NAV_ITEMS.map((item) => (
                 <SidebarLink
                   key={item.to}
@@ -743,27 +746,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               ))}
             </nav>
 
-            <div className="mt-5 space-y-2 border-t border-[#232f3e]/10 pt-4">
-              <WalletCreditBadge wallet={walletMini} compact />
-              <div className="rounded-2xl border border-[#232f3e]/10 bg-white/72 p-3 shadow-[0_10px_26px_rgba(35,47,62,0.055)]">
+            <div className="mt-auto space-y-2.5 px-7 pb-6 pt-5">
+              <div className="rounded-xl border border-[#334155] bg-[#1E293B] p-4 shadow-[0_16px_34px_rgba(2,6,23,0.18)]">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#94A3B8]">
                     Plan Usage
                   </p>
                   <Link
                     to="/settings"
-                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600"
+                    className="rounded-md bg-[#F59E0B]/15 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[#F59E0B] transition hover:bg-[#F59E0B]/20"
                   >
                     {org.subscription.plan}
                   </Link>
                 </div>
-                <p className="mt-1.5 text-[11px] font-semibold text-slate-600">
+                <p className="mt-3 text-[12px] font-medium text-[#E2E8F0]">
                   {org.subscription.usage.minutes} /{" "}
                   {org.subscription.usage.minuteLimit} minutes used
                 </p>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#475569]">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#ff5527] via-[#ff9b5f] to-[#232f3e]"
+                    className="h-full rounded-full bg-[#F59E0B]"
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
@@ -771,10 +773,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <Link
                 to="/test-agent"
-                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] shadow-sm transition ${
+                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] shadow-sm transition ${
                   isTestAgentPage
-                    ? "bg-[#232f3e] text-white ring-2 ring-[#ff5527]/25"
-                    : "bg-[#232f3e] text-white hover:bg-[#1b2531]"
+                    ? "bg-[#F59E0B] text-white ring-2 ring-[#F59E0B]/30"
+                    : "bg-[#F59E0B] text-white hover:bg-[#D97706]"
                 }`}
                 onClick={() => setMobileNavOpen(false)}
               >
@@ -784,7 +786,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
               <button
                 onClick={onLogout}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:border-red-200 hover:text-red-600"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#334155] px-4 py-2.5 text-[12px] font-medium uppercase tracking-[0.06em] text-[#94A3B8] transition hover:border-red-400/45 hover:text-red-300"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -807,78 +809,71 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex-1 md:ml-[17rem] md:min-w-0">
-          <div className="flex h-screen min-h-0 flex-col px-3 pb-0 pt-3 sm:px-5 sm:pt-4 lg:px-6 xl:px-8">
-            <header className="relative z-20 shrink-0">
-              <div className="app-shell-titlebar-flat">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setMobileNavOpen(true)}
-                      className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#232f3e]/10 bg-white/80 text-[#232f3e] shadow-sm md:hidden"
-                      aria-label="Open navigation"
-                    >
-                      <MenuButtonIcon />
-                    </button>
-                    <div className="min-w-0 flex-1">
+        <div className="flex-1 md:ml-[16.25rem] md:min-w-0">
+          <div className="flex h-screen min-h-0 flex-col">
+            <header className="agently-app-topbar sticky top-0 z-[24] flex-shrink-0 overflow-visible border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_rgba(15,23,42,0.025)]">
+              <div className="agently-app-topbar-inner flex min-h-[68px] w-full flex-col gap-2 overflow-visible px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 xl:px-8">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileNavOpen(true)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] shadow-sm md:hidden"
+                    aria-label="Open navigation"
+                  >
+                    <MenuButtonIcon />
+                  </button>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="agently-topbar-context flex min-w-0 items-center gap-2 text-[12px] font-normal text-[#94A3B8] sm:text-[12px]">
                       {settingsSubpageBack ? (
-                        <Link
-                          to="/settings"
-                          className="mb-1.5 inline-flex items-center gap-2 rounded-full border border-[#232f3e]/10 bg-white/70 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#232f3e]/62 transition hover:border-[#ff5527]/30 hover:text-[#ff5527]"
-                        >
-                          <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
-                          Settings
-                        </Link>
+                        <>
+                          <Link
+                            to="/settings"
+                            className="inline-flex shrink-0 items-center gap-1.5 transition hover:text-[#F59E0B]"
+                          >
+                            <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
+                            Settings
+                          </Link>
+                          <span className="text-[#CBD5E1]">/</span>
+                        </>
                       ) : null}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-[#ff5527]/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-[#ff5527]">
-                          {pageMeta.eyebrow}
-                        </span>
-                        <span className="hidden text-xs font-semibold text-slate-400 sm:inline">
-                          {org.profile.name}
-                        </span>
-                      </div>
-                      <h1 className="font-display mt-1.5 truncate text-xl font-medium tracking-[-0.045em] text-[#232f3e] sm:text-[1.85rem]">
-                        {pageMeta.title}
-                      </h1>
+                      <span className="truncate">{pageMeta.eyebrow}</span>
                     </div>
+                    <h1 className="agently-topbar-title mt-0.5 overflow-visible py-1 text-[clamp(1.35rem,1.08rem+0.8vw,1.7rem)] font-medium leading-[1.32] tracking-[-0.025em] text-[#0F172A]">
+                      {pageMeta.title}
+                    </h1>
+                  </div>
+                </div>
+
+                <div className="agently-topbar-actions flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
+                  <WalletCreditBadge wallet={walletMini} />
+                  <NotificationBell />
+
+                  <div className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 text-[12px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:px-3.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
+                    <span className="min-w-0 truncate">
+                      {activeVoiceAgent.name}
+                    </span>
+                    <span className="hidden shrink-0 text-[#64748B] sm:inline">
+                      active
+                    </span>
                   </div>
 
-                  <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                    <WalletCreditBadge wallet={walletMini} />
-                    <NotificationBell />
-                    <div className="max-w-full rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 sm:max-w-[16rem]">
-                      <span className="inline-block max-w-[9rem] truncate align-bottom font-black text-slate-900 sm:max-w-[12rem]">
-                        {activeVoiceAgent.name}
-                      </span>
-                      <span className="ml-1.5 text-slate-400">active</span>
-                    </div>
-                    <Link
-                      to="/settings"
-                      className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600"
-                    >
-                      {org.subscription.plan}
-                    </Link>
-                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-950 py-1.5 pl-1.5 pr-4 text-white shadow-[0_14px_32px_rgba(15,23,42,0.14)]">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 font-display text-sm">
-                        {user.name.charAt(0) || "A"}
-                      </div>
-                      <div className="leading-tight min-w-0">
-                        <p className="text-xs font-black truncate max-w-[100px]">
-                          {user.name}
-                        </p>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/55">
-                          {user.role}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <Link
+                    to="/settings"
+                    className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl bg-[#F59E0B] px-3.5 text-[12px] font-normal leading-none text-white shadow-[0_10px_22px_rgba(245,158,11,0.18)] transition hover:bg-[#D97706] sm:max-w-[16rem] sm:px-4"
+                    title={org.profile.name || user.name}
+                  >
+                    <span className="min-w-0 truncate">
+                      {org.profile.name || user.name}
+                    </span>
+                    <i className="fa-solid fa-chevron-down shrink-0 text-[11px] text-white/80" />
+                  </Link>
                 </div>
               </div>
             </header>
 
-            <main className="custom-scrollbar mx-auto mt-4 w-full min-w-0 max-w-full flex-1 overflow-y-auto pb-8 pr-1 md:mt-5 md:pb-10">
+            <main className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-3 pb-8 pt-4 sm:px-5 md:pb-10 md:pt-5 lg:px-6 xl:px-8">
               {user.role === "Viewer" &&
               [
                 "/agent",
@@ -943,11 +938,11 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
   }, [location.pathname]);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#f7f4eb] text-[#232f3e]">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(35,47,62,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(255,85,39,0.12),transparent_25%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.12),transparent_25%)]" />
 
       <header className="sticky top-0 z-40 px-3 py-3 sm:px-5">
-        <div className="mx-auto max-w-7xl rounded-full border border-[#232f3e]/10 bg-[#fbfaf4]/88 px-3 py-2 shadow-[0_14px_46px_rgba(35,47,62,0.08)] backdrop-blur-xl sm:px-4">
+        <div className="mx-auto max-w-7xl rounded-full border border-[#0F172A]/10 bg-[#F8FAFC]/88 px-3 py-2 shadow-[0_14px_46px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-4">
           <div className="flex items-center justify-between gap-4">
             <Link to="/" aria-label="Agently home" className="shrink-0">
               <PublicBrand compact />
@@ -962,8 +957,8 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
                     to={item.to}
                     className={`rounded-full px-3.5 py-2 text-[13px] font-normal leading-none transition ${
                       isActive
-                        ? "bg-[#232f3e] text-[#fbfaf4]"
-                        : "text-[#232f3e]/66 hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
+                        ? "bg-[#0F172A] text-[#F8FAFC]"
+                        : "text-[#0F172A]/66 hover:bg-[#0F172A]/[0.055] hover:text-[#0F172A]"
                     }`}
                   >
                     {item.label}
@@ -975,13 +970,13 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             <div className="hidden items-center gap-2 lg:flex">
               <Link
                 to="/login"
-                className="rounded-full px-4 py-2 text-[13px] font-normal leading-none text-[#232f3e]/66 transition hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
+                className="rounded-full px-4 py-2 text-[13px] font-normal leading-none text-[#0F172A]/66 transition hover:bg-[#0F172A]/[0.055] hover:text-[#0F172A]"
               >
                 Login
               </Link>
               <Link
                 to="/login"
-                className="rounded-full bg-[#ff5527] px-4 py-2.5 text-[13px] font-medium leading-none text-white shadow-[0_12px_26px_rgba(255,85,39,0.22)] transition hover:bg-[#e94b21]"
+                className="rounded-full bg-[#F59E0B] px-4 py-2.5 text-[13px] font-medium leading-none text-white shadow-[0_12px_26px_rgba(245,158,11,0.22)] transition hover:bg-[#D97706]"
               >
                 Get Started
               </Link>
@@ -990,7 +985,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             <button
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#232f3e]/10 bg-white/70 text-[#232f3e]/72 shadow-sm lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0F172A]/10 bg-white/70 text-[#0F172A]/72 shadow-sm lg:hidden"
               aria-label="Toggle navigation"
             >
               <MenuButtonIcon open={mobileNavOpen} />
@@ -999,13 +994,13 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         {mobileNavOpen && (
-          <div className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#232f3e]/10 bg-[#fbfaf4]/96 p-4 shadow-[0_24px_80px_rgba(35,47,62,0.12)] backdrop-blur-xl lg:hidden">
+          <div className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#0F172A]/10 bg-[#F8FAFC]/96 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden">
             <nav className="grid gap-2">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="rounded-2xl px-4 py-3 text-sm font-normal text-[#232f3e]/72 transition hover:bg-[#232f3e]/[0.055] hover:text-[#232f3e]"
+                  className="rounded-2xl px-4 py-3 text-sm font-normal text-[#0F172A]/72 transition hover:bg-[#0F172A]/[0.055] hover:text-[#0F172A]"
                 >
                   {item.label}
                 </Link>
@@ -1014,13 +1009,13 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <Link
                 to="/login"
-                className="rounded-2xl border border-[#232f3e]/10 px-4 py-3 text-center text-sm font-normal text-[#232f3e]/72"
+                className="rounded-2xl border border-[#0F172A]/10 px-4 py-3 text-center text-sm font-normal text-[#0F172A]/72"
               >
                 Login
               </Link>
               <Link
                 to="/login"
-                className="rounded-2xl bg-[#ff5527] px-4 py-3 text-center text-sm font-medium text-white"
+                className="rounded-2xl bg-[#F59E0B] px-4 py-3 text-center text-sm font-medium text-white"
               >
                 Get Started
               </Link>
@@ -1032,14 +1027,14 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
       <main className="relative">{children}</main>
 
       <footer className="relative px-3 pb-5 pt-4 sm:px-5 sm:pb-6">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-[#232f3e] text-[#fbfaf4] shadow-[0_28px_90px_rgba(35,47,62,0.25)]">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-[#0F172A] text-[#F8FAFC] shadow-[0_28px_90px_rgba(15,23,42,0.25)]">
           <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[1.1fr_1.35fr] lg:px-10 lg:py-10">
             <div className="max-w-md">
               <PublicBrand inverted />
-              <h2 className="font-display mt-8 max-w-sm text-[clamp(2.25rem,4vw,3.6rem)] font-medium leading-[0.96] tracking-[-0.06em] text-[#fbfaf4]">
+              <h2 className="font-display mt-8 max-w-sm text-[clamp(2.25rem,4vw,3.6rem)] font-medium leading-[0.96] tracking-[-0.06em] text-[#F8FAFC]">
                 Everyday conversations. Extraordinary outcomes.
               </h2>
-              <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#fbfaf4]/68">
+              <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#F8FAFC]/68">
                 AI voice agents, chatbots, follow-up workflows, and call
                 intelligence in one warm, reliable control room.
               </p>
@@ -1047,7 +1042,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
                 {["Inbound", "Outbound", "Chat", "CRM handoff"].map((item) => (
                   <span
                     key={item}
-                    className="rounded-full border border-[#fbfaf4]/12 bg-[#fbfaf4]/[0.07] px-3 py-1.5 text-xs font-normal text-[#fbfaf4]/72"
+                    className="rounded-full border border-[#F8FAFC]/12 bg-[#F8FAFC]/[0.07] px-3 py-1.5 text-xs font-normal text-[#F8FAFC]/72"
                   >
                     {item}
                   </span>
@@ -1057,31 +1052,31 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
 
             <div className="grid gap-7 sm:grid-cols-3">
               <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
                   Product
                 </h4>
                 <div className="mt-4 space-y-3">
                   <Link
                     to="/features"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Features
                   </Link>
                   <Link
                     to="/pricing"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Pricing
                   </Link>
                   <Link
                     to="/login"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Workspace
                   </Link>
                   <Link
                     to="/login"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Start Trial
                   </Link>
@@ -1089,25 +1084,25 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               </div>
 
               <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
                   Company
                 </h4>
                 <div className="mt-4 space-y-3">
                   <Link
                     to="/about"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     About
                   </Link>
                   <Link
                     to="/contact"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Contact
                   </Link>
                   <Link
                     to="/faqs"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     FAQs
                   </Link>
@@ -1115,19 +1110,19 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               </div>
 
               <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#fbfaf4]/44">
+                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
                   Legal
                 </h4>
                 <div className="mt-4 space-y-3">
                   <Link
                     to="/privacy"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Privacy Policy
                   </Link>
                   <Link
                     to="/terms"
-                    className="block text-sm font-normal text-[#fbfaf4]/72 transition hover:text-white"
+                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                   >
                     Terms of Service
                   </Link>
@@ -1136,7 +1131,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-[#fbfaf4]/12 px-5 py-4 text-xs font-normal text-[#fbfaf4]/48 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+          <div className="flex flex-col gap-3 border-t border-[#F8FAFC]/12 px-5 py-4 text-xs font-normal text-[#F8FAFC]/48 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
             <p>© {currentYear} Agently. All rights reserved.</p>
             <p>Voice, chat, CRM, and call intelligence for modern teams.</p>
           </div>

@@ -778,15 +778,15 @@ main {
 }
 
 .ag-button-orange {
-  background: #ff5527;
+  background: #F59E0B;
   color: white;
-  box-shadow: 0 14px 28px rgba(255, 85, 39, 0.18);
+  box-shadow: 0 14px 28px rgba(245, 158, 11, 0.18);
 }
 
 .ag-button-soft {
-  border: 1px solid rgba(255, 85, 39, 0.22);
-  background: #fff7ef;
-  color: #9b3d21;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: #fff7ed;
+  color: #92400e;
 }
 
 .ag-button-dark:hover,
@@ -1406,4 +1406,574 @@ main {
   font-size: 0.74rem;
   line-height: 1.45;
   color: rgba(35, 47, 62, 0.68);
+}
+
+.ag-identity-language-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.055);
+}
+
+.ag-identity-language-card input,
+.ag-identity-language-card select,
+.ag-identity-language-card textarea {
+  border-color: #dbe4ef;
+  background: #ffffff;
+}
+
+.ag-identity-language-card input:focus,
+.ag-identity-language-card select:focus,
+.ag-identity-language-card textarea:focus {
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14);
+}
+
+/* Voice Agent Studio: flat tab rail and compact fleet pagination */
+.ag-page-inline-actions.ag-voice-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.ag-voice-toolbar::before,
+.ag-voice-toolbar::after,
+.ag-agent-tabs-flat::before,
+.ag-agent-tabs-flat::after {
+  display: none !important;
+}
+
+.ag-voice-tabs {
+  flex: 1 1 auto;
+  gap: clamp(1.25rem, 4vw, 4rem);
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.ag-voice-tab {
+  position: relative;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #64748b;
+  padding: 0.45rem 0 0.8rem !important;
+  white-space: nowrap;
+  box-shadow: none !important;
+}
+
+.ag-voice-tab:hover,
+.ag-voice-tab-active {
+  color: #f59e0b !important;
+  background: transparent !important;
+}
+
+.ag-voice-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+.ag-voice-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.ag-agent-fleet-shell {
+  position: relative;
+  width: 100%;
+  padding: 0.15rem 0 0.25rem;
+}
+
+.ag-agent-fleet-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #94a3b8;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  transition: border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.ag-agent-fleet-nav:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #f59e0b;
+}
+
+.ag-agent-fleet-nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
+.ag-agent-fleet-nav-left {
+  left: -0.55rem;
+}
+
+.ag-agent-fleet-nav-right {
+  right: -0.55rem;
+}
+
+.ag-agent-page-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ag-agent-page-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ag-agent-page-dot {
+  height: 0.42rem;
+  width: 0.42rem;
+  border: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  padding: 0;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.ag-agent-page-dot-active {
+  background: #f59e0b;
+  transform: scale(1.08);
+}
+
+@media (max-width: 767px) {
+  .ag-page-inline-actions.ag-voice-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ag-voice-toolbar-actions {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
+  .ag-agent-fleet-nav-left {
+    left: -0.25rem;
+  }
+
+  .ag-agent-fleet-nav-right {
+    right: -0.25rem;
+  }
+}
+
+/* V31 Voice Agent Studio precision fixes: prompt card, mobile fleet, no x-axis wobble */
+.agently-agent-settings-page {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.ag-page-inline-actions.ag-voice-toolbar {
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.ag-voice-tab {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+.ag-agent-fleet-shell {
+  max-width: 100%;
+  overflow: visible;
+}
+
+.ag-agent-page-indicator {
+  font-size: 13px !important;
+}
+
+.ag-prompt-purpose-card {
+  border: 1px solid #dbe4ef !important;
+  border-radius: 1.35rem !important;
+  background: #f8fafc !important;
+  padding: 1.15rem !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.ag-prompt-purpose-card::before,
+.ag-prompt-purpose-card::after {
+  content: none !important;
+  display: none !important;
+}
+
+.ag-prompt-purpose-card .ag-textarea-premium {
+  min-height: 3rem !important;
+  border: 1px solid #dbe4ef !important;
+  border-radius: 0.9rem !important;
+  background: #ffffff !important;
+  padding: 0.75rem 1rem !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.ag-prompt-purpose-card .ag-prompt-single-line {
+  min-height: 2.8rem !important;
+  overflow: hidden !important;
+}
+
+.ag-prompt-purpose-card .ag-textarea-premium:focus {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14) !important;
+}
+
+@media (max-width: 767px) {
+  .agently-agent-settings-page {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .ag-agent-fleet-shell {
+    overflow: hidden;
+  }
+
+  .ag-agent-fleet-shell .relative {
+    overflow: hidden;
+  }
+
+  .ag-agent-fleet-card {
+    border-radius: 1rem !important;
+  }
+
+  .ag-agent-fleet-nav {
+    height: 1.85rem;
+    width: 1.85rem;
+    border-radius: 0.7rem;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .ag-agent-fleet-nav-left {
+    left: 0.1rem !important;
+  }
+
+  .ag-agent-fleet-nav-right {
+    right: 0.1rem !important;
+  }
+
+  .ag-agent-page-indicator {
+    gap: 0.45rem;
+    font-size: 13px !important;
+  }
+
+  .ag-agent-page-dot {
+    height: 0.38rem;
+    width: 0.38rem;
+  }
+
+  .ag-prompt-purpose-card {
+    padding: 1rem !important;
+  }
+}
+
+/* V32 Voice Agent cleanup: neutral card surfaces, remove blueprint tiles, lighter placeholders */
+.ag-panel,
+.ag-dashboard-hero,
+.ag-agent-hero,
+.ag-dashboard-stat,
+.ag-voice-engine-card,
+.ag-prompt-purpose-card,
+.ag-identity-language-card,
+.ag-knowledge-engine-strip,
+.ag-knowledge-select-wrap {
+  background: #ffffff !important;
+  background-image: none !important;
+}
+
+.ag-voice-engine-card,
+.ag-prompt-purpose-card,
+.ag-identity-language-card,
+.ag-panel,
+.ag-dashboard-stat {
+  border-color: #dbe4ef !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.045) !important;
+}
+
+.ag-voice-engine-card::before,
+.ag-voice-engine-card::after,
+.ag-prompt-purpose-card::before,
+.ag-prompt-purpose-card::after,
+.ag-agent-hero::before,
+.ag-agent-hero::after,
+.ag-dashboard-hero::before,
+.ag-dashboard-hero::after {
+  content: none !important;
+  display: none !important;
+}
+
+.ag-prompt-purpose-card {
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.ag-prompt-purpose-card .ag-textarea-premium {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+}
+
+.agently-agent-settings-page input::placeholder,
+.agently-agent-settings-page textarea::placeholder,
+.ag-textarea-premium::placeholder,
+.ag-prompt-purpose-card .ag-textarea-premium::placeholder {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+
+.ag-definition-row,
+.ag-definition-tile {
+  display: none !important;
+}
+
+/* V33 focused Voice Agent card + dial restoration */
+.ag-agent-page-indicator {
+  margin-top: 1rem !important;
+}
+
+.ag-voice-control-row {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ag-voice-control-card {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ag-range-slider {
+  accent-color: #f59e0b;
+  height: 0.45rem !important;
+  width: 100% !important;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b 0%, #f59e0b 58%, #e2e8f0 58%, #e2e8f0 100%) !important;
+  outline: none;
+}
+
+.ag-range-slider::-webkit-slider-runnable-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.ag-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.275rem;
+  border-radius: 999px;
+  background: #ffffff !important;
+  border: 3px solid #f59e0b !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16) !important;
+}
+
+.ag-range-slider::-moz-range-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.ag-range-slider::-moz-range-progress {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+.ag-range-slider::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #ffffff !important;
+  border: 3px solid #f59e0b !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16) !important;
+}
+
+@media (max-width: 767px) {
+  .ag-agent-page-indicator {
+    margin-top: 0.9rem !important;
+  }
+}
+
+/* V34 focused fix: synced voice tuning sliders + larger fleet pagination gap */
+.ag-agent-page-indicator {
+  margin-top: 1.85rem !important;
+}
+
+.ag-range-slider {
+  --ag-range-progress: 0%;
+  height: 0.45rem !important;
+  width: 100% !important;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+      #f59e0b 0%,
+      #f59e0b var(--ag-range-progress),
+      #e2e8f0 var(--ag-range-progress),
+      #e2e8f0 100%) !important;
+  outline: none;
+}
+
+.ag-range-slider::-webkit-slider-runnable-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: transparent !important;
+}
+
+.ag-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.275rem;
+  border-radius: 999px;
+  background: #ffffff !important;
+  border: 3px solid #f59e0b !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.14) !important;
+}
+
+.ag-range-slider::-moz-range-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #e2e8f0 !important;
+}
+
+.ag-range-slider::-moz-range-progress {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #f59e0b !important;
+}
+
+.ag-range-slider::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #ffffff !important;
+  border: 3px solid #f59e0b !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.14) !important;
+}
+
+@media (max-width: 767px) {
+  .ag-agent-page-indicator {
+    margin-top: 1.55rem !important;
+  }
+}
+
+/* V34 Phone Numbers: flat section tabs, no call-log subpage, no header cards */
+.ag-phone-numbers-page {
+  max-width: 100%;
+}
+
+.ag-page-inline-actions.ag-phone-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ag-phone-tabs {
+  flex: 1 1 auto;
+  gap: clamp(1.25rem, 4vw, 4rem);
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.ag-phone-tab {
+  position: relative;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #64748b;
+  padding: 0.45rem 0 0.8rem !important;
+  white-space: nowrap;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+.ag-phone-tab:hover,
+.ag-phone-tab-active {
+  color: #f59e0b !important;
+  background: transparent !important;
+}
+
+.ag-phone-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+@media (max-width: 767px) {
+  .ag-page-inline-actions.ag-phone-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .ag-page-inline-actions.ag-phone-toolbar>div:last-child {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
 }

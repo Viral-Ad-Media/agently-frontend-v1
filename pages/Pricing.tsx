@@ -139,7 +139,7 @@ const Pricing: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#fbfaf4]">
+      <section className="bg-[#F8FAFC]">
         <div className="marketing-shell py-12 lg:py-14">
           <div className="grid items-center gap-5 rounded-[2rem] border border-black/12 bg-black p-6 text-white md:grid-cols-[1fr_auto] md:p-8">
             <div>

@@ -143,6 +143,11 @@ const readAgentCallScreeningSettings = (
 const toSliderValue = (value: number | undefined, fallback: number) =>
   Number.isFinite(value) ? Number(value) : fallback;
 
+const toSliderProgress = (value: number, min: number, max: number) => {
+  if (!Number.isFinite(value) || max <= min) return 0;
+  return Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+};
+
 const readKnowledgeEnabled = (context: unknown, fallback = true) => {
   const data = context as Record<string, unknown> | null;
   if (!data) return fallback;
@@ -347,6 +352,20 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [faqLoading, setFaqLoading] = useState(false);
   const [faqLoadError, setFaqLoadError] = useState("");
   const [agentFleetPage, setAgentFleetPage] = useState(0);
+  const [isMobileAgentFleet, setIsMobileAgentFleet] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncAgentFleetSize = () => setIsMobileAgentFleet(mediaQuery.matches);
+
+    syncAgentFleetSize();
+    mediaQuery.addEventListener?.("change", syncAgentFleetSize);
+
+    return () => {
+      mediaQuery.removeEventListener?.("change", syncAgentFleetSize);
+    };
+  }, []);
 
   useEffect(() => {
     const rememberedAgentId =
@@ -1163,15 +1182,22 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   };
 
   const visibleVoiceAgents = org.voiceAgents.map(getDisplayAgent);
-  const AGENT_FLEET_PAGE_SIZE = 10;
+  const agentFleetPageSize = isMobileAgentFleet ? 3 : 5;
   const agentFleetPageCount = Math.max(
     1,
-    Math.ceil(visibleVoiceAgents.length / AGENT_FLEET_PAGE_SIZE),
+    Math.ceil(visibleVoiceAgents.length / agentFleetPageSize),
   );
   const safeAgentFleetPage = Math.min(agentFleetPage, agentFleetPageCount - 1);
   const pagedVoiceAgents = visibleVoiceAgents.slice(
-    safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE,
-    safeAgentFleetPage * AGENT_FLEET_PAGE_SIZE + AGENT_FLEET_PAGE_SIZE,
+    safeAgentFleetPage * agentFleetPageSize,
+    safeAgentFleetPage * agentFleetPageSize + agentFleetPageSize,
+  );
+  const agentFleetRangeStart = visibleVoiceAgents.length
+    ? safeAgentFleetPage * agentFleetPageSize + 1
+    : 0;
+  const agentFleetRangeEnd = Math.min(
+    visibleVoiceAgents.length,
+    safeAgentFleetPage * agentFleetPageSize + pagedVoiceAgents.length,
   );
 
   useEffect(() => {
@@ -1758,69 +1784,88 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       )}
 
       {/* ── Page route tabs, directly under the main title bar ── */}
-      <div className="ag-page-inline-actions justify-start">
-        <div className="ag-agent-tabs ag-agent-tabs-flat">
+      <div className="ag-page-inline-actions ag-voice-toolbar">
+        <div
+          className="ag-agent-tabs ag-agent-tabs-flat ag-voice-tabs"
+          role="tablist"
+        >
           {TABS.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium uppercase tracking-[0.16em] transition-all ${tab === t.id ? "bg-[#232f3e] text-white" : "text-[#687386] hover:bg-[#fff7ef] hover:text-[#232f3e]"}`}
+              className={`ag-voice-tab text-[13px] font-medium transition-all ${tab === t.id ? "ag-voice-tab-active" : ""}`}
             >
-              {t.icon}
               {t.label}
             </button>
           ))}
+        </div>
+        <div className="ag-voice-toolbar-actions">
+          <button
+            onClick={() =>
+              void run(
+                "create-in",
+                () => onCreateVoiceAgent({ direction: "inbound" }),
+                "Agent created",
+              )
+            }
+            className="ag-button-soft"
+          >
+            + Inbound
+          </button>
+          <button
+            onClick={() =>
+              void run(
+                "create-out",
+                () => onCreateVoiceAgent({ direction: "outbound" }),
+                "Agent created",
+              )
+            }
+            className="ag-button-soft"
+          >
+            + Outbound
+          </button>
+          <button
+            type="button"
+            onClick={() => void openCallCampaignComposer("call-now")}
+            className="ag-button-orange"
+          >
+            Start Call
+          </button>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════ PERSONA TAB */}
       {tab === "persona" && (
         <div className="space-y-6">
-          {/* Voice agents fleet — clickable compact grid */}
-          <div className="ag-panel ag-agent-fleet-panel p-4 sm:p-5">
-            <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div className="min-w-0">
-                <h3 className="text-lg font-medium tracking-[-0.04em] text-[#232f3e]">
-                  Voice agent fleet
-                </h3>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
+          {/* Voice agents fleet — five visible cards per desktop page */}
+          <div className="ag-agent-fleet-shell space-y-3">
+            <div className="relative">
+              {agentFleetPageCount > 1 && (
                 <button
                   type="button"
-                  onClick={() => void openCallCampaignComposer("call-now")}
-                  className="ag-button-orange"
-                >
-                  Start Call
-                </button>
-                <button
+                  aria-label="Previous agents"
                   onClick={() =>
-                    void run(
-                      "create-in",
-                      () => onCreateVoiceAgent({ direction: "inbound" }),
-                      "Agent created",
-                    )
+                    setAgentFleetPage((page) => Math.max(0, page - 1))
                   }
-                  className="ag-button-dark"
+                  disabled={safeAgentFleetPage === 0}
+                  className="ag-agent-fleet-nav ag-agent-fleet-nav-left"
                 >
-                  + Inbound
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
                 </button>
-                <button
-                  onClick={() =>
-                    void run(
-                      "create-out",
-                      () => onCreateVoiceAgent({ direction: "outbound" }),
-                      "Agent created",
-                    )
-                  }
-                  className="ag-button-soft"
-                >
-                  + Outbound
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+              )}
+              <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
                 {pagedVoiceAgents.map((agent) => {
                   const isEditing = agent.id === draft.id;
                   const isOutbound = agent.direction === "outbound";
@@ -1889,105 +1934,87 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   );
                 })}
               </div>
-
               {agentFleetPageCount > 1 && (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                  <button
-                    type="button"
-                    aria-label="Previous agents"
-                    onClick={() =>
-                      setAgentFleetPage((page) => Math.max(0, page - 1))
-                    }
-                    disabled={safeAgentFleetPage === 0}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#687386] transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
+                <button
+                  type="button"
+                  aria-label="Next agents"
+                  onClick={() =>
+                    setAgentFleetPage((page) =>
+                      Math.min(agentFleetPageCount - 1, page + 1),
+                    )
+                  }
+                  disabled={safeAgentFleetPage >= agentFleetPageCount - 1}
+                  className="ag-agent-fleet-nav ag-agent-fleet-nav-right"
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                  </button>
-                  <div className="flex items-center gap-1.5">
-                    {Array.from({ length: agentFleetPageCount }).map(
-                      (_, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          aria-label={`Agent page ${index + 1}`}
-                          onClick={() => setAgentFleetPage(index)}
-                          className={`h-2 rounded-full transition-all ${index === safeAgentFleetPage ? "w-6 bg-amber-500" : "w-2 bg-slate-300 hover:bg-slate-400"}`}
-                        />
-                      ),
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Next agents"
-                    onClick={() =>
-                      setAgentFleetPage((page) =>
-                        Math.min(agentFleetPageCount - 1, page + 1),
-                      )
-                    }
-                    disabled={safeAgentFleetPage >= agentFleetPageCount - 1}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#687386] transition hover:border-amber-200 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                </div>
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
               )}
             </div>
+
+            {agentFleetPageCount > 1 && (
+              <div className="ag-agent-page-indicator">
+                <span>
+                  {agentFleetRangeStart}-{agentFleetRangeEnd} of{" "}
+                  {visibleVoiceAgents.length} agents
+                </span>
+                <span className="ag-agent-page-dots">
+                  {Array.from({ length: agentFleetPageCount }).map(
+                    (_, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        aria-label={`Agent page ${index + 1}`}
+                        onClick={() => setAgentFleetPage(index)}
+                        className={`ag-agent-page-dot ${index === safeAgentFleetPage ? "ag-agent-page-dot-active" : ""}`}
+                      />
+                    ),
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Left: identity fields */}
-          <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-card p-6 space-y-5">
+          <div className="ag-identity-language-card w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-card space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-base font-medium text-[#232f3e] flex items-center gap-2">
+                <h3 className="text-base font-medium text-[#0F172A] flex items-center gap-2.5">
                   <svg
                     width="16"
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.5"
+                    strokeWidth="2.35"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-amber-500"
+                    className="text-[#F59E0B]"
                   >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 8v4l3 3" />
+                    <path d="M20 21a8 8 0 0 0-16 0" />
+                    <circle cx="12" cy="7" r="4" />
                   </svg>
                   Identity & Language
-                </h3>
-                <div className="mt-2">
                   {hasUnsavedChanges ? (
-                    <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-100">
-                      Unsaved changes
+                    <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-amber-700 ring-1 ring-amber-100">
+                      Unsaved
                     </span>
                   ) : (
-                    <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-emerald-700 ring-1 ring-emerald-100">
-                      Saved
+                    <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-700 ring-1 ring-emerald-100">
+                      Active
                     </span>
                   )}
-                </div>
+                </h3>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1996,7 +2023,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386] transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#475569] transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Discard
                 </button>
@@ -2006,7 +2033,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-xl bg-[#F59E0B] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white transition-all hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
                 </button>
@@ -2245,8 +2272,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       voiceSettings[key] as number | undefined,
                       control.fallback,
                     );
+                    const progress = toSliderProgress(
+                      value,
+                      control.min,
+                      control.max,
+                    );
                     return (
-                      <div key={control.key} className="ag-voice-control-card">
+                      <div key={control.key} className="ag-voice-control-row">
                         <div className="flex items-center justify-between mb-2">
                           <Label>{control.label}</Label>
                           <span className="text-[10px] font-black text-[#687386]">
@@ -2266,6 +2298,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                             )
                           }
                           className="ag-range-slider"
+                          style={
+                            {
+                              "--ag-range-progress": `${progress}%`,
+                            } as React.CSSProperties
+                          }
                         />
                       </div>
                     );
@@ -2408,77 +2445,26 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
 
-            <div className="ag-prompt-purpose-card space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#232f3e] text-white shadow-[0_12px_26px_rgba(35,47,62,0.16)]">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-[#232f3e]">
-                      Conversation blueprint
-                    </p>
-                    <p className="mt-1 max-w-2xl text-xs leading-5 text-[#7a8493]">
-                      Write the operating instructions this agent follows during
-                      every call, including tone, mission, and escalation
-                      boundaries.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {["Behavior", "Mission", "Handoff"].map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full bg-white/72 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[#687386] shadow-[inset_0_0_0_1px_rgba(35,47,62,0.055)]"
-                    >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="ag-definition-row">
-                <div className="ag-definition-tile">
-                  <span>Behavior</span>
-                  <p>
-                    How the agent should speak, listen, confirm, and handle
-                    uncertainty.
-                  </p>
-                </div>
-                <div className="ag-definition-tile">
-                  <span>Purpose</span>
-                  <p>
-                    The specific outcome the call should drive before ending or
-                    escalating.
-                  </p>
-                </div>
-                <div className="ag-definition-tile">
-                  <span>Handoff</span>
-                  <p>
-                    What context must be passed to your CRM, team, or follow-up
-                    queue.
-                  </p>
-                </div>
+            <div className="ag-prompt-purpose-card space-y-5">
+              <div>
+                <h3 className="text-sm font-medium leading-tight text-[#0F172A]">
+                  Prompt & Call Purpose
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-[#94a3b8]">
+                  Set the behavioral framework and objective for every call.
+                </p>
               </div>
 
               <div>
-                <Label>Agent Prompt</Label>
+                <Label>
+                  Agent Prompt{" "}
+                  <span className="normal-case tracking-normal font-normal text-[#94a3b8]">
+                    (optional)
+                  </span>
+                </Label>
                 <textarea
-                  rows={4}
-                  className="ag-textarea-premium"
+                  rows={1}
+                  className="ag-textarea-premium ag-prompt-single-line"
                   placeholder="Describe how this agent should behave, what it should prioritize, and what it should avoid."
                   value={getAgentPrompt()}
                   onChange={(e) =>
@@ -2491,7 +2477,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 <div>
                   <Label>Default Call Purpose</Label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     className="ag-textarea-premium"
                     placeholder="Example: Confirm interest, answer questions, and book a follow-up appointment."
                     value={getDefaultCallPurpose()}
@@ -2501,9 +2487,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   />
                 </div>
                 <div>
-                  <Label>Default Call Instructions</Label>
+                  <Label>
+                    Default Call Instructions{" "}
+                    <span className="normal-case tracking-normal font-normal text-[#94a3b8]">
+                      (optional)
+                    </span>
+                  </Label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     className="ag-textarea-premium"
                     placeholder="Add any extra calling rules, qualification notes, or handoff instructions."
                     value={getCallInstructions()}
@@ -2514,7 +2505,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pt-4">
                 {[
                   { mode: "call-now", label: "Call Now" },
                   { mode: "schedule", label: "Schedule" },
@@ -2527,7 +2518,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                         item.mode as "call-now" | "schedule",
                       )
                     }
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386] transition-all hover:border-amber-300 hover:text-amber-700"
+                    className="rounded-full border border-slate-200 bg-white px-5 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#475569] transition-all hover:border-amber-300 hover:text-amber-700"
                   >
                     {item.label}
                   </button>

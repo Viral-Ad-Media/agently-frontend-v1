@@ -128,7 +128,7 @@ const Contact: React.FC = () => {
                     <input
                       type="text"
                       required
-                      className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
+                      className="w-full rounded-2xl border border-black/12 bg-[#F1F5F9] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                       value={form.name}
                       onChange={(event) =>
                         setForm({ ...form, name: event.target.value })
@@ -142,7 +142,7 @@ const Contact: React.FC = () => {
                     <input
                       type="email"
                       required
-                      className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
+                      className="w-full rounded-2xl border border-black/12 bg-[#F1F5F9] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                       value={form.email}
                       onChange={(event) =>
                         setForm({ ...form, email: event.target.value })
@@ -158,7 +158,7 @@ const Contact: React.FC = () => {
                   <input
                     type="text"
                     required
-                    className="w-full rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
+                    className="w-full rounded-2xl border border-black/12 bg-[#F1F5F9] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                     value={form.subject}
                     onChange={(event) =>
                       setForm({ ...form, subject: event.target.value })
@@ -173,7 +173,7 @@ const Contact: React.FC = () => {
                   <textarea
                     rows={5}
                     required
-                    className="w-full resize-none rounded-2xl border border-black/12 bg-[#f7f4eb] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
+                    className="w-full resize-none rounded-2xl border border-black/12 bg-[#F1F5F9] px-4 py-3 text-sm font-normal outline-none transition focus:border-[#ff9900] focus:bg-white"
                     value={form.message}
                     onChange={(event) =>
                       setForm({ ...form, message: event.target.value })

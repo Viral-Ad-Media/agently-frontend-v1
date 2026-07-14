@@ -391,6 +391,8 @@ const Leads: React.FC<LeadsProps> = ({
   const [backendTotal, setBackendTotal] = useState<number | null>(null);
   const [refreshingLeads, setRefreshingLeads] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const utilityMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const selectionMenuRef = useRef<HTMLDetailsElement | null>(null);
 
   const defaultTz = resolveOrgTimezone(org);
 
@@ -488,6 +490,32 @@ const Leads: React.FC<LeadsProps> = ({
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    const closeOpenMenus = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (target && !utilityMenuRef.current?.contains(target)) {
+        utilityMenuRef.current?.removeAttribute("open");
+      }
+      if (target && !selectionMenuRef.current?.contains(target)) {
+        selectionMenuRef.current?.removeAttribute("open");
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      utilityMenuRef.current?.removeAttribute("open");
+      selectionMenuRef.current?.removeAttribute("open");
+    };
+
+    document.addEventListener("mousedown", closeOpenMenus);
+    document.addEventListener("touchstart", closeOpenMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOpenMenus);
+      document.removeEventListener("touchstart", closeOpenMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   // ─────────────────────────────────────────────────────────
   // FETCH VOICE AGENTS DIRECTLY FROM THE DB
@@ -1181,7 +1209,7 @@ const Leads: React.FC<LeadsProps> = ({
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900">Lead CRM</h2>
           <p className="mt-0.5 text-xs text-slate-400">
@@ -1189,62 +1217,55 @@ const Leads: React.FC<LeadsProps> = ({
             outreach
           </p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:w-auto sm:flex sm:flex-wrap">
-          {selIds.length > 0 && (
-            <>
-              <button
-                onClick={() => void bulkStatus("contacted")}
-                className="rounded-xl bg-amber-500 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
-              >
-                Mark Contacted ({selIds.length})
-              </button>
-              <button
-                onClick={() => setShowTagModal(true)}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300 hover:text-amber-700"
-              >
-                Tag Selected
-              </button>
-              <button
-                onClick={() =>
-                  setDeleteTarget({
-                    ids: selIds,
-                    label: `${selIds.length} lead${selIds.length > 1 ? "s" : ""}`,
-                  })
-                }
-                className="rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100"
-              >
-                Delete ({selIds.length})
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => void refreshLeadsFromBackend()}
-            disabled={refreshingLeads}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300 disabled:opacity-50"
-          >
-            {refreshingLeads ? "Refreshing…" : "Refresh"}
-          </button>
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300"
-          >
-            Import CSV
-          </button>
-          <button
-            onClick={() => {
-              setExportTags([]);
-              setShowExportModal(true);
-            }}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-slate-300"
-          >
-            Tags / Export
-          </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             onClick={() => setShowAddModal(true)}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-amber-500 px-4 text-xs font-bold text-white transition-colors hover:bg-amber-600"
           >
-            + Add Lead
+            <span className="mr-1.5 text-base leading-none">+</span> Add Lead
           </button>
+          <details ref={utilityMenuRef} className="group relative">
+            <summary
+              aria-label="More lead actions"
+              className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 [&::-webkit-details-marker]:hidden"
+            >
+              <i className="fa-sharp fa-solid fa-ellipsis-vertical text-sm" />
+            </summary>
+            <div className="absolute right-0 z-40 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10">
+              <button
+                onClick={() => {
+                  utilityMenuRef.current?.removeAttribute("open");
+                  void refreshLeadsFromBackend();
+                }}
+                disabled={refreshingLeads}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <i className="fa-sharp fa-solid fa-arrows-rotate w-4 text-center text-slate-400" />
+                {refreshingLeads ? "Refreshing…" : "Refresh leads"}
+              </button>
+              <button
+                onClick={() => {
+                  utilityMenuRef.current?.removeAttribute("open");
+                  setShowImportModal(true);
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <i className="fa-sharp fa-solid fa-file-import w-4 text-center text-slate-400" />
+                Import CSV
+              </button>
+              <button
+                onClick={() => {
+                  utilityMenuRef.current?.removeAttribute("open");
+                  setExportTags([]);
+                  setShowExportModal(true);
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <i className="fa-sharp fa-solid fa-tags w-4 text-center text-slate-400" />
+                Tags and export
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -1324,11 +1345,11 @@ const Leads: React.FC<LeadsProps> = ({
       <div className="grid min-w-0 gap-5">
         {/* LEFT */}
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+              <div className="relative min-w-0">
                 <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                   width="13"
                   height="13"
                   viewBox="0 0 24 24"
@@ -1343,28 +1364,85 @@ const Leads: React.FC<LeadsProps> = ({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search name, phone, email or tag…"
-                  className="w-full rounded-2xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm font-medium outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40"
+                  className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 outline-none focus:border-amber-300 sm:w-auto"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:w-auto"
               >
-                <option value="all">All</option>
+                <option value="all">All statuses</option>
                 <option value="new">New</option>
                 <option value="contacted">Contacted</option>
                 <option value="closed">Closed</option>
               </select>
               <button
                 onClick={toggleAll}
-                className="w-full whitespace-nowrap rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 sm:w-auto"
+                className="h-11 w-full whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
               >
                 {selectedIds.size === pagedLeads.length && pagedLeads.length > 0
                   ? "Clear"
                   : "Select Page"}
               </button>
             </div>
+
+            {selIds.length > 0 && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-slate-900 px-3 text-[11px] font-bold text-white">
+                    {selIds.length} selected
+                  </span>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs font-semibold text-slate-400 hover:text-slate-700"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void bulkStatus("contacted")}
+                    className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-amber-500 px-3.5 text-xs font-bold text-white transition-colors hover:bg-amber-600 sm:flex-none"
+                  >
+                    Mark contacted
+                  </button>
+                  <details ref={selectionMenuRef} className="group relative">
+                    <summary
+                      aria-label="Selected lead actions"
+                      className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 [&::-webkit-details-marker]:hidden"
+                    >
+                      <i className="fa-sharp fa-solid fa-ellipsis-vertical text-xs" />
+                    </summary>
+                    <div className="absolute right-0 z-40 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10">
+                      <button
+                        onClick={() => {
+                          selectionMenuRef.current?.removeAttribute("open");
+                          setShowTagModal(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <i className="fa-sharp fa-solid fa-tag w-4 text-center text-slate-400" />
+                        Tag selected
+                      </button>
+                      <button
+                        onClick={() => {
+                          selectionMenuRef.current?.removeAttribute("open");
+                          setDeleteTarget({
+                            ids: selIds,
+                            label: `${selIds.length} lead${selIds.length > 1 ? "s" : ""}`,
+                          });
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        <i className="fa-sharp fa-solid fa-trash-can w-4 text-center text-red-400" />
+                        Delete selected
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

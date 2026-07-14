@@ -69,6 +69,84 @@ const SUPPORTED_LANGUAGES = [
   { code: "nl", name: "Dutch", flag: "🇳🇱" },
 ];
 
+const CHATBOT_AVATAR_PREFIX = "agently-avatar:";
+const CHATBOT_AVATAR_UPLOAD_PREFIX = "agently-upload:";
+
+const CHATBOT_PROFILE_AVATARS = [
+  { id: "ava-garden", label: "Ava", image: "/chatbot-avatars/ava-garden.jpg" },
+  {
+    id: "mina-studio",
+    label: "Mina",
+    image: "/chatbot-avatars/mina-studio.jpg",
+  },
+  { id: "hao", label: "Hao", image: "/chatbot-avatars/hao.jpg" },
+  { id: "jurica", label: "Jurica", image: "/chatbot-avatars/jurica.jpg" },
+  { id: "joseph", label: "Joseph", image: "/chatbot-avatars/joseph.jpg" },
+  { id: "jake", label: "Jake", image: "/chatbot-avatars/jake.jpg" },
+  { id: "diego", label: "Diego", image: "/chatbot-avatars/diego.jpg" },
+  { id: "albert", label: "Albert", image: "/chatbot-avatars/albert.jpg" },
+  { id: "amara", label: "Amara", image: "/chatbot-avatars/amara.jpg" },
+];
+
+const getChatbotAvatarOption = (avatarLabel?: string) => {
+  if (!avatarLabel?.startsWith(CHATBOT_AVATAR_PREFIX)) return null;
+  const id = avatarLabel.slice(CHATBOT_AVATAR_PREFIX.length);
+  return CHATBOT_PROFILE_AVATARS.find((avatar) => avatar.id === id) || null;
+};
+
+const getUploadedChatbotAvatarImage = (avatarLabel?: string) => {
+  if (!avatarLabel?.startsWith(CHATBOT_AVATAR_UPLOAD_PREFIX)) return "";
+  return avatarLabel.slice(CHATBOT_AVATAR_UPLOAD_PREFIX.length);
+};
+
+const getChatbotAvatarImage = (avatarLabel?: string) => {
+  const uploadedImage = getUploadedChatbotAvatarImage(avatarLabel);
+  if (uploadedImage) return uploadedImage;
+  return getChatbotAvatarOption(avatarLabel)?.image || "";
+};
+
+const hasChatbotAvatarImage = (avatarLabel?: string) =>
+  Boolean(getChatbotAvatarImage(avatarLabel));
+
+const getAvatarInitial = (_label?: string, fallbackName?: string) => {
+  const source = fallbackName?.trim() || "A";
+  return source.slice(0, 1).toUpperCase() || "A";
+};
+
+const getAvatarSelectorLabel = (avatarLabel?: string) => {
+  if (getUploadedChatbotAvatarImage(avatarLabel)) return "Uploaded image";
+  const option = getChatbotAvatarOption(avatarLabel);
+  return option ? option.label : "Add image";
+};
+
+const ChatbotAvatar: React.FC<{
+  avatarLabel?: string;
+  fallbackName?: string;
+  className?: string;
+  textClassName?: string;
+}> = ({
+  avatarLabel,
+  fallbackName,
+  className = "h-8 w-8",
+  textClassName = "text-[11px]",
+}) => {
+  const image = getChatbotAvatarImage(avatarLabel);
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-700 ring-1 ring-slate-200 ${className}`}
+      aria-hidden="true"
+    >
+      {image ? (
+        <img src={image} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className={`font-semibold leading-none ${textClassName}`}>
+          {getAvatarInitial(avatarLabel, fallbackName)}
+        </span>
+      )}
+    </span>
+  );
+};
+
 const DEFAULT_BOT: ChatbotConfig & {
   chatVoice: string;
   chatLanguages: string[];
@@ -82,7 +160,7 @@ const DEFAULT_BOT: ChatbotConfig & {
   launcherLabel: "Chat",
   accentColor: "#4f46e5",
   position: "right",
-  avatarLabel: "A",
+  avatarLabel: "",
   customPrompt: "",
   suggestedPrompts: [],
   faqs: [],
@@ -133,6 +211,9 @@ const Messenger: React.FC<MessengerProps> = ({
     "idle" | "loading" | "done" | "error"
   >("idle");
   const [scrapeMsg, setScrapeMsg] = useState("");
+  const [chatbotFleetPage, setChatbotFleetPage] = useState(0);
+  const [isMobileChatbotFleet, setIsMobileChatbotFleet] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
 
   // Voice recording state
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -147,6 +228,7 @@ const Messenger: React.FC<MessengerProps> = ({
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const avatarUploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (activeChatbot) {
@@ -166,6 +248,31 @@ const Messenger: React.FC<MessengerProps> = ({
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [localMessages, isTyping]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1279px)");
+    const update = () => setIsMobileChatbotFleet(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const pageSize = isMobileChatbotFleet ? 3 : 5;
+    const pageCount = Math.max(1, Math.ceil(org.chatbots.length / pageSize));
+    if (chatbotFleetPage > pageCount - 1) {
+      setChatbotFleetPage(Math.max(0, pageCount - 1));
+    }
+  }, [chatbotFleetPage, isMobileChatbotFleet, org.chatbots.length]);
+
+  useEffect(() => {
+    const activeIndex = org.chatbots.findIndex(
+      (bot) => bot.id === org.activeChatbotId,
+    );
+    if (activeIndex < 0) return;
+    const pageSize = isMobileChatbotFleet ? 3 : 5;
+    setChatbotFleetPage(Math.floor(activeIndex / pageSize));
+  }, [isMobileChatbotFleet, org.activeChatbotId, org.chatbots.length]);
 
   const runAction = useCallback(
     async (key: string, fn: () => Promise<void>) => {
@@ -188,6 +295,34 @@ const Messenger: React.FC<MessengerProps> = ({
       ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] }
     >,
   ) => setDraft((d) => ({ ...d, ...updates }));
+
+  const resetDraftAvatarToInitials = useCallback(() => {
+    patch({ avatarLabel: "" });
+    setAvatarMenuOpen(false);
+  }, []);
+
+  const handleChatbotAvatarUpload = useCallback((file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload a valid image file.");
+      return;
+    }
+    if (file.size > 900_000) {
+      setError(
+        "Please use an image under 900KB so it can be saved with this chatbot.",
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) return;
+      patch({ avatarLabel: `${CHATBOT_AVATAR_UPLOAD_PREFIX}${result}` });
+      setAvatarMenuOpen(false);
+      setError("");
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   const linkedAgentName =
     org.voiceAgents.find((a) => a.id === draft.voiceAgentId)?.name ||
@@ -222,7 +357,7 @@ const Messenger: React.FC<MessengerProps> = ({
         );
         patch({ faqs: savedFaqs.manualFaqs || [] });
       }
-      await onUpdateChatbot(activeChatbot.id, {
+      await api.updateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
         knowledgeBaseId,
@@ -232,7 +367,9 @@ const Messenger: React.FC<MessengerProps> = ({
         launcherLabel: draft.launcherLabel,
         accentColor: draft.accentColor,
         position: draft.position,
-        avatarLabel: draft.avatarLabel,
+        avatarLabel: hasChatbotAvatarImage(draft.avatarLabel)
+          ? draft.avatarLabel
+          : "",
         customPrompt: draft.customPrompt,
         suggestedPrompts: draft.suggestedPrompts,
         // Legacy chatbot.faqs is intentionally cleared when a Knowledge Base is selected.
@@ -498,7 +635,7 @@ const Messenger: React.FC<MessengerProps> = ({
         <p className="text-slate-400 font-medium mb-4">No chatbot yet.</p>
         <button
           onClick={() => void runAction("create", onCreateChatbot)}
-          className="rounded-2xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white"
+          className="rounded-2xl bg-[#F59E0B] px-6 py-3 text-xs font-medium text-white transition hover:bg-[#d88a05]"
         >
           + Create Chatbot
         </button>
@@ -507,90 +644,229 @@ const Messenger: React.FC<MessengerProps> = ({
   }
 
   const previewColor = draft.accentColor || "#4f46e5";
+  const chatbotFleetPageSize = isMobileChatbotFleet ? 3 : 5;
+  const chatbotFleetPageCount = Math.max(
+    1,
+    Math.ceil(org.chatbots.length / chatbotFleetPageSize),
+  );
+  const safeChatbotFleetPage = Math.min(
+    chatbotFleetPage,
+    chatbotFleetPageCount - 1,
+  );
+  const pagedChatbots = org.chatbots.slice(
+    safeChatbotFleetPage * chatbotFleetPageSize,
+    safeChatbotFleetPage * chatbotFleetPageSize + chatbotFleetPageSize,
+  );
+  const chatbotFleetRangeStart = org.chatbots.length
+    ? safeChatbotFleetPage * chatbotFleetPageSize + 1
+    : 0;
+  const chatbotFleetRangeEnd = Math.min(
+    org.chatbots.length,
+    safeChatbotFleetPage * chatbotFleetPageSize + pagedChatbots.length,
+  );
 
   return (
     <div className="min-w-0 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:space-y-8">
       {/* Chatbot selector */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
-              Chatbot Agent Studio
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Design, train and deploy embeddable chat widgets — preview updates
-              live.
-            </p>
-          </div>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              void saveCustomization();
+            }}
+            disabled={busyAction === "save"}
+            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-600 transition hover:border-[#F59E0B] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+          >
+            {busyAction === "save" ? "Saving…" : "Save Changes"}
+          </button>
           <button
             onClick={() => void runAction("create", onCreateChatbot)}
             disabled={busyAction === "create"}
-            className="w-full rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full bg-[#F59E0B] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             {busyAction === "create" ? "Creating…" : "+ New Chatbot"}
           </button>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {org.chatbots.map((bot) => {
-            const isActive = bot.id === org.activeChatbotId;
-            const agent = org.voiceAgents.find(
-              (a) => a.id === bot.voiceAgentId,
-            );
-            return (
-              <div
-                key={bot.id}
-                className={`rounded-3xl border p-5 transition-all ${isActive ? "border-indigo-200 bg-indigo-50/60 shadow-sm" : "border-slate-200 bg-slate-50"}`}
+
+        <div className="relative">
+          {chatbotFleetPageCount > 1 && (
+            <button
+              type="button"
+              aria-label="Previous chatbots"
+              onClick={() =>
+                setChatbotFleetPage((page) => Math.max(0, page - 1))
+              }
+              disabled={safeChatbotFleetPage === 0}
+              className="absolute left-0 top-1/2 z-10 flex h-7 w-7 -translate-x-2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:text-[#0F172A] disabled:pointer-events-none disabled:opacity-0"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {bot.name}
-                    </p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
-                      {agent?.name ?? "Voice Agent"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    <div
-                      className="w-4 h-4 rounded-full border-2 border-white shadow"
-                      style={{ background: bot.accentColor }}
-                    />
-                    {isActive && (
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-100">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {!isActive && (
-                    <button
-                      onClick={() =>
-                        void runAction(`activate-${bot.id}`, () =>
-                          onActivateChatbot(bot.id),
-                        )
-                      }
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-                    >
-                      Open
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      void runAction(`delete-${bot.id}`, () =>
-                        onDeleteChatbot(bot.id),
-                      )
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+
+          <div className="grid grid-cols-3 gap-2 xl:grid-cols-5">
+            {pagedChatbots.map((bot) => {
+              const isActive = bot.id === org.activeChatbotId;
+              const displayBot = isActive ? { ...bot, ...draft } : bot;
+              const agent = org.voiceAgents.find(
+                (a) => a.id === displayBot.voiceAgentId,
+              );
+              return (
+                <div
+                  key={bot.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (!isActive) {
+                      void runAction(`activate-${bot.id}`, () =>
+                        onActivateChatbot(bot.id),
+                      );
                     }
-                    disabled={org.chatbots.length <= 1}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-red-200 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    Delete
-                  </button>
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === " ") && !isActive) {
+                      e.preventDefault();
+                      void runAction(`activate-${bot.id}`, () =>
+                        onActivateChatbot(bot.id),
+                      );
+                    }
+                  }}
+                  className={`group min-h-[5.9rem] min-w-0 cursor-pointer rounded-2xl border px-2 py-2 text-left transition-all sm:min-h-[6.2rem] sm:px-3 ${
+                    isActive
+                      ? "border-[#ff9f43] bg-white text-[#232f3e] shadow-[0_14px_28px_rgba(245,158,11,0.10)] ring-1 ring-[#fed7aa]"
+                      : "border-slate-200 bg-white text-[#232f3e] hover:border-[#fbbf24] hover:bg-[#fffbeb]"
+                  }`}
+                >
+                  <div className="flex h-full min-w-0 items-center gap-1.5 sm:gap-3">
+                    <ChatbotAvatar
+                      avatarLabel={displayBot.avatarLabel}
+                      fallbackName={displayBot.name}
+                      className="h-9 w-9 rounded-2xl sm:h-12 sm:w-12"
+                      textClassName="text-[10px] sm:text-[11px]"
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col justify-center">
+                      <div className="flex min-w-0 items-start justify-between gap-1.5">
+                        <p className="min-w-0 truncate text-[10px] font-semibold leading-tight text-slate-900 sm:text-[12px]">
+                          {displayBot.name}
+                        </p>
+                        <span
+                          className="mt-0.5 hidden h-2 w-2 shrink-0 rounded-full ring-2 ring-white sm:block"
+                          style={{
+                            background: displayBot.accentColor || "#F59E0B",
+                          }}
+                        />
+                      </div>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                        <span
+                          className={`max-w-full truncate rounded-full border px-1.5 py-0.5 text-[8px] font-medium uppercase leading-none tracking-[0.08em] ${
+                            isActive
+                              ? "border-blue-200 bg-blue-50 text-blue-600"
+                              : "border-slate-200 bg-slate-50 text-slate-500"
+                          }`}
+                        >
+                          {isActive ? "Editing" : agent?.name || "Chatbot"}
+                        </span>
+                      </div>
+                      <div
+                        className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mt-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runAction(`activate-${bot.id}`, () =>
+                              onActivateChatbot(bot.id),
+                            )
+                          }
+                          disabled={isActive}
+                          className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#7a8493] transition hover:text-amber-700 disabled:text-amber-700"
+                        >
+                          {isActive ? "Active" : "Open"}
+                        </button>
+                        <span className="h-3 w-px bg-slate-200" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runAction(`delete-${bot.id}`, () =>
+                              onDeleteChatbot(bot.id),
+                            )
+                          }
+                          disabled={org.chatbots.length <= 1}
+                          className="text-[9px] font-medium uppercase tracking-[0.14em] text-red-300 transition hover:text-red-500 disabled:opacity-30"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {chatbotFleetPageCount > 1 && (
+            <button
+              type="button"
+              aria-label="Next chatbots"
+              onClick={() =>
+                setChatbotFleetPage((page) =>
+                  Math.min(chatbotFleetPageCount - 1, page + 1),
+                )
+              }
+              disabled={safeChatbotFleetPage >= chatbotFleetPageCount - 1}
+              className="absolute right-0 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 translate-x-2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:text-[#0F172A] disabled:pointer-events-none disabled:opacity-0"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
         </div>
+
+        {chatbotFleetPageCount > 1 && (
+          <div className="mt-5 flex items-center justify-center gap-3 text-[13px] font-medium text-[#7a8493]">
+            <span>
+              {chatbotFleetRangeStart}-{chatbotFleetRangeEnd} of{" "}
+              {org.chatbots.length} chatbots
+            </span>
+            <span className="flex items-center gap-1.5">
+              {Array.from({ length: chatbotFleetPageCount }).map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  aria-label={`Chatbot page ${index + 1}`}
+                  onClick={() => setChatbotFleetPage(index)}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === safeChatbotFleetPage
+                      ? "w-5 bg-[#F59E0B]"
+                      : "w-1.5 bg-slate-300 hover:bg-slate-400"
+                  }`}
+                />
+              ))}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Studio grid */}
@@ -650,17 +926,102 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                  Avatar Label
+                  Profile Image
                 </label>
-                <input
-                  type="text"
-                  value={draft.avatarLabel}
-                  maxLength={6}
-                  onChange={(e) =>
-                    patch({ avatarLabel: e.target.value.toUpperCase() })
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium uppercase outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <div>
+                  <div className="relative w-full">
+                    <button
+                      type="button"
+                      onClick={() => setAvatarMenuOpen((open) => !open)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-[#F59E0B] focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <span className="min-w-0 truncate">
+                        {getAvatarSelectorLabel(draft.avatarLabel)}
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`shrink-0 text-slate-400 transition ${avatarMenuOpen ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    {avatarMenuOpen && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                        <button
+                          type="button"
+                          onClick={() => avatarUploadInputRef.current?.click()}
+                          className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-amber-50 hover:text-[#92400e]"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M12 5v14" />
+                              <path d="M5 12h14" />
+                            </svg>
+                          </span>
+                          <span>Add from device</span>
+                        </button>
+                        <div className="my-1 h-px bg-slate-100" />
+                        {CHATBOT_PROFILE_AVATARS.map((avatar) => (
+                          <button
+                            key={avatar.id}
+                            type="button"
+                            onClick={() => {
+                              patch({
+                                avatarLabel: `${CHATBOT_AVATAR_PREFIX}${avatar.id}`,
+                              });
+                              setAvatarMenuOpen(false);
+                            }}
+                            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                          >
+                            <img
+                              src={avatar.image}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
+                            />
+                            <span className="min-w-0 truncate">
+                              {avatar.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      ref={avatarUploadInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        handleChatbotAvatarUpload(e.target.files?.[0] || null);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+                {hasChatbotAvatarImage(draft.avatarLabel) && (
+                  <button
+                    type="button"
+                    onClick={resetDraftAvatarToInitials}
+                    className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500 transition hover:text-red-500"
+                  >
+                    Remove image
+                  </button>
+                )}
               </div>
             </div>
 
@@ -834,68 +1195,69 @@ const Messenger: React.FC<MessengerProps> = ({
             </div>
 
             {/* Knowledge Base */}
-            <div className="rounded-[1.35rem] bg-white p-4 shadow-sm ring-1 ring-slate-100 sm:p-5">
+            <section className="pt-1 sm:pt-2">
               <div className="mb-4 min-w-0">
                 <h3 className="text-base font-black text-slate-900 sm:text-lg">
                   Knowledge Base
                 </h3>
                 <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-slate-400">
-                  Select the knowledge base this chatbot should use for answers,
+                  Choose the knowledge this chatbot should use for answers,
                   FAQs, products, policies, and website content.
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100 sm:p-4">
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <select
-                    value={currentKnowledgeBase?.id || ""}
-                    onChange={(event) =>
-                      void assignDraftKnowledgeBase(event.target.value)
-                    }
-                    disabled={
-                      !knowledgeBases.length ||
-                      busyAction === "assign-knowledge-base" ||
-                      !onAssignKnowledgeBase
-                    }
-                    className="w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {knowledgeBases.length === 0 ? (
-                      <option value="">Create a knowledge base first</option>
-                    ) : (
-                      knowledgeBases.map((kb) => (
-                        <option key={kb.id} value={kb.id}>
-                          {kb.name ||
-                            kb.businessName ||
-                            kb.domain ||
-                            "Untitled knowledge base"}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <Link
-                    to="/knowledge-bases"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700"
-                  >
-                    Manage
-                  </Link>
-                </div>
-                {!currentKnowledgeBase && (
-                  <p className="mt-3 text-xs font-semibold text-amber-600">
-                    Create and sync a knowledge base before deploying this
-                    chatbot.
-                  </p>
-                )}
+
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <select
+                  value={currentKnowledgeBase?.id || ""}
+                  onChange={(event) =>
+                    void assignDraftKnowledgeBase(event.target.value)
+                  }
+                  disabled={
+                    !knowledgeBases.length ||
+                    busyAction === "assign-knowledge-base" ||
+                    !onAssignKnowledgeBase
+                  }
+                  className="w-full min-w-0 rounded-xl border-0 bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {knowledgeBases.length === 0 ? (
+                    <option value="">Create a knowledge base first</option>
+                  ) : (
+                    knowledgeBases.map((kb) => (
+                      <option key={kb.id} value={kb.id}>
+                        {kb.name ||
+                          kb.businessName ||
+                          kb.domain ||
+                          "Untitled knowledge base"}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <Link
+                  to="/knowledge-bases"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700"
+                >
+                  Manage
+                  <i className="fa-sharp fa-solid fa-arrow-up-right-from-square text-[9px]" />
+                </Link>
               </div>
-            </div>
+
+              {!currentKnowledgeBase && (
+                <p className="mt-3 text-xs font-semibold text-amber-600">
+                  Create and sync a knowledge base before deploying this
+                  chatbot.
+                </p>
+              )}
+            </section>
           </div>
         </div>
 
         {/* RIGHT: live preview + embed */}
         <div className="min-w-0 space-y-5 sm:space-y-6 xl:sticky xl:top-6">
           {/* Preview */}
-          <div className="overflow-hidden rounded-3xl bg-slate-900 shadow-2xl">
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
             <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
                   Live Preview
                 </p>
                 <p className="text-white font-black text-lg mt-0.5">
@@ -906,7 +1268,7 @@ const Messenger: React.FC<MessengerProps> = ({
                 <button
                   type="button"
                   onClick={() => void onResetConversation(activeChatbot.id)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/10"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:bg-white/10 hover:text-white"
                 >
                   Reset
                 </button>
@@ -917,18 +1279,18 @@ const Messenger: React.FC<MessengerProps> = ({
               </div>
             </div>
 
-            <div className="m-3 flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 sm:m-6 sm:h-[480px]">
+            <div className="m-3 flex h-[420px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white sm:m-6 sm:h-[480px]">
               {/* Header */}
               <div
                 className="flex flex-shrink-0 items-center gap-3 px-4 py-4 sm:px-5"
                 style={{ background: previewColor }}
               >
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 text-white"
-                  style={{ background: "rgba(255,255,255,0.22)" }}
-                >
-                  {draft.avatarLabel || "A"}
-                </div>
+                <ChatbotAvatar
+                  avatarLabel={draft.avatarLabel}
+                  fallbackName={draft.name}
+                  className="h-9 w-9 rounded-full bg-white/20 ring-white/25"
+                  textClassName="text-sm text-white"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm truncate">
                     {draft.headerTitle || "Chat with us"}
@@ -958,12 +1320,12 @@ const Messenger: React.FC<MessengerProps> = ({
               {/* Messages */}
               <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-800/50 custom-scrollbar"
+                className="flex-1 overflow-y-auto p-4 space-y-3 bg-white custom-scrollbar"
               >
                 <div className="flex justify-start">
-                  <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-white/10 text-white/90 text-sm font-medium">
+                  <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-slate-100 text-slate-700 text-sm font-medium">
                     {draft.welcomeMessage || "Hello! How can I help you today?"}
-                    <div className="text-[10px] text-white/40 mt-1">
+                    <div className="text-[10px] text-slate-400 mt-1">
                       Just now
                     </div>
                   </div>
@@ -974,7 +1336,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-sm font-medium ${msg.role === "user" ? "text-white rounded-tr-sm" : "bg-white/10 text-white/90 rounded-tl-sm"}`}
+                      className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-sm font-medium ${msg.role === "user" ? "text-white rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}
                       style={
                         msg.role === "user"
                           ? { background: previewColor }
@@ -983,7 +1345,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     >
                       {msg.text}
                       <div
-                        className={`text-[10px] mt-1 ${msg.role === "user" ? "text-white/50" : "text-white/40"}`}
+                        className={`text-[10px] mt-1 ${msg.role === "user" ? "text-white/50" : "text-slate-400"}`}
                       >
                         {new Date(msg.timestamp).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -995,12 +1357,12 @@ const Messenger: React.FC<MessengerProps> = ({
                 ))}
                 {isTyping && (
                   <div className="flex justify-start">
-                    <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-white/10">
+                    <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-slate-100">
                       <div className="flex gap-1">
                         {[0, 200, 400].map((d) => (
                           <div
                             key={d}
-                            className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce"
+                            className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
                             style={{ animationDelay: `${d}ms` }}
                           />
                         ))}
@@ -1013,7 +1375,7 @@ const Messenger: React.FC<MessengerProps> = ({
               {/* Input area with voice toggle */}
               <form
                 onSubmit={handleSend}
-                className="flex flex-shrink-0 items-center gap-2 border-t border-white/10 bg-slate-800 p-2.5 sm:p-3"
+                className="flex flex-shrink-0 items-center gap-2 border-t border-slate-200 bg-white p-2.5 sm:p-3"
               >
                 {/* Voice toggle button */}
                 <button
@@ -1027,7 +1389,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     }
                   }}
                   title={isVoiceMode ? "Switch to text" : "Switch to voice"}
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isVoiceMode ? "bg-rose-500 text-white" : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"}`}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isVoiceMode ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"}`}
                 >
                   <i
                     className={`fa-sharp fa-solid ${isVoiceMode ? "fa-keyboard" : "fa-microphone"} text-sm`}
@@ -1036,7 +1398,7 @@ const Messenger: React.FC<MessengerProps> = ({
 
                 {/* Input area (text or voice waveform) */}
                 {isVoiceMode ? (
-                  <div className="flex-1 h-9 flex items-center px-3 rounded-xl bg-white/10 border border-white/10 gap-1 overflow-hidden">
+                  <div className="flex-1 h-9 flex items-center px-3 rounded-xl bg-slate-50 border border-slate-200 gap-1 overflow-hidden">
                     {isRecording ? (
                       <>
                         {audioWave.map((h, i) => (
@@ -1051,7 +1413,7 @@ const Messenger: React.FC<MessengerProps> = ({
                         </span>
                       </>
                     ) : (
-                      <span className="text-xs text-white/40">
+                      <span className="text-xs text-slate-400">
                         Press mic to record
                       </span>
                     )}
@@ -1062,7 +1424,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={draft.placeholder || "Type your message…"}
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/30 sm:px-4"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#F59E0B] sm:px-4"
                   />
                 )}
 
@@ -1074,9 +1436,9 @@ const Messenger: React.FC<MessengerProps> = ({
                     onMouseUp={stopRecording}
                     onTouchStart={startRecording}
                     onTouchEnd={stopRecording}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isRecording ? "bg-rose-500 animate-pulse" : "bg-white/20 text-white hover:bg-white/30"}`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isRecording ? "bg-rose-500 animate-pulse" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
                   >
-                    <i className="fa-sharp fa-solid fa-microphone text-sm text-white" />
+                    <i className="fa-sharp fa-solid fa-microphone text-sm" />
                   </button>
                 ) : (
                   <button
@@ -1096,7 +1458,7 @@ const Messenger: React.FC<MessengerProps> = ({
           <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-2xl sm:p-7">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
                   Embed Script
                 </p>
                 <h3 className="text-lg font-black mt-1">Deploy anywhere</h3>
@@ -1161,61 +1523,46 @@ const Messenger: React.FC<MessengerProps> = ({
       </div>
 
       {/* FAQ section - full width */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-3xl">
             <h3 className="text-base font-black text-slate-900">FAQs</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              These manual FAQs belong to the selected Knowledge Base and are
-              stored separately from every other Knowledge Base. Scraped website
-              knowledge, products, and policies are still used at runtime.
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
+              Add common questions and clear answers for this Knowledge Base.
+              Each Knowledge Base keeps its own FAQ list, while your synced
+              website content, products, and policies remain available to the
+              chatbot automatically.
             </p>
           </div>
           <button
             type="button"
             onClick={addFaq}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+            className="inline-flex min-h-[2.75rem] shrink-0 items-center justify-center rounded-full bg-[#F59E0B] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 sm:px-6"
           >
-            + Add Entry
+            + Add FAQ
           </button>
         </div>
 
         {draft.faqs.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 py-7 text-center">
+          <div className="rounded-2xl bg-slate-50 px-4 py-7 text-center">
             <p className="text-sm font-bold text-slate-400">
-              No FAQs yet. Add your first entry.
+              No FAQs yet. Add a question and answer to get started.
             </p>
           </div>
         ) : (
-          <div className="max-h-[36rem] space-y-3 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="max-h-[36rem] space-y-3 overflow-y-auto pr-1 custom-scrollbar sm:space-y-4">
             {draft.faqs.map((faq, index) => (
               <div
                 key={faq.id}
-                className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition-all hover:border-indigo-200 hover:bg-indigo-50/20 sm:p-4"
+                className="grid grid-cols-[1.5rem_minmax(0,1fr)_1.75rem] items-start gap-2.5 sm:grid-cols-[1.75rem_minmax(0,1fr)_2rem] sm:gap-3"
               >
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-500">
-                      {index + 1}
-                    </span>
-                    <p className="truncate text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      FAQ knowledge entry
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFaq(faq.id)}
-                    className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-red-200 hover:text-red-500"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
-                  <label className="block">
-                    <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-indigo-50 text-[9px] text-indigo-700">
-                        Q
-                      </span>
+                <span className="mt-[1.55rem] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500 sm:h-7 sm:w-7">
+                  {index + 1}
+                </span>
+
+                <div className="grid min-w-0 grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)] lg:gap-3">
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Question
                     </span>
                     <textarea
@@ -1225,14 +1572,11 @@ const Messenger: React.FC<MessengerProps> = ({
                         updateFaq(faq.id, "question", e.target.value)
                       }
                       placeholder="e.g. What are your hours?"
-                      className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none transition-all focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-200"
+                      className="w-full resize-none rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-indigo-200"
                     />
                   </label>
-                  <label className="block">
-                    <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-emerald-50 text-[9px] text-emerald-700">
-                        A
-                      </span>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Answer
                     </span>
                     <textarea
@@ -1242,15 +1586,25 @@ const Messenger: React.FC<MessengerProps> = ({
                         updateFaq(faq.id, "answer", e.target.value)
                       }
                       placeholder="e.g. We are open Mon–Fri, 9am–6pm."
-                      className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium outline-none transition-all focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-200"
+                      className="w-full resize-none rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-indigo-200"
                     />
                   </label>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => removeFaq(faq.id)}
+                  aria-label={`Remove FAQ ${index + 1}`}
+                  title="Remove FAQ"
+                  className="mt-[1.35rem] inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 sm:h-8 sm:w-8"
+                >
+                  <i className="fa-sharp fa-solid fa-xmark text-sm" />
+                </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
       <button
         type="button"
         onClick={() => void saveCustomization()}

@@ -45,7 +45,7 @@ const About: React.FC = () => {
             </div>
           </div>
 
-          <div className="marketing-card overflow-hidden bg-[#fbfaf4] p-4 lg:p-5">
+          <div className="marketing-card overflow-hidden bg-[#F8FAFC] p-4 lg:p-5">
             <div className="rounded-[1.35rem] border border-black/12 bg-white p-5">
               <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-black/50">
                 What we are building
@@ -79,7 +79,7 @@ const About: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#fbfaf4]">
+      <section className="bg-[#F8FAFC]">
         <div className="marketing-shell py-12 lg:py-14">
           <div className="grid gap-4 md:grid-cols-3">
             {PRINCIPLES.map((principle) => (

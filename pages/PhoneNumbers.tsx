@@ -31,6 +31,12 @@ const parseTabParam = (value: string | null): Tab | null => {
     : null;
 };
 
+const parsePhoneTabParam = (
+  value: string | null,
+): Exclude<Tab, "calls"> | null => {
+  return value === "numbers" || value === "search" ? value : null;
+};
+
 interface PhoneNumbersProps {
   org: Organization;
   calls?: CallRecord[];
@@ -199,9 +205,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
   const orgId = org.id;
   const [searchParams, setSearchParams] = useSearchParams();
   const [isTabPending, startTabTransition] = useTransition();
-  const [tab, setTab] = useState<Tab>(
-    () => parseTabParam(searchParams.get("tab")) || initialTab,
-  );
+  const [tab, setTab] = useState<Tab>(() => {
+    if (initialTab === "calls")
+      return parseTabParam(searchParams.get("tab")) || "calls";
+    return parsePhoneTabParam(searchParams.get("tab")) || initialTab;
+  });
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<TwilioNumberRecord[]>([]);
@@ -221,14 +229,18 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
   } | null>(null);
 
   const agents = useMemo(() => org.voiceAgents || [], [org.voiceAgents]);
+  const isCallsMode = initialTab === "calls";
 
   useEffect(() => {
-    const requestedTab = parseTabParam(searchParams.get("tab")) || initialTab;
+    const requestedTab = isCallsMode
+      ? parseTabParam(searchParams.get("tab")) || "calls"
+      : parsePhoneTabParam(searchParams.get("tab")) || "numbers";
     setTab((current) => (current === requestedTab ? current : requestedTab));
-  }, [searchParams, initialTab]);
+  }, [searchParams, initialTab, isCallsMode]);
 
   const updateTab = useCallback(
     (nextTab: Tab) => {
+      if (!isCallsMode && nextTab === "calls") return;
       startTabTransition(() => {
         setTab(nextTab);
         const nextParams = new URLSearchParams(searchParams);
@@ -240,7 +252,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         setSearchParams(nextParams, { replace: true });
       });
     },
-    [searchParams, setSearchParams],
+    [isCallsMode, searchParams, setSearchParams],
   );
 
   const showToast = useCallback((msg: string, ok = true) => {
@@ -280,8 +292,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
   }, [orgId, showToast]);
 
   useEffect(() => {
-    void loadNumbers();
-  }, [loadNumbers]);
+    if (!isCallsMode) void loadNumbers();
+  }, [isCallsMode, loadNumbers]);
 
   const handleSearch = async () => {
     setBusy("search");
@@ -690,8 +702,39 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     );
   };
 
+  if (isCallsMode) {
+    return (
+      <div className="animate-fade-up space-y-6">
+        {toast && (
+          <div
+            className={`fixed right-5 top-5 z-[200] rounded-2xl px-5 py-3 text-sm font-bold shadow-xl ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
+          >
+            {toast.msg}
+          </div>
+        )}
+        <Suspense
+          fallback={
+            <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-card">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <p className="text-sm font-bold text-slate-500">
+                Loading call logs…
+              </p>
+            </div>
+          }
+        >
+          <CallLogs
+            calls={calls}
+            org={org}
+            onDownloadReport={onDownloadReport}
+            embedded
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
-    <div className="animate-fade-up space-y-6">
+    <div className="ag-phone-numbers-page animate-fade-up space-y-5">
       {toast && (
         <div
           className={`fixed right-5 top-5 z-[200] rounded-2xl px-5 py-3 text-sm font-bold shadow-xl ${toast.ok ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
@@ -700,73 +743,54 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         </div>
       )}
 
-      <div className="rounded-[1.35rem] bg-white p-3 shadow-sm ring-1 ring-slate-100 sm:p-4">
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div className="min-w-0">
-            <h2 className="text-lg font-black text-slate-900 sm:text-xl">
-              Phone Numbers
-            </h2>
-            <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-slate-400">
-              Manage business numbers, call logs, recordings, and outcomes from
-              one workspace.
-            </p>
-          </div>
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="custom-scrollbar hide-scrollbar-mobile flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1">
-              <button
-                onClick={() => updateTab("numbers")}
-                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "numbers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Numbers
-              </button>
-              <button
-                onClick={() => updateTab("search")}
-                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "search" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Buy Number
-              </button>
-              <button
-                onClick={() => updateTab("calls")}
-                className={`shrink-0 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider ${tab === "calls" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              >
-                Call Logs
-              </button>
-            </div>
-            {isTabPending && (
-              <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                Loading view…
-              </span>
-            )}
-            <button
-              onClick={() => void loadNumbers()}
-              disabled={busy === "load"}
-              className="shrink-0 rounded-2xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-slate-800 disabled:opacity-50"
-            >
-              {busy === "load" ? "Refreshing…" : "Refresh"}
-            </button>
-          </div>
-        </div>
+      <div className="space-y-1">
+        <h2 className="text-base font-medium text-slate-900 sm:text-lg">
+          Manage calling numbers
+        </h2>
+        <p className="max-w-3xl text-xs leading-relaxed text-slate-500">
+          Assign one business number to multiple outbound agents. Inbound
+          routing stays controlled separately, while outbound campaigns can
+          share the same number.
+        </p>
       </div>
 
-      {tab !== "calls" && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-black text-slate-900">
-                Manage calling numbers
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                Assign one business number to multiple outbound agents. Inbound
-                routing stays controlled separately, while outbound campaigns
-                can share the same number.
-              </p>
-            </div>
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-              Multi-agent outbound
-            </span>
-          </div>
+      <div className="ag-page-inline-actions ag-phone-toolbar">
+        <div
+          className="ag-agent-tabs ag-agent-tabs-flat ag-phone-tabs"
+          role="tablist"
+          aria-label="Phone number sections"
+        >
+          <button
+            type="button"
+            onClick={() => updateTab("numbers")}
+            className={`ag-phone-tab text-[13px] font-medium transition-all ${tab === "numbers" ? "ag-phone-tab-active" : ""}`}
+          >
+            Numbers
+          </button>
+          <button
+            type="button"
+            onClick={() => updateTab("search")}
+            className={`ag-phone-tab text-[13px] font-medium transition-all ${tab === "search" ? "ag-phone-tab-active" : ""}`}
+          >
+            Buy Number
+          </button>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {isTabPending && (
+            <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-[10px] font-medium uppercase tracking-widest text-amber-700">
+              Loading view…
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void loadNumbers()}
+            disabled={busy === "load"}
+            className="ag-button-soft shrink-0"
+          >
+            {busy === "load" ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
 
       {tab === "numbers" && (
         <div className="space-y-4">
@@ -806,26 +830,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {tab === "calls" && (
-        <Suspense
-          fallback={
-            <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-card">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-              <p className="text-sm font-bold text-slate-500">
-                Loading call logs…
-              </p>
-            </div>
-          }
-        >
-          <CallLogs
-            calls={calls}
-            org={org}
-            onDownloadReport={onDownloadReport}
-            embedded
-          />
-        </Suspense>
       )}
 
       {tab === "search" && (

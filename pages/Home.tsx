@@ -144,7 +144,7 @@ const Home: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-[1.45rem] border border-white/10 bg-[#fbfaf4] p-4 text-black">
+                <div className="rounded-[1.45rem] border border-white/10 bg-[#F8FAFC] p-4 text-black">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-black/42">
@@ -165,7 +165,7 @@ const Home: React.FC = () => {
                         key={step}
                         className="flex items-center gap-3 rounded-[1rem] border border-black/12 bg-white px-3 py-2.5"
                       >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ff5527]/12 text-[10px] font-medium text-[#ff5527] ring-1 ring-[#ff5527]/18">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/12 text-[10px] font-medium text-[#F59E0B] ring-1 ring-[#F59E0B]/18">
                           {index + 1}
                         </span>
                         <span className="text-sm font-medium tracking-[-0.03em] text-black/80">
@@ -190,7 +190,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="border-b border-black/12 bg-[#f7f4eb]">
+      <section className="border-b border-black/12 bg-[#F1F5F9]">
         <div className="marketing-shell grid items-center gap-8 py-12 lg:grid-cols-[0.82fr_1.18fr] lg:py-14">
           <div>
             <div className="marketing-eyebrow mb-5">
@@ -216,7 +216,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="border-b border-black/12 bg-[#fbfaf4]">
+      <section className="border-b border-black/12 bg-[#F8FAFC]">
         <div className="marketing-shell py-12 lg:py-14">
           <div className="grid gap-4 md:grid-cols-3">
             {OUTCOME_CARDS.map((card) => (
@@ -225,7 +225,7 @@ const Home: React.FC = () => {
                 <h3 className="text-xl font-medium tracking-[-0.055em] text-black">
                   {card.title}
                 </h3>
-                <p className="mt-3 text-sm font-normal leading-relaxed text-[#232f3e]/72">
+                <p className="mt-3 text-sm font-normal leading-relaxed text-[#0F172A]/72">
                   {card.copy}
                 </p>
               </div>
@@ -234,7 +234,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#f7f4eb]">
+      <section className="bg-[#F1F5F9]">
         <div className="marketing-shell py-14">
           <div className="grid items-center gap-8 rounded-[2rem] border border-black/12 bg-black p-6 text-white shadow-[0_28px_90px_rgba(5,8,23,0.18)] md:grid-cols-[1fr_auto] md:p-8">
             <div>
