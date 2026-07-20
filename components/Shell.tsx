@@ -166,19 +166,8 @@ const LowCreditTicker: React.FC<{ wallet: WalletMini | null }> = ({
   if (!wallet) return null;
   const balance = Number(wallet.balanceUsd);
   if (!Number.isFinite(balance)) return null;
-  const minimum = Math.max(
-    Number(wallet.numberRetention?.minimumRequiredUsd || 0),
-    Number(wallet.minimums?.callUsd || 0),
-    Number(wallet.minimums?.activeUsd || 0),
-    Number(wallet.minimumRechargeUsd || 0),
-    1,
-  );
-  const shouldShow =
-    balance < minimum ||
-    Boolean(wallet.numberRetention?.openCase) ||
-    ["open", "warning", "pending_release", "release_pending"].includes(
-      String(wallet.numberRetention?.status || "").toLowerCase(),
-    );
+  const minimum = 3;
+  const shouldShow = balance < minimum;
   if (!shouldShow) return null;
   return (
     <div className="border-y border-amber-200 bg-amber-50 text-[12px] font-medium text-amber-900">
@@ -186,7 +175,7 @@ const LowCreditTicker: React.FC<{ wallet: WalletMini | null }> = ({
       <div className="relative h-8 overflow-hidden">
         <div
           className="absolute left-0 top-0 flex h-8 min-w-full items-center whitespace-nowrap px-6"
-          style={{ animation: "agentlyTicker 22s linear infinite" }}
+          style={{ animation: "agentlyTicker 45s linear infinite" }}
         >
           Usage credit is below the required minimum. Top up with at least{" "}
           {formatWalletMoney(minimum)} in Billing to keep phone numbers, calls,

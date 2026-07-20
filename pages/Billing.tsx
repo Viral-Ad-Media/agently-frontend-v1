@@ -307,10 +307,10 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
 
   const activity = useMemo<ActivityItem[]>(() => {
     const scopedTransactions = (wallet.recentTransactions || []).filter(
-      (tx) => !tx.organizationId || tx.organizationId === org.id,
+      (tx) => tx.organizationId === org.id,
     );
     const scopedCharges = (wallet.recentUsageCharges || []).filter(
-      (charge) => !charge.organizationId || charge.organizationId === org.id,
+      (charge) => charge.organizationId === org.id,
     );
     const txById = new Map(scopedTransactions.map((tx) => [tx.id, tx]));
     const chargeItems: ActivityItem[] = scopedCharges
@@ -560,7 +560,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
           </div>
         </div>
 
-        <div className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
+        <div className="mt-5 max-h-[720px] divide-y divide-slate-100 overflow-y-auto rounded-2xl border border-slate-100">
           {filteredActivity.map((item) => (
             <div
               key={item.id}
