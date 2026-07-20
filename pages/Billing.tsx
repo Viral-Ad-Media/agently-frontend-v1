@@ -118,7 +118,23 @@ const usageLabel = (charge: WalletUsageCharge) => {
   const raw =
     `${charge.eventType || ""} ${charge.service || ""} ${charge.unit || ""} ${charge.provider || ""}`.toLowerCase();
 
-  if (raw.includes("call") || raw.includes("phone") || raw.includes("minute")) {
+  if (
+    raw.includes("number_purchase") ||
+    raw.includes("phone_number_purchase") ||
+    raw.includes("number purchase")
+  ) {
+    return "Business-number purchase";
+  }
+
+  if (
+    raw.includes("number_rental") ||
+    raw.includes("phone_number_rental") ||
+    raw.includes("number retention")
+  ) {
+    return "Business-number rental";
+  }
+
+  if (raw.includes("call") || raw.includes("minute")) {
     return "Call usage";
   }
 
@@ -168,6 +184,10 @@ const quantityLabel = (charge: WalletUsageCharge) => {
 
   if (unit.includes("message")) {
     return `${quantity.toFixed(0)} ${quantity === 1 ? "message" : "messages"}`;
+  }
+
+  if (unit === "number" || unit.includes("phone_number")) {
+    return `${quantity.toFixed(0)} ${quantity === 1 ? "number" : "numbers"}`;
   }
 
   return `${quantity.toFixed(quantity >= 10 ? 0 : 1)} billable ${quantity === 1 ? "unit" : "units"}`;
@@ -259,8 +279,13 @@ const Billing: React.FC<BillingProps> = ({
     void loadBilling();
     const timer = window.setInterval(() => {
       void loadBilling();
-    }, 10000);
-    return () => window.clearInterval(timer);
+    }, 5000);
+    const refreshHandler = () => void loadBilling();
+    window.addEventListener("agently:wallet-refresh", refreshHandler);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("agently:wallet-refresh", refreshHandler);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org.id]);
 
@@ -319,16 +344,29 @@ const Billing: React.FC<BillingProps> = ({
   const currentRange = usageRanges.find((range) => range.key === usageRange);
   const activityRangeStart = Date.now() - rangeToMs(usageRange);
   const walletActivity = useMemo(() => {
-    const chargeRows = walletUsageCharges.map((charge) => ({
-      id: `charge-${charge.id}`,
-      kind: "debit" as const,
-      title: usageLabel(charge),
-      detail: quantityLabel(charge),
-      amountUsd: -Math.abs(Number(charge.customerChargeUsd || 0)),
-      balanceAfterUsd: null as number | null,
-      createdAt: charge.createdAt,
-      sortTime: new Date(charge.createdAt || 0).getTime() || 0,
-    }));
+    const chargeRows = walletUsageCharges.map((charge) => {
+      const quotedAmountUsd = Math.abs(Number(charge.customerChargeUsd || 0));
+      const posted = Boolean(charge.walletTransactionId);
+      const kind =
+        quotedAmountUsd <= 0
+          ? ("neutral" as const)
+          : posted
+            ? ("debit" as const)
+            : ("pending" as const);
+
+      return {
+        id: `charge-${charge.id}`,
+        kind,
+        title: usageLabel(charge),
+        detail: posted
+          ? quantityLabel(charge)
+          : `${quantityLabel(charge)} · wallet posting pending`,
+        amountUsd: posted ? -quotedAmountUsd : quotedAmountUsd,
+        balanceAfterUsd: null as number | null,
+        createdAt: charge.createdAt,
+        sortTime: new Date(charge.createdAt || 0).getTime() || 0,
+      };
+    });
 
     const usageTransactionIds = new Set(
       walletUsageCharges
@@ -616,19 +654,30 @@ const Billing: React.FC<BillingProps> = ({
                         {item.title}
                       </p>
                       <p className="mt-0.5 text-xs text-[#0F172A]/45">
-                        {item.kind === "debit"
-                          ? `${item.detail} · ${item.createdAt ? new Date(item.createdAt).toLocaleString() : "Just now"}`
-                          : item.detail}
+                        {item.kind === "credit"
+                          ? item.detail
+                          : `${item.detail} · ${item.createdAt ? new Date(item.createdAt).toLocaleString() : "Just now"}`}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p
-                        className={`text-sm font-black ${item.kind === "credit" && Number(item.amountUsd || 0) > 0 ? "text-emerald-600" : "text-red-500"}`}
+                        className={`text-sm font-black ${
+                          item.kind === "credit"
+                            ? "text-emerald-600"
+                            : item.kind === "pending"
+                              ? "text-amber-600"
+                              : item.kind === "neutral"
+                                ? "text-slate-500"
+                                : "text-red-500"
+                        }`}
                       >
-                        {item.kind === "credit" &&
-                        Number(item.amountUsd || 0) > 0
+                        {item.kind === "credit"
                           ? "+"
-                          : "-"}
+                          : item.kind === "debit"
+                            ? "-"
+                            : item.kind === "pending"
+                              ? "Pending "
+                              : ""}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </p>
                       {item.balanceAfterUsd !== null && (
@@ -768,9 +817,9 @@ const Billing: React.FC<BillingProps> = ({
                           {item.title}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">
-                          {item.kind === "debit"
-                            ? item.detail
-                            : "Wallet credit"}
+                          {item.kind === "credit"
+                            ? "Wallet credit"
+                            : item.detail}
                         </p>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500">
@@ -779,12 +828,23 @@ const Billing: React.FC<BillingProps> = ({
                           : "Just now"}
                       </td>
                       <td
-                        className={`px-6 py-4 text-right text-sm font-black ${item.kind === "credit" && Number(item.amountUsd || 0) > 0 ? "text-emerald-600" : "text-red-500"}`}
+                        className={`px-6 py-4 text-right text-sm font-black ${
+                          item.kind === "credit"
+                            ? "text-emerald-600"
+                            : item.kind === "pending"
+                              ? "text-amber-600"
+                              : item.kind === "neutral"
+                                ? "text-slate-500"
+                                : "text-red-500"
+                        }`}
                       >
-                        {item.kind === "credit" &&
-                        Number(item.amountUsd || 0) > 0
+                        {item.kind === "credit"
                           ? "+"
-                          : "-"}
+                          : item.kind === "debit"
+                            ? "-"
+                            : item.kind === "pending"
+                              ? "Pending "
+                              : ""}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </td>
                     </tr>

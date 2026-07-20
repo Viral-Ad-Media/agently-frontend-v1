@@ -16,12 +16,13 @@ const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-export type RealtimeEvent = 'call' | 'lead' | 'usage';
+export type RealtimeEvent = 'call' | 'lead' | 'usage' | 'wallet';
 
-interface RealtimeCallbacks {
+export interface RealtimeCallbacks {
   onCall?: () => void;
   onLead?: () => void;
   onUsage?: () => void;
+  onWallet?: (balanceUsd: number | null) => void;
   onAny?: () => void;
 }
 
@@ -108,6 +109,37 @@ export function subscribeToOrgRealtime(
     )
     .subscribe();
   channels.push(usageChannel);
+
+  // ── Wallet balance updates ───────────────────────────────────
+  const walletChannel = supabase
+    .channel(`wallet:${orgId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'billing_wallets',
+        filter: `organization_id=eq.${orgId}`,
+      },
+      (payload) => {
+        const next = payload.new as
+          | { balance_usd?: number | string | null }
+          | undefined;
+        const previous = payload.old as
+          | { balance_usd?: number | string | null }
+          | undefined;
+        const rawBalance = next?.balance_usd ?? previous?.balance_usd ?? null;
+        const parsedBalance = rawBalance === null ? null : Number(rawBalance);
+
+        callbacks.onWallet?.(
+          parsedBalance !== null && Number.isFinite(parsedBalance)
+            ? parsedBalance
+            : null,
+        );
+      },
+    )
+    .subscribe();
+  channels.push(walletChannel);
 
   // Return cleanup function
   return () => {

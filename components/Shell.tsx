@@ -640,8 +640,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [walletMini, setWalletMini] = useState<WalletMini | null>(null);
+  const walletRequestInFlight = useRef(false);
 
   const refreshWalletMini = async () => {
+    if (walletRequestInFlight.current) return;
+    walletRequestInFlight.current = true;
     try {
       const summary = (await api.getBillingSummary()) as {
         wallet?: WalletMini;
@@ -654,17 +657,38 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       }
     } catch {
       // Billing should not break the app shell.
+    } finally {
+      walletRequestInFlight.current = false;
     }
   };
 
   useEffect(() => {
     void refreshWalletMini();
-    const interval = window.setInterval(() => void refreshWalletMini(), 15000);
-    const handler = () => void refreshWalletMini();
+    const interval = window.setInterval(() => void refreshWalletMini(), 5000);
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ balanceUsd?: number }>).detail;
+      const nextBalance = Number(detail?.balanceUsd);
+      if (Number.isFinite(nextBalance)) {
+        setWalletMini((current) => ({
+          ...(current || { balanceUsd: nextBalance }),
+          balanceUsd: nextBalance,
+        }));
+      }
+      void refreshWalletMini();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshWalletMini();
+    };
+    const refreshOnFocus = () => void refreshWalletMini();
+
     window.addEventListener("agently:wallet-refresh", handler);
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("agently:wallet-refresh", handler);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [org.id]);
 

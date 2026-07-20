@@ -62,6 +62,25 @@ const notifyAuthExpired = (message: string) => {
   }));
 };
 
+const emitWalletRefresh = (payload?: unknown) => {
+  if (typeof window === 'undefined') return;
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, any>
+    : {};
+  const candidates = [
+    record.walletBalanceUsd,
+    record.balanceUsd,
+    record.billing?.walletBalanceUsd,
+    record.wallet?.balanceUsd,
+  ];
+  const balanceUsd = candidates
+    .map((value) => Number(value))
+    .find((value) => Number.isFinite(value));
+  window.dispatchEvent(new CustomEvent('agently:wallet-refresh', {
+    detail: Number.isFinite(balanceUsd) ? { balanceUsd } : {},
+  }));
+};
+
 const isNetworkError = (error: unknown) => {
   const message = String((error as { message?: unknown })?.message || error || '').toLowerCase();
   return (
@@ -150,10 +169,13 @@ const request = async <T>(path: string, options: {
   }
 
   if (response.status === 204) {
+    if (auth && method !== 'GET') emitWalletRefresh();
     return null as T;
   }
 
-  return await response.json() as T;
+  const payload = await response.json() as T;
+  if (auth && method !== 'GET') emitWalletRefresh(payload);
+  return payload;
 };
 
 const triggerDownload = (blob: Blob, filename: string) => {

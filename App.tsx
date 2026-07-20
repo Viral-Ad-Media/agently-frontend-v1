@@ -212,6 +212,15 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!org?.id) return;
     const unsubscribe = subscribeToOrgRealtime(org.id, {
+      onWallet: (balanceUsd) => {
+        window.dispatchEvent(
+          new CustomEvent("agently:wallet-refresh", {
+            detail: Number.isFinite(Number(balanceUsd))
+              ? { balanceUsd: Number(balanceUsd) }
+              : {},
+          }),
+        );
+      },
       onAny: () => {
         if (realtimeDebounceRef.current)
           clearTimeout(realtimeDebounceRef.current);
