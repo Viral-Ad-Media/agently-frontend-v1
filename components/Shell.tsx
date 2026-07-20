@@ -58,6 +58,7 @@ const NAV_ITEMS: Array<{
 const PUBLIC_NAV_ITEMS = [
   { to: "/features", label: "Features" },
   { to: "/pricing", label: "Pricing" },
+  { to: "/blog", label: "Blog" },
   { to: "/about", label: "About" },
   { to: "/faqs", label: "FAQs" },
   { to: "/contact", label: "Contact" },
@@ -114,14 +115,6 @@ const WalletCreditBadge: React.FC<{
   );
 };
 
-const getUsagePercent = (minutes: number, minuteLimit: number) => {
-  if (minuteLimit <= 0) {
-    return 0;
-  }
-
-  return Math.min(100, (minutes / minuteLimit) * 100);
-};
-
 const getPageMeta = (pathname: string, org: Organization) => {
   const pageMap: Record<
     string,
@@ -143,12 +136,6 @@ const getPageMeta = (pathname: string, org: Organization) => {
       title: "Phone Numbers",
       description:
         "Search, connect, and manage business numbers for your voice agents.",
-    },
-    "/test-agent": {
-      eyebrow: "Agent Preview",
-      title: "Test Your Agent",
-      description:
-        "Run limited trial calls before connecting a dedicated business number.",
     },
     "/features": {
       eyebrow: "Product Surface",
@@ -641,7 +628,6 @@ interface MainLayoutProps {
   children: React.ReactNode;
   org: Organization;
   user: User;
-  setShowSimulator: (show: boolean) => void;
   onLogout: () => void;
 }
 
@@ -649,7 +635,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   children,
   org,
   user,
-  setShowSimulator: _setShowSimulator,
   onLogout,
 }) => {
   const location = useLocation();
@@ -687,15 +672,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     setMobileNavOpen(false);
   }, [location.pathname]);
 
-  const usagePercent = getUsagePercent(
-    org.subscription.usage.minutes,
-    org.subscription.usage.minuteLimit,
-  );
   const activeVoiceAgent =
     org.voiceAgents.find((agent) => agent.id === org.activeVoiceAgentId) ||
     org.agent;
   const pageMeta = getPageMeta(location.pathname, org);
-  const isTestAgentPage = location.pathname === "/test-agent";
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
@@ -747,43 +727,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </nav>
 
             <div className="mt-auto space-y-2.5 px-7 pb-6 pt-5">
-              <div className="rounded-xl border border-[#334155] bg-[#1E293B] p-4 shadow-[0_16px_34px_rgba(2,6,23,0.18)]">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#94A3B8]">
-                    Plan Usage
-                  </p>
-                  <Link
-                    to="/settings"
-                    className="rounded-md bg-[#F59E0B]/15 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[#F59E0B] transition hover:bg-[#F59E0B]/20"
-                  >
-                    {org.subscription.plan}
-                  </Link>
-                </div>
-                <p className="mt-3 text-[12px] font-medium text-[#E2E8F0]">
-                  {org.subscription.usage.minutes} /{" "}
-                  {org.subscription.usage.minuteLimit} minutes used
-                </p>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#475569]">
-                  <div
-                    className="h-full rounded-full bg-[#F59E0B]"
-                    style={{ width: `${usagePercent}%` }}
-                  />
-                </div>
-              </div>
-
-              <Link
-                to="/test-agent"
-                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] shadow-sm transition ${
-                  isTestAgentPage
-                    ? "bg-[#F59E0B] text-white ring-2 ring-[#F59E0B]/30"
-                    : "bg-[#F59E0B] text-white hover:bg-[#D97706]"
-                }`}
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <i className="fa-solid fa-phone-volume text-sm" />
-                Test Your Agent
-              </Link>
-
               <button
                 onClick={onLogout}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#334155] px-4 py-2.5 text-[12px] font-medium uppercase tracking-[0.06em] text-[#94A3B8] transition hover:border-red-400/45 hover:text-red-300"

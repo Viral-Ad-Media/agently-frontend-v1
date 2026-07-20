@@ -236,10 +236,25 @@ const normalizeAgentVoiceConfig = (payload: unknown): AgentVoiceConfig => {
   };
 };
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const resolveDefaultApiBaseUrl = () => {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+  if (!import.meta.env.DEV || !isLocalHost) return '';
+  return import.meta.env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 const NETWORK_OFFLINE_MESSAGE = 'You are currently not connected to the internet. Please connect to the internet and try again.';
+const REQUEST_TIMEOUT_MESSAGE = 'Agently could not reach its data service in time. Your session is still valid; please retry.';
+const REQUEST_TIMEOUT_MS = Math.max(5000, Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000));
+
+const notifyAuthExpired = (message: string) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('agently:auth-expired', { detail: { message } }));
+};
 
 const isNetworkError = (error: unknown) => {
   const message = String((error as { message?: unknown })?.message || error || '').toLowerCase();
@@ -253,7 +268,7 @@ const isNetworkError = (error: unknown) => {
   );
 };
 
-class VoiceApiError extends Error {
+export class VoiceApiError extends Error {
   status: number;
   details: unknown;
 
@@ -280,30 +295,39 @@ const request = async <T>(path: string, options: VoiceRequestOptions = {}): Prom
   const headers = auth ? authHeaders(body != null) : new Headers(body != null ? { 'Content-Type': 'application/json' } : undefined);
 
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(buildUrl(path), {
       method,
       headers,
       body: body != null ? JSON.stringify(body) : undefined,
       cache: 'no-store',
+      signal: controller.signal,
     });
   } catch (error) {
+    if ((error as { name?: string })?.name === 'AbortError') {
+      throw new VoiceApiError(REQUEST_TIMEOUT_MESSAGE, 0, error);
+    }
     if (isNetworkError(error) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       throw new VoiceApiError(NETWORK_OFFLINE_MESSAGE, 0, error);
     }
     throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     let details: unknown = null;
     try {
-      const payload = await response.json() as { error?: { message?: string; details?: unknown }; message?: string };
+      const payload = await response.json() as { error?: { message?: string; details?: unknown; code?: string; retryable?: boolean }; message?: string };
       message = payload.error?.message || payload.message || message;
-      details = payload.error?.details ?? payload;
+      details = payload.error ?? payload;
     } catch {
       details = null;
     }
+    if (auth && response.status === 401) notifyAuthExpired(message);
     throw new VoiceApiError(message, response.status, details);
   }
 
@@ -549,29 +573,60 @@ const normalizeAudioResult = async (response: Response): Promise<TestVoiceResult
 
 const postForAudio = async (path: string, body: unknown): Promise<TestVoiceResult> => {
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(buildUrl(path), {
       method: 'POST',
       headers: authHeaders(true),
       body: JSON.stringify(body),
       cache: 'no-store',
+      signal: controller.signal,
     });
   } catch (error) {
+    if ((error as { name?: string })?.name === 'AbortError') {
+      throw new VoiceApiError(REQUEST_TIMEOUT_MESSAGE, 0, error);
+    }
     if (isNetworkError(error) || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       throw new VoiceApiError(NETWORK_OFFLINE_MESSAGE, 0, error);
     }
     throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let details: unknown = null;
     try {
-      const payload = await response.json() as { error?: { message?: string }; message?: string };
+      const payload = await response.json() as {
+        error?: { message?: string; details?: unknown };
+        message?: string;
+      };
       message = payload.error?.message || payload.message || message;
+      details = payload.error?.details ?? payload;
     } catch {
-      // Keep generic message.
+      // Keep the generic status message when the server did not return JSON.
     }
-    throw new VoiceApiError(message, response.status);
+
+    if (response.status === 401) notifyAuthExpired(message);
+
+    if (response.status === 402 && typeof window !== 'undefined') {
+      const creditDetails =
+        details && typeof details === 'object' && !Array.isArray(details)
+          ? details as Record<string, unknown>
+          : {};
+      window.dispatchEvent(new CustomEvent('agently:billing-credit-required', {
+        detail: {
+          ...creditDetails,
+          message,
+          action: creditDetails.action || 'voice_preview',
+          topUpPath: creditDetails.topUpPath || '#/billing',
+        },
+      }));
+    }
+
+    throw new VoiceApiError(message, response.status, details);
   }
 
   return normalizeAudioResult(response);

@@ -38,7 +38,8 @@ const getSelectedAgentStorageKey = (orgId?: string) =>
   `${SELECTED_AGENT_STORAGE_KEY}:${orgId || "global"}`;
 
 const DEFAULT_VOICE_PREVIEW_TEXT =
-  "Hello, this is a voice preview from Agently.";
+  "Hello! This is a voice preview from Agently!";
+
 const DEFAULT_ELEVENLABS_SETTINGS: Required<VoiceSettings> = {
   stability: 0.65,
   similarity_boost: 0.8,
@@ -163,22 +164,34 @@ const getAgentIdForVoiceEditing = (
   fallbackAgent: AgentConfig,
 ) => selectedAgent?.id || fallbackAgent.id;
 
-const buildAudioSource = (result: {
+const buildAudioBlob = async (result: {
   blob?: Blob;
   audioUrl?: string;
   audioBase64?: string;
   mimeType?: string;
 }) => {
-  if (result.blob)
-    return { url: URL.createObjectURL(result.blob), isObjectUrl: true };
+  if (result.blob && result.blob.size > 0) return result.blob;
+
   if (result.audioBase64) {
-    const mimeType = result.mimeType || "audio/mpeg";
-    return {
-      url: `data:${mimeType};base64,${result.audioBase64}`,
-      isObjectUrl: false,
-    };
+    const binary = window.atob(result.audioBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new Blob([bytes], { type: result.mimeType || "audio/mpeg" });
   }
-  if (result.audioUrl) return { url: result.audioUrl, isObjectUrl: false };
+
+  if (result.audioUrl) {
+    const response = await fetch(result.audioUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(
+        `Voice audio download failed with status ${response.status}.`,
+      );
+    }
+    const blob = await response.blob();
+    if (blob.size > 0) return blob;
+  }
+
   return null;
 };
 
@@ -324,6 +337,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [chunks, setChunks] = useState(0);
   const activeVoiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeVoiceObjectUrlRef = useRef<string | null>(null);
+  const activeVoiceAudioContextRef = useRef<AudioContext | null>(null);
+  const activeVoiceBufferSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   /* stabilized voice-config integration */
   const [voiceProvider, setVoiceProvider] = useState<VoiceProvider>("openai");
@@ -507,9 +522,23 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
   useEffect(() => {
     return () => {
+      if (activeVoiceBufferSourceRef.current) {
+        try {
+          activeVoiceBufferSourceRef.current.stop();
+        } catch {
+          // The source may already have finished.
+        }
+        activeVoiceBufferSourceRef.current.disconnect();
+        activeVoiceBufferSourceRef.current = null;
+      }
+      if (activeVoiceAudioContextRef.current) {
+        void activeVoiceAudioContextRef.current.close().catch(() => undefined);
+        activeVoiceAudioContextRef.current = null;
+      }
       if (activeVoiceAudioRef.current) {
         activeVoiceAudioRef.current.pause();
         activeVoiceAudioRef.current.src = "";
+        activeVoiceAudioRef.current = null;
       }
       if (activeVoiceObjectUrlRef.current) {
         URL.revokeObjectURL(activeVoiceObjectUrlRef.current);
@@ -811,6 +840,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       return;
     }
 
+    if (activeVoiceBufferSourceRef.current) {
+      try {
+        activeVoiceBufferSourceRef.current.stop();
+      } catch {
+        // The previous source may already have finished.
+      }
+      activeVoiceBufferSourceRef.current.disconnect();
+      activeVoiceBufferSourceRef.current = null;
+    }
     if (activeVoiceAudioRef.current) {
       activeVoiceAudioRef.current.pause();
       activeVoiceAudioRef.current.src = "";
@@ -821,20 +859,89 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       activeVoiceObjectUrlRef.current = null;
     }
 
+    // Resume Web Audio while this function is still running from the user's
+    // button click. That keeps playback reliable after the network request
+    // finishes, including browsers that otherwise block delayed audio.play().
+    let audioContext: AudioContext | null = activeVoiceAudioContextRef.current;
+    try {
+      const AudioContextConstructor =
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (AudioContextConstructor) {
+        if (!audioContext || audioContext.state === "closed") {
+          audioContext = new AudioContextConstructor();
+          activeVoiceAudioContextRef.current = audioContext;
+        }
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+      }
+    } catch {
+      audioContext = null;
+    }
+
+    const playGeneratedAudio = async (blob: Blob) => {
+      if (blob.size === 0) {
+        throw new Error("The voice preview returned an empty audio file.");
+      }
+
+      if (audioContext && audioContext.state !== "closed") {
+        const encodedAudio = await blob.arrayBuffer();
+        const decodedAudio = await audioContext.decodeAudioData(
+          encodedAudio.slice(0),
+        );
+        const source = audioContext.createBufferSource();
+        source.buffer = decodedAudio;
+        source.connect(audioContext.destination);
+        source.onended = () => {
+          if (activeVoiceBufferSourceRef.current === source) {
+            activeVoiceBufferSourceRef.current = null;
+          }
+          source.disconnect();
+        };
+        activeVoiceBufferSourceRef.current = source;
+        source.start(0);
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      activeVoiceObjectUrlRef.current = objectUrl;
+      const audio = new Audio(objectUrl);
+      audio.preload = "auto";
+      audio.setAttribute("playsinline", "true");
+      activeVoiceAudioRef.current = audio;
+      audio.onended = () => {
+        if (activeVoiceObjectUrlRef.current === objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          activeVoiceObjectUrlRef.current = null;
+        }
+        if (activeVoiceAudioRef.current === audio) {
+          activeVoiceAudioRef.current = null;
+        }
+      };
+      audio.onerror = () => {
+        showToast(
+          "The generated voice audio could not be decoded by the browser.",
+          false,
+        );
+      };
+      await audio.play();
+    };
+
     setVoicePreviewing(true);
     try {
       const result =
         currentProvider === "elevenlabs"
-          ? await voiceCallsApi.previewVoice({
+          ? await voiceCallsApi.testElevenLabsVoice({
               text: DEFAULT_VOICE_PREVIEW_TEXT,
               returnJson: true,
-              provider: "elevenlabs",
               voice_provider: "elevenlabs",
               voice_id: currentElevenLabsVoiceId,
               voiceId: currentElevenLabsVoiceId,
               elevenlabs_voice_id: currentElevenLabsVoiceId,
               elevenlabs_voice_name: currentElevenLabsVoiceName,
-              model: currentElevenLabsVoice?.modelId || undefined,
+              modelId: currentElevenLabsVoice?.modelId || undefined,
               voice_settings: {
                 ...DEFAULT_ELEVENLABS_SETTINGS,
                 ...voiceSettings,
@@ -856,44 +963,21 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         result.voiceId &&
         result.voiceId !== currentElevenLabsVoiceId
       ) {
-        showToast(
-          "The backend returned audio for a different ElevenLabs voice. Please try again.",
-          false,
+        throw new Error(
+          "The backend returned audio for a different ElevenLabs voice.",
         );
-        return;
       }
 
-      const audioSource = buildAudioSource(result);
-      if (!audioSource) {
-        showToast(
-          "Listen to voice returned no playable audio. Expected audioBase64, audio URL, or audio file.",
-          false,
-        );
-        return;
+      const audioBlob = await buildAudioBlob(result);
+      if (!audioBlob) {
+        throw new Error("The voice preview returned no playable audio.");
       }
 
-      if (audioSource.isObjectUrl)
-        activeVoiceObjectUrlRef.current = audioSource.url;
-      const audio = new Audio(audioSource.url);
-      activeVoiceAudioRef.current = audio;
-      audio.onended = () => {
-        if (activeVoiceObjectUrlRef.current) {
-          URL.revokeObjectURL(activeVoiceObjectUrlRef.current);
-          activeVoiceObjectUrlRef.current = null;
-        }
-        activeVoiceAudioRef.current = null;
-      };
-      audio.onerror = () => {
-        showToast(
-          "The selected voice audio could not be played by the browser.",
-          false,
-        );
-      };
-      await audio.play();
-      showToast("Playing selected voice.");
-    } catch (e) {
+      await playGeneratedAudio(audioBlob);
+      // showToast('Playing: "Hello! This is a voice preview from Agently!"');
+    } catch (error) {
       showToast(
-        e instanceof Error ? e.message : "Listen to voice failed.",
+        error instanceof Error ? error.message : "Listen to voice failed.",
         false,
       );
     } finally {

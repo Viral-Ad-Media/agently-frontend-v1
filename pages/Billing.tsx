@@ -623,9 +623,12 @@ const Billing: React.FC<BillingProps> = ({
                     </div>
                     <div className="shrink-0 text-right">
                       <p
-                        className={`text-sm font-black ${item.amountUsd >= 0 ? "text-emerald-600" : "text-red-500"}`}
+                        className={`text-sm font-black ${item.kind === "credit" && Number(item.amountUsd || 0) > 0 ? "text-emerald-600" : "text-red-500"}`}
                       >
-                        {item.amountUsd >= 0 ? "+" : "-"}
+                        {item.kind === "credit" &&
+                        Number(item.amountUsd || 0) > 0
+                          ? "+"
+                          : "-"}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </p>
                       {item.balanceAfterUsd !== null && (
@@ -776,9 +779,12 @@ const Billing: React.FC<BillingProps> = ({
                           : "Just now"}
                       </td>
                       <td
-                        className={`px-6 py-4 text-right text-sm font-black ${item.amountUsd >= 0 ? "text-emerald-600" : "text-red-500"}`}
+                        className={`px-6 py-4 text-right text-sm font-black ${item.kind === "credit" && Number(item.amountUsd || 0) > 0 ? "text-emerald-600" : "text-red-500"}`}
                       >
-                        {item.amountUsd >= 0 ? "+" : "-"}
+                        {item.kind === "credit" &&
+                        Number(item.amountUsd || 0) > 0
+                          ? "+"
+                          : "-"}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </td>
                     </tr>

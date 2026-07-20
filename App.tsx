@@ -13,22 +13,21 @@ import {
   Lead,
   WorkspaceBootstrap,
 } from "./types";
-import { api } from "./services/api";
+import { api, ApiError } from "./services/api";
 import {
   clearSessionToken,
   getSessionToken,
+  isSessionTokenExpired,
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 import { subscribeToOrgRealtime } from "./services/realtime";
-import TestAgent from "./pages/TestAgent";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Leads = lazy(() => import("./pages/Leads"));
 const AgentSettings = lazy(() => import("./pages/AgentSettings"));
 const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
-// const TestAgent = lazy(() => import("./pages/TestAgent"));
 const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Billing = lazy(() => import("./pages/Billing"));
@@ -46,7 +45,9 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Settings = lazy(() => import("./pages/Settings"));
 const KnowledgeBases = lazy(() => import("./pages/KnowledgeBases"));
-const CallSimulator = lazy(() => import("./components/CallSimulator"));
+const Blog = lazy(() => import("./pages/Blog"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
+const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 
 function hasPasswordResetTokenInUrl() {
   if (typeof window === "undefined") return false;
@@ -63,7 +64,7 @@ function hasPasswordResetTokenInUrl() {
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [showSimulator, setShowSimulator] = useState(false);
+  const [startupError, setStartupError] = useState("");
   const [creditAlert, setCreditAlert] = useState<{
     message: string;
     balanceUsd?: number;
@@ -135,8 +136,20 @@ const App: React.FC = () => {
       );
   }, []);
 
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      clearSessionToken();
+      setWorkspace(null);
+      setStartupError("");
+    };
+    window.addEventListener("agently:auth-expired", handleAuthExpired);
+    return () =>
+      window.removeEventListener("agently:auth-expired", handleAuthExpired);
+  }, []);
+
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
+    setStartupError("");
   };
 
   const loadWorkspace = async () => {
@@ -152,23 +165,37 @@ const App: React.FC = () => {
       return;
     }
 
+    if (isSessionTokenExpired(token)) {
+      clearSessionToken();
+      setWorkspace(null);
+      setIsInitializing(false);
+      return;
+    }
+
     let isMounted = true;
 
     const bootstrap = async () => {
       try {
         const nextWorkspace = await api.bootstrap();
-        if (isMounted) {
-          applyWorkspace(nextWorkspace);
-        }
-      } catch {
-        clearSessionToken();
-        if (isMounted) {
-          setWorkspace(null);
+        if (isMounted) applyWorkspace(nextWorkspace);
+      } catch (error) {
+        const isInvalidSession =
+          error instanceof ApiError && error.status === 401;
+        if (isInvalidSession || isSessionTokenExpired(token)) {
+          clearSessionToken();
+          if (isMounted) {
+            setWorkspace(null);
+            setStartupError("");
+          }
+        } else if (isMounted) {
+          setStartupError(
+            error instanceof Error
+              ? error.message
+              : "Agently could not load your workspace. Your login is still valid.",
+          );
         }
       } finally {
-        if (isMounted) {
-          setIsInitializing(false);
-        }
+        if (isMounted) setIsInitializing(false);
       }
     };
 
@@ -189,8 +216,16 @@ const App: React.FC = () => {
         if (realtimeDebounceRef.current)
           clearTimeout(realtimeDebounceRef.current);
         realtimeDebounceRef.current = setTimeout(() => {
-          void refreshWorkspace();
-        }, 1200);
+          if (typeof document !== "undefined" && document.hidden) return;
+          void refreshWorkspace().catch((error) => {
+            if (!(error instanceof ApiError) || error.status !== 401) {
+              console.warn(
+                "[workspace] realtime refresh skipped:",
+                error instanceof Error ? error.message : error,
+              );
+            }
+          });
+        }, 3000);
       },
     });
     return () => {
@@ -237,7 +272,27 @@ const App: React.FC = () => {
     } finally {
       clearSessionToken();
       setWorkspace(null);
-      setShowSimulator(false);
+    }
+  };
+
+  const retryWorkspaceInitialization = async () => {
+    setIsInitializing(true);
+    try {
+      await loadWorkspace();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSessionToken();
+        setWorkspace(null);
+        setStartupError("");
+      } else {
+        setStartupError(
+          error instanceof Error
+            ? error.message
+            : "Agently could not load your workspace. Your login is still valid.",
+        );
+      }
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -398,18 +453,6 @@ const App: React.FC = () => {
     );
   };
 
-  const handleSimulatorFinished = async (payload: {
-    transcript: string;
-    duration: number;
-    outcome?: string;
-    callerName?: string;
-    callerPhone?: string;
-    lead?: Partial<Lead>;
-  }) => {
-    await api.simulateCall(payload);
-    await refreshWorkspace();
-  };
-
   const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
     await api.updateLead(leadId, updates);
   };
@@ -532,12 +575,7 @@ const App: React.FC = () => {
     }
 
     return (
-      <MainLayout
-        org={org}
-        user={user}
-        setShowSimulator={setShowSimulator}
-        onLogout={() => void handleLogout()}
-      >
+      <MainLayout org={org} user={user} onLogout={() => void handleLogout()}>
         {children}
       </MainLayout>
     );
@@ -545,6 +583,44 @@ const App: React.FC = () => {
 
   if (isInitializing) {
     return <AppLoading />;
+  }
+
+  if (getSessionToken() && !workspace && startupError) {
+    return (
+      <div className="min-h-screen bg-slate-100 px-6 py-12 flex items-center justify-center">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+            <i className="fa-sharp fa-solid fa-cloud-exclamation" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">
+            Workspace temporarily unavailable
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {startupError}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            Agently has kept your login session. Retrying will not sign you out
+            or remove any data.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={() => void retryWorkspaceInitialization()}
+              className="flex-1 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -556,6 +632,23 @@ const App: React.FC = () => {
             element={
               <PublicLayout>
                 <Home />
+              </PublicLayout>
+            }
+          />
+          <Route path="/admin" element={<SuperAdmin />} />
+          <Route
+            path="/blog"
+            element={
+              <PublicLayout>
+                <Blog />
+              </PublicLayout>
+            }
+          />
+          <Route
+            path="/blog/:slug"
+            element={
+              <PublicLayout>
+                <BlogPost />
               </PublicLayout>
             }
           />
@@ -627,15 +720,9 @@ const App: React.FC = () => {
           <Route
             path="/features"
             element={
-              user && org ? (
-                <ProtectedRoute>
-                  <Features />
-                </ProtectedRoute>
-              ) : (
-                <PublicLayout>
-                  <Features />
-                </PublicLayout>
-              )
+              <PublicLayout>
+                <Features />
+              </PublicLayout>
             }
           />
           <Route
@@ -818,21 +905,6 @@ const App: React.FC = () => {
               )
             }
           />
-          <Route
-            path="/test-agent"
-            element={
-              org ? (
-                <ProtectedRoute>
-                  <TestAgent
-                    org={org}
-                    onChanged={() => void refreshWorkspace()}
-                  />
-                </ProtectedRoute>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
           {[
             "/knowledge-bases",
             "/knowledge-base",
@@ -885,17 +957,6 @@ const App: React.FC = () => {
           />
         </Routes>
       </Suspense>
-
-      {showSimulator && org && (
-        <Suspense fallback={null}>
-          <CallSimulator
-            agent={org.agent}
-            org={org}
-            onClose={() => setShowSimulator(false)}
-            onCallFinished={handleSimulatorFinished}
-          />
-        </Suspense>
-      )}
 
       {creditAlert && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#232f3e]/55 px-4 backdrop-blur-sm">
