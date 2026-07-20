@@ -731,12 +731,15 @@ export const voiceCallsApi = {
       return normalizeTwilioNumbersResponse(payload);
     },
     async searchAvailableTwilioNumbers(params: Record<string, string | number | boolean | undefined>) {
-      // Backend primary search is POST /api/twilio/numbers/search
-      const qs = new URLSearchParams();
-      Object.entries(params || {}).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') qs.set(key, String(value));
+      const payload = await request<unknown>('/api/twilio/numbers/search', {
+        method: 'POST',
+        body: {
+          requiresVoice: true,
+          requiresSms: false,
+          showAdvancedRestrictedNumbers: false,
+          ...(params || {}),
+        },
       });
-      const payload = await request<unknown>(`/api/twilio/numbers/search${qs.toString() ? `?${qs.toString()}` : ''}`);
       return normalizeAvailableTwilioNumbersResponse(payload);
     },
     async purchaseTwilioNumber(payload: unknown) {

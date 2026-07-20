@@ -933,15 +933,21 @@ export const twilioApi = {
     contains?: string;
     limit?: number;
   }) {
-    const qs = new URLSearchParams({
-      country: params.country,
-      type: params.type || 'Local',
-    });
-    if (params.areaCode) qs.set('areaCode', params.areaCode);
-    if (params.contains) qs.set('contains', params.contains);
-    if (params.limit) qs.set('limit', String(params.limit));
     return request<{ numbers: import('../types').AvailablePhoneNumber[] }>(
-      `/api/twilio/numbers/search?${qs.toString()}`,
+      '/api/twilio/numbers/search',
+      {
+        method: 'POST',
+        body: {
+          country: params.country,
+          type: params.type || 'Local',
+          areaCode: params.areaCode || undefined,
+          contains: params.contains || undefined,
+          limit: params.limit || undefined,
+          requiresVoice: true,
+          requiresSms: false,
+          showAdvancedRestrictedNumbers: false,
+        },
+      },
     );
   },
 

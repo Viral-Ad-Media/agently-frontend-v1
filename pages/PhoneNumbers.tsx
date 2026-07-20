@@ -303,8 +303,12 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       const result =
         await voiceCallsApi.phoneNumbers.searchAvailableTwilioNumbers({
           country: "US",
+          type: "Local",
           areaCode: areaCode || undefined,
           contains: contains || undefined,
+          requiresVoice: true,
+          requiresSms: false,
+          showAdvancedRestrictedNumbers: false,
           limit: 20,
         });
       setAvailableNumbers(result.numbers || []);
@@ -327,12 +331,27 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       return;
     setBusy(`purchase-${phoneNumber}`);
     try {
+      const defaultAgent =
+        agents.find(
+          (agent: any) =>
+            String(agent?.is_active ?? agent?.isActive ?? true) !== "false",
+        ) || agents[0];
       const purchased = await voiceCallsApi.phoneNumbers.purchaseTwilioNumber({
         phoneNumber,
         organizationId: orgId,
+        country: number.isoCountry || number.iso_country || "US",
+        type: (number as any).numberType || (number as any).type || "Local",
+        agentId:
+          (defaultAgent as any)?.id ||
+          (defaultAgent as any)?.agentId ||
+          undefined,
       });
+      const assignedName =
+        purchased?.autoAssignedAgent?.name || (defaultAgent as any)?.name;
       showToast(
-        `${phoneNumber} purchased. Assign it to an agent from the Numbers tab.`,
+        assignedName
+          ? `${phoneNumber} purchased and connected to ${assignedName}. It is ready for inbound and outbound calls.`
+          : `${phoneNumber} purchased. Add or assign a voice agent before calls can use it.`,
       );
       await loadNumbers();
       updateTab("numbers");
