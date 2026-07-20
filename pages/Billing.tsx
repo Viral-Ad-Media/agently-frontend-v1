@@ -143,11 +143,35 @@ const usageLabel = (charge: WalletUsageCharge) => {
     raw.includes("message") ||
     raw.includes("conversation")
   ) {
-    return "Chat usage";
+    return "Assistant conversation";
   }
 
-  if (raw.includes("voice") || raw.includes("preview")) {
+  if (raw.includes("voice") || raw.includes("preview") || raw.includes("tts")) {
     return "Voice preview";
+  }
+
+  if (raw.includes("audio_input") || raw.includes("audio input")) {
+    return "AI audio input";
+  }
+
+  if (raw.includes("audio_output") || raw.includes("audio output")) {
+    return "AI audio output";
+  }
+
+  if (raw.includes("cached_input") || raw.includes("cached input")) {
+    return "AI cached input";
+  }
+
+  if (raw.includes("input_tokens") || raw.includes("input tokens")) {
+    return "AI text input";
+  }
+
+  if (raw.includes("output_tokens") || raw.includes("output tokens")) {
+    return "AI text output";
+  }
+
+  if (raw.includes("token") || raw.includes("openai")) {
+    return "AI usage";
   }
 
   if (
@@ -163,7 +187,7 @@ const usageLabel = (charge: WalletUsageCharge) => {
     return "Notification delivery";
   }
 
-  return "Platform usage";
+  return "Service usage";
 };
 
 const quantityLabel = (charge: WalletUsageCharge) => {
@@ -344,29 +368,31 @@ const Billing: React.FC<BillingProps> = ({
   const currentRange = usageRanges.find((range) => range.key === usageRange);
   const activityRangeStart = Date.now() - rangeToMs(usageRange);
   const walletActivity = useMemo(() => {
-    const chargeRows = walletUsageCharges.map((charge) => {
-      const quotedAmountUsd = Math.abs(Number(charge.customerChargeUsd || 0));
-      const posted = Boolean(charge.walletTransactionId);
-      const kind =
-        quotedAmountUsd <= 0
-          ? ("neutral" as const)
-          : posted
-            ? ("debit" as const)
-            : ("pending" as const);
+    const chargeRows = walletUsageCharges
+      .filter((charge) => {
+        const quotedAmountUsd = Math.abs(Number(charge.customerChargeUsd || 0));
+        // Customer-facing history should show posted service debits only.
+        // A positive charge without a wallet transaction is a backend/database
+        // issue to be fixed by the immediate wallet-posting migration, not an
+        // intermediate customer-visible state.
+        if (quotedAmountUsd > 0 && !charge.walletTransactionId) return false;
+        if (quotedAmountUsd <= 0) return false;
+        return true;
+      })
+      .map((charge) => {
+        const quotedAmountUsd = Math.abs(Number(charge.customerChargeUsd || 0));
 
-      return {
-        id: `charge-${charge.id}`,
-        kind,
-        title: usageLabel(charge),
-        detail: posted
-          ? quantityLabel(charge)
-          : `${quantityLabel(charge)} · wallet posting pending`,
-        amountUsd: posted ? -quotedAmountUsd : quotedAmountUsd,
-        balanceAfterUsd: null as number | null,
-        createdAt: charge.createdAt,
-        sortTime: new Date(charge.createdAt || 0).getTime() || 0,
-      };
-    });
+        return {
+          id: `charge-${charge.id}`,
+          kind: "debit" as const,
+          title: usageLabel(charge),
+          detail: quantityLabel(charge),
+          amountUsd: -quotedAmountUsd,
+          balanceAfterUsd: null as number | null,
+          createdAt: charge.createdAt,
+          sortTime: new Date(charge.createdAt || 0).getTime() || 0,
+        };
+      });
 
     const usageTransactionIds = new Set(
       walletUsageCharges
@@ -664,20 +690,14 @@ const Billing: React.FC<BillingProps> = ({
                         className={`text-sm font-black ${
                           item.kind === "credit"
                             ? "text-emerald-600"
-                            : item.kind === "pending"
-                              ? "text-amber-600"
-                              : item.kind === "neutral"
-                                ? "text-slate-500"
-                                : "text-red-500"
+                            : "text-red-500"
                         }`}
                       >
                         {item.kind === "credit"
                           ? "+"
                           : item.kind === "debit"
                             ? "-"
-                            : item.kind === "pending"
-                              ? "Pending "
-                              : ""}
+                            : ""}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </p>
                       {item.balanceAfterUsd !== null && (
@@ -831,20 +851,14 @@ const Billing: React.FC<BillingProps> = ({
                         className={`px-6 py-4 text-right text-sm font-black ${
                           item.kind === "credit"
                             ? "text-emerald-600"
-                            : item.kind === "pending"
-                              ? "text-amber-600"
-                              : item.kind === "neutral"
-                                ? "text-slate-500"
-                                : "text-red-500"
+                            : "text-red-500"
                         }`}
                       >
                         {item.kind === "credit"
                           ? "+"
                           : item.kind === "debit"
                             ? "-"
-                            : item.kind === "pending"
-                              ? "Pending "
-                              : ""}
+                            : ""}
                         {money(Math.abs(Number(item.amountUsd || 0)))}
                       </td>
                     </tr>
