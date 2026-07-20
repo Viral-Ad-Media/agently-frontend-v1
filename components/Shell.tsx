@@ -754,7 +754,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     void refreshWalletMini();
     const interval = window.setInterval(() => void refreshWalletMini(), 5000);
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ balanceUsd?: number }>).detail;
+      const detail =
+        (event as CustomEvent<{ organizationId?: string; balanceUsd?: number }>)
+          .detail || {};
+      if (detail.organizationId !== org.id) {
+        void refreshWalletMini();
+        return;
+      }
       const nextBalance = Number(detail?.balanceUsd);
       if (Number.isFinite(nextBalance)) {
         setWalletMini((current) => {

@@ -216,8 +216,8 @@ const App: React.FC = () => {
         window.dispatchEvent(
           new CustomEvent("agently:wallet-refresh", {
             detail: Number.isFinite(Number(balanceUsd))
-              ? { balanceUsd: Number(balanceUsd) }
-              : {},
+              ? { organizationId: org.id, balanceUsd: Number(balanceUsd) }
+              : { organizationId: org.id },
           }),
         );
       },

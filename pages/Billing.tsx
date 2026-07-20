@@ -12,6 +12,7 @@ interface BillingProps {
 
 type WalletTransaction = {
   id: string;
+  organizationId?: string;
   type: string;
   amountUsd: number;
   balanceBeforeUsd?: number | null;
@@ -23,6 +24,7 @@ type WalletTransaction = {
 
 type WalletUsageCharge = {
   id: string;
+  organizationId?: string;
   provider: string;
   service: string;
   eventType?: string;
@@ -67,6 +69,7 @@ type BillingWallet = {
 };
 
 type BillingMetrics = {
+  organizationId?: string;
   invoices: Invoice[];
   wallet?: BillingWallet;
   totals?: {
@@ -212,12 +215,21 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     setError("");
     try {
       const response = (await api.getBillingSummary()) as BillingMetrics;
+      if (response?.organizationId && response.organizationId !== org.id) {
+        throw new Error(
+          "Billing summary returned a different organization. Please log out and log back in before continuing.",
+        );
+      }
       setBilling(response);
       const nextBalance = Number(response?.wallet?.balanceUsd);
       if (Number.isFinite(nextBalance)) {
         window.dispatchEvent(
           new CustomEvent("agently:wallet-refresh", {
-            detail: { balanceUsd: nextBalance },
+            detail: {
+              organizationId: org.id,
+              balanceUsd: nextBalance,
+              source: "billing-summary",
+            },
           }),
         );
       }
@@ -231,7 +243,14 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
   useEffect(() => {
     void loadBilling();
     const timer = window.setInterval(() => void loadBilling(), 5000);
-    const refreshHandler = () => void loadBilling();
+    const refreshHandler = (event: Event) => {
+      const detail =
+        (event as CustomEvent<{ organizationId?: string; source?: string }>)
+          .detail || {};
+      if (detail.organizationId && detail.organizationId !== org.id) return;
+      if (detail.source === "billing-summary") return;
+      void loadBilling();
+    };
     window.addEventListener("agently:wallet-refresh", refreshHandler);
     return () => {
       window.clearInterval(timer);
@@ -268,7 +287,11 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         if (Number.isFinite(nextBalance)) {
           window.dispatchEvent(
             new CustomEvent("agently:wallet-refresh", {
-              detail: { balanceUsd: nextBalance },
+              detail: {
+                organizationId: org.id,
+                balanceUsd: nextBalance,
+                source: "billing-topup",
+              },
             }),
           );
         }
@@ -283,33 +306,38 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
   };
 
   const activity = useMemo<ActivityItem[]>(() => {
-    const txById = new Map(
-      (wallet.recentTransactions || []).map((tx) => [tx.id, tx]),
+    const scopedTransactions = (wallet.recentTransactions || []).filter(
+      (tx) => !tx.organizationId || tx.organizationId === org.id,
     );
-    const chargeItems: ActivityItem[] = (wallet.recentUsageCharges || []).map(
-      (charge) => {
+    const scopedCharges = (wallet.recentUsageCharges || []).filter(
+      (charge) => !charge.organizationId || charge.organizationId === org.id,
+    );
+    const txById = new Map(scopedTransactions.map((tx) => [tx.id, tx]));
+    const chargeItems: ActivityItem[] = scopedCharges
+      .filter(
+        (charge) =>
+          Number(charge.customerChargeUsd || 0) <= 0 ||
+          Boolean(charge.walletTransactionId),
+      )
+      .map((charge) => {
         const tx = charge.walletTransactionId
           ? txById.get(charge.walletTransactionId)
           : undefined;
-        const posted = Boolean(charge.walletTransactionId);
         const amount = Number(charge.customerChargeUsd || 0);
         return {
           id: `charge-${charge.id}`,
           createdAt: charge.createdAt,
           title: usageLabel(charge),
-          subtitle: `${unitLabel(charge)}${posted || amount <= 0 ? "" : " · needs wallet posting"}`,
+          subtitle: unitLabel(charge),
           amountUsd: amount <= 0 ? 0 : -Math.abs(amount),
           tone: amount <= 0 ? "neutral" : "debit",
           balanceAfterUsd: tx?.balanceAfterUsd ?? null,
         };
-      },
-    );
+      });
     const chargeTxIds = new Set(
-      (wallet.recentUsageCharges || [])
-        .map((c) => c.walletTransactionId)
-        .filter(Boolean),
+      scopedCharges.map((c) => c.walletTransactionId).filter(Boolean),
     );
-    const transactionItems: ActivityItem[] = (wallet.recentTransactions || [])
+    const transactionItems: ActivityItem[] = scopedTransactions
       .filter((tx) => !chargeTxIds.has(tx.id))
       .map((tx) => {
         const amount = Number(tx.amountUsd || 0);
@@ -327,7 +355,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [wallet.recentTransactions, wallet.recentUsageCharges]);
+  }, [org.id, wallet.recentTransactions, wallet.recentUsageCharges]);
 
   const filteredActivity = useMemo(() => {
     if (usageRange === "all") return activity;
