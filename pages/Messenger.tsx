@@ -108,6 +108,42 @@ const getChatbotAvatarImage = (avatarLabel?: string) => {
 const hasChatbotAvatarImage = (avatarLabel?: string) =>
   Boolean(getChatbotAvatarImage(avatarLabel));
 
+const compressChatbotAvatarImage = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Unable to read image file."));
+    reader.onload = () => {
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      if (!raw) return reject(new Error("Unable to read image file."));
+      const image = new Image();
+      image.onerror = () => reject(new Error("Unable to load image."));
+      image.onload = () => {
+        const maxSide = 256;
+        const scale = Math.min(
+          1,
+          maxSide / Math.max(image.width, image.height),
+        );
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx)
+          return reject(new Error("Image compression is not available."));
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+        let output = canvas.toDataURL("image/webp", 0.82);
+        if (!output || output.length > 350_000) {
+          output = canvas.toDataURL("image/jpeg", 0.78);
+        }
+        resolve(output);
+      };
+      image.src = raw;
+    };
+    reader.readAsDataURL(file);
+  });
+
 const getAvatarInitial = (_label?: string, fallbackName?: string) => {
   const source = fallbackName?.trim() || "A";
   return source.slice(0, 1).toUpperCase() || "A";
@@ -307,21 +343,15 @@ const Messenger: React.FC<MessengerProps> = ({
       setError("Please upload a valid image file.");
       return;
     }
-    if (file.size > 900_000) {
-      setError(
-        "Please use an image under 900KB so it can be saved with this chatbot.",
-      );
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result) return;
-      patch({ avatarLabel: `${CHATBOT_AVATAR_UPLOAD_PREFIX}${result}` });
-      setAvatarMenuOpen(false);
-      setError("");
-    };
-    reader.readAsDataURL(file);
+    setError("");
+    void compressChatbotAvatarImage(file)
+      .then((result) => {
+        patch({ avatarLabel: `${CHATBOT_AVATAR_UPLOAD_PREFIX}${result}` });
+        setAvatarMenuOpen(false);
+      })
+      .catch((err) => {
+        setError(err?.message || "Unable to prepare this image.");
+      });
   }, []);
 
   const linkedAgentName =
@@ -379,6 +409,9 @@ const Messenger: React.FC<MessengerProps> = ({
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
       } as any);
+      if (knowledgeBaseId && onAssignKnowledgeBase) {
+        await onAssignKnowledgeBase(knowledgeBaseId, activeChatbot.id);
+      }
       setSaveSuccess("Saved! Knowledge base assignment and FAQs are synced.");
       setSaveModalOpen(true);
     });
@@ -394,13 +427,11 @@ const Messenger: React.FC<MessengerProps> = ({
     null;
 
   const assignDraftKnowledgeBase = async (knowledgeBaseId: string) => {
-    if (!knowledgeBaseId || !activeChatbot?.id || !onAssignKnowledgeBase)
-      return;
-    await runAction("assign-knowledge-base", async () => {
-      await onAssignKnowledgeBase(knowledgeBaseId, activeChatbot.id);
-      patch({ knowledgeBaseId, faqs: [] });
-      setSaveSuccess("Knowledge base updated.");
-    });
+    if (!knowledgeBaseId || !activeChatbot?.id) return;
+    patch({ knowledgeBaseId, faqs: [] });
+    setSaveSuccess(
+      "Knowledge Base selected locally. Click Save Changes to apply it.",
+    );
   };
 
   useEffect(() => {
@@ -745,8 +776,8 @@ const Messenger: React.FC<MessengerProps> = ({
                   }}
                   className={`group min-h-[5.9rem] min-w-0 cursor-pointer rounded-2xl border px-2 py-2 text-left transition-all sm:min-h-[6.2rem] sm:px-3 ${
                     isActive
-                      ? "border-[#ff9f43] bg-white text-[#232f3e] shadow-[0_14px_28px_rgba(245,158,11,0.10)] ring-1 ring-[#fed7aa]"
-                      : "border-slate-200 bg-white text-[#232f3e] hover:border-[#fbbf24] hover:bg-[#fffbeb]"
+                      ? "border-[#D97706] bg-[#FFF7ED] text-[#111827] shadow-[0_18px_38px_rgba(217,119,6,0.18)] ring-2 ring-[#F59E0B]/35"
+                      : "border-slate-200 bg-white/75 text-[#232f3e] hover:border-[#fbbf24] hover:bg-[#fffbeb]"
                   }`}
                 >
                   <div className="flex h-full min-w-0 items-center gap-1.5 sm:gap-3">
@@ -772,7 +803,7 @@ const Messenger: React.FC<MessengerProps> = ({
                         <span
                           className={`max-w-full truncate rounded-full border px-1.5 py-0.5 text-[8px] font-medium uppercase leading-none tracking-[0.08em] ${
                             isActive
-                              ? "border-blue-200 bg-blue-50 text-blue-600"
+                              ? "border-amber-300 bg-amber-100 text-amber-800"
                               : "border-slate-200 bg-slate-50 text-slate-500"
                           }`}
                         >
@@ -1212,11 +1243,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   onChange={(event) =>
                     void assignDraftKnowledgeBase(event.target.value)
                   }
-                  disabled={
-                    !knowledgeBases.length ||
-                    busyAction === "assign-knowledge-base" ||
-                    !onAssignKnowledgeBase
-                  }
+                  disabled={!knowledgeBases.length}
                   className="w-full min-w-0 rounded-xl border-0 bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 outline-none transition focus:bg-white focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {knowledgeBases.length === 0 ? (

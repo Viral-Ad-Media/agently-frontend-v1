@@ -73,9 +73,18 @@ type WalletMini = {
   minimums?: {
     callUsd?: number;
     chatUsd?: number;
+    voicePreviewUsd?: number;
+    knowledgeSyncUsd?: number;
+    activeUsd?: number;
     hardStopBalanceUsd?: number;
     maxNegativeBalanceUsd?: number;
   };
+  numberRetention?: {
+    status?: string;
+    openCase?: boolean;
+    minimumRequiredUsd?: number;
+    graceEndsAt?: string | null;
+  } | null;
 };
 
 const formatWalletMoney = (value: number) => {
@@ -83,13 +92,49 @@ const formatWalletMoney = (value: number) => {
   return `${amount < 0 ? "-" : ""}$${Math.abs(amount).toFixed(2)}`;
 };
 
+const walletCacheKey = (organizationId: string) =>
+  `agently:wallet-mini:${organizationId}`;
+
+const readWalletCache = (organizationId: string): WalletMini | null => {
+  if (typeof window === "undefined" || !organizationId) return null;
+  try {
+    const raw = window.localStorage.getItem(walletCacheKey(organizationId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WalletMini;
+    const balanceUsd = Number(parsed?.balanceUsd);
+    if (!Number.isFinite(balanceUsd)) return null;
+    return { ...parsed, balanceUsd };
+  } catch {
+    return null;
+  }
+};
+
+const writeWalletCache = (organizationId: string, wallet: WalletMini) => {
+  if (typeof window === "undefined" || !organizationId) return;
+  try {
+    window.localStorage.setItem(
+      walletCacheKey(organizationId),
+      JSON.stringify(wallet),
+    );
+  } catch {
+    // Local storage is optional.
+  }
+};
+
 const WalletCreditBadge: React.FC<{
   wallet: WalletMini | null;
   compact?: boolean;
 }> = ({ wallet, compact = false }) => {
-  const balance = Number(wallet?.balanceUsd || 0);
-  const isNegative = balance < 0;
-  const isLow = !isNegative && balance < Number(wallet?.minimums?.callUsd || 1);
+  const hasWallet = Boolean(
+    wallet && Number.isFinite(Number(wallet.balanceUsd)),
+  );
+  const balance = hasWallet ? Number(wallet?.balanceUsd || 0) : null;
+  const isNegative = Number(balance || 0) < 0;
+  const isLow =
+    hasWallet &&
+    !isNegative &&
+    Number(balance || 0) <
+      Number(wallet?.minimums?.callUsd || wallet?.minimums?.activeUsd || 1);
   const tone = isNegative
     ? "border-red-200 bg-red-50 text-red-700"
     : isLow
@@ -109,9 +154,46 @@ const WalletCreditBadge: React.FC<{
         <span className="truncate md:hidden">Credit</span>
       </span>
       <span className="shrink-0 tabular-nums">
-        {formatWalletMoney(balance)}
+        {hasWallet ? formatWalletMoney(Number(balance || 0)) : "—"}
       </span>
     </Link>
+  );
+};
+
+const LowCreditTicker: React.FC<{ wallet: WalletMini | null }> = ({
+  wallet,
+}) => {
+  if (!wallet) return null;
+  const balance = Number(wallet.balanceUsd);
+  if (!Number.isFinite(balance)) return null;
+  const minimum = Math.max(
+    Number(wallet.numberRetention?.minimumRequiredUsd || 0),
+    Number(wallet.minimums?.callUsd || 0),
+    Number(wallet.minimums?.activeUsd || 0),
+    Number(wallet.minimumRechargeUsd || 0),
+    1,
+  );
+  const shouldShow =
+    balance < minimum ||
+    Boolean(wallet.numberRetention?.openCase) ||
+    ["open", "warning", "pending_release", "release_pending"].includes(
+      String(wallet.numberRetention?.status || "").toLowerCase(),
+    );
+  if (!shouldShow) return null;
+  return (
+    <div className="border-y border-amber-200 bg-amber-50 text-[12px] font-medium text-amber-900">
+      <style>{`@keyframes agentlyTicker{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
+      <div className="relative h-8 overflow-hidden">
+        <div
+          className="absolute left-0 top-0 flex h-8 min-w-full items-center whitespace-nowrap px-6"
+          style={{ animation: "agentlyTicker 22s linear infinite" }}
+        >
+          Usage credit is below the required minimum. Top up with at least{" "}
+          {formatWalletMoney(minimum)} in Billing to keep phone numbers, calls,
+          website assistants, Knowledge Base syncs and campaigns active.
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -639,7 +721,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [walletMini, setWalletMini] = useState<WalletMini | null>(null);
+  const [walletMini, setWalletMini] = useState<WalletMini | null>(() =>
+    readWalletCache(org.id),
+  );
   const walletRequestInFlight = useRef(false);
 
   const refreshWalletMini = async () => {
@@ -650,10 +734,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         wallet?: WalletMini;
       };
       if (summary?.wallet) {
-        setWalletMini({
+        const nextWallet = {
           ...summary.wallet,
           balanceUsd: Number(summary.wallet.balanceUsd || 0),
-        });
+        };
+        setWalletMini(nextWallet);
+        writeWalletCache(org.id, nextWallet);
       }
     } catch {
       // Billing should not break the app shell.
@@ -663,16 +749,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   };
 
   useEffect(() => {
+    const cachedWallet = readWalletCache(org.id);
+    if (cachedWallet) setWalletMini(cachedWallet);
     void refreshWalletMini();
     const interval = window.setInterval(() => void refreshWalletMini(), 5000);
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ balanceUsd?: number }>).detail;
       const nextBalance = Number(detail?.balanceUsd);
       if (Number.isFinite(nextBalance)) {
-        setWalletMini((current) => ({
-          ...(current || { balanceUsd: nextBalance }),
-          balanceUsd: nextBalance,
-        }));
+        setWalletMini((current) => {
+          const nextWallet = {
+            ...(current || { balanceUsd: nextBalance }),
+            balanceUsd: nextBalance,
+          };
+          writeWalletCache(org.id, nextWallet);
+          return nextWallet;
+        });
       }
       void refreshWalletMini();
     };
@@ -839,6 +931,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 </div>
               </div>
             </header>
+            <LowCreditTicker wallet={walletMini} />
 
             <main className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-3 pb-8 pt-4 sm:px-5 md:pb-10 md:pt-5 lg:px-6 xl:px-8">
               {user.role === "Viewer" &&
