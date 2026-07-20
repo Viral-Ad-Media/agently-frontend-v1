@@ -140,6 +140,43 @@ const statusTone = (status?: string) => {
   return "bg-slate-50 text-slate-600 ring-slate-100";
 };
 
+type ScrapeProgressPage = {
+  url?: string;
+  title?: string;
+  status?:
+    | "queued"
+    | "fetching"
+    | "processing"
+    | "completed"
+    | "failed"
+    | string;
+  percent?: number;
+  error?: string;
+};
+
+type ScrapeProgress = {
+  phase?: string;
+  currentUrl?: string | null;
+  pagesDetected?: number;
+  pagesCompleted?: number;
+  pagesFailed?: number;
+  overallPercent?: number;
+  pages?: ScrapeProgressPage[];
+  updatedAt?: string;
+};
+
+const getScrapeProgress = (
+  source?: KnowledgeSource | null,
+): ScrapeProgress | null => {
+  const metadata = source?.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return null;
+  const progress = (metadata as { scrapeProgress?: unknown }).scrapeProgress;
+  if (!progress || typeof progress !== "object" || Array.isArray(progress))
+    return null;
+  return progress as ScrapeProgress;
+};
+
 type ScrapeReport = {
   coveragePercent?: number;
   pagesAttempted?: number;
@@ -168,12 +205,22 @@ const getScrapeReport = (
 };
 
 const reportSummary = (source: KnowledgeSource) => {
+  const progress = getScrapeProgress(source);
+  const status = String(source.scrapeStatus || "").toLowerCase();
+  if (progress && ["scraping", "syncing"].includes(status)) {
+    const detected = Number(
+      progress.pagesDetected || progress.pages?.length || 0,
+    );
+    const completed = Number(progress.pagesCompleted || 0);
+    const failed = Number(progress.pagesFailed || 0);
+    const percent = Number.isFinite(Number(progress.overallPercent))
+      ? Math.max(0, Math.min(100, Math.round(Number(progress.overallPercent))))
+      : 0;
+    return `${detected} page${detected === 1 ? "" : "s"} detected · ${percent}% complete · ${completed} successful · ${failed} failed`;
+  }
   const report = getScrapeReport(source);
   if (!report) {
-    if (
-      String(source.scrapeStatus || "").toLowerCase() === "pending" ||
-      !source.lastScrapedAt
-    ) {
+    if (status === "pending" || !source.lastScrapedAt) {
       return "Not synced yet. Click Sync to scrape and prepare this source.";
     }
     return "No detailed sync report is available yet.";
@@ -259,6 +306,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   const [showAssignments, setShowAssignments] = useState(false);
   const [deleteModal, setDeleteModal] = useState<DeleteModalState>(null);
   const lastInitialSignature = useRef("");
+  const resumedStaleSources = useRef(new Set<string>());
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -504,6 +552,55 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncNotice?.id, syncNotice?.status]);
+
+  useEffect(() => {
+    const staleBefore = Date.now() - 15 * 60 * 1000;
+    for (const kb of knowledgeBases) {
+      for (const source of kb.sources || []) {
+        const status = String(source.scrapeStatus || "").toLowerCase();
+        const updatedAt = new Date(
+          source.updatedAt || source.createdAt || 0,
+        ).getTime();
+        if (
+          status === "scraping" &&
+          Number.isFinite(updatedAt) &&
+          updatedAt > 0 &&
+          updatedAt < staleBefore &&
+          !resumedStaleSources.current.has(source.id)
+        ) {
+          resumedStaleSources.current.add(source.id);
+          void api
+            .syncKnowledgeSource(kb.id, source.id, { background: true })
+            .catch(() => {
+              resumedStaleSources.current.delete(source.id);
+            });
+        }
+      }
+    }
+  }, [knowledgeBases]);
+
+  useEffect(() => {
+    const hasActiveScrape = knowledgeBases.some((kb) =>
+      (kb.sources || []).some((source) =>
+        ["scraping", "syncing"].includes(
+          String(source.scrapeStatus || "").toLowerCase(),
+        ),
+      ),
+    );
+    if (!hasActiveScrape) return;
+    const timer = window.setInterval(() => {
+      void loadKnowledgeBases({ silent: true });
+    }, 4000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    knowledgeBases
+      .map(
+        (kb) =>
+          `${kb.id}:${(kb.sources || []).map((s) => `${s.id}:${s.scrapeStatus}`).join(",")}`,
+      )
+      .join("|"),
+  ]);
 
   const assignVoiceAgent = async (
     agent: AgentConfig,
@@ -897,6 +994,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                     </h3>
                     <p className="mt-1 break-all text-xs font-semibold text-slate-500">
                       {selected.primaryUrl ||
+                        selected.sources?.find((source) => source.isPrimary)
+                          ?.url ||
+                        selected.sources?.[0]?.url ||
                         selected.domain ||
                         "No primary website"}
                     </p>
@@ -1036,19 +1136,99 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                                   <p className="mt-1 text-xs font-bold leading-5 text-slate-600">
                                     {reportSummary(source)}
                                   </p>
-                                  {getScrapeReport(source)?.failedPages
+                                  {getScrapeProgress(source)?.pages?.length ||
+                                  getScrapeReport(source)?.failedPages
                                     ?.length ||
                                   getScrapeReport(source)?.warnings?.length ? (
-                                    <details className="mt-2">
+                                    <details
+                                      className="mt-2"
+                                      open={
+                                        String(
+                                          source.scrapeStatus || "",
+                                        ).toLowerCase() === "scraping"
+                                      }
+                                    >
                                       <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-amber-700">
                                         View page details
                                       </summary>
                                       <div className="mt-2 space-y-2 text-xs text-slate-600">
                                         {(
+                                          getScrapeProgress(source)?.pages || []
+                                        )
+                                          .slice(0, 30)
+                                          .map((item, index) => {
+                                            const pageStatus = String(
+                                              item.status || "queued",
+                                            ).toLowerCase();
+                                            const failed =
+                                              pageStatus === "failed";
+                                            const percent = Number.isFinite(
+                                              Number(item.percent),
+                                            )
+                                              ? Math.max(
+                                                  0,
+                                                  Math.min(
+                                                    100,
+                                                    Math.round(
+                                                      Number(item.percent),
+                                                    ),
+                                                  ),
+                                                )
+                                              : 0;
+                                            return (
+                                              <div
+                                                key={`progress-${source.id}-${index}`}
+                                                className={`rounded-xl bg-white p-2 ring-1 ${failed ? "ring-red-100" : "ring-slate-100"}`}
+                                              >
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <p
+                                                    className={`min-w-0 break-all font-black ${failed ? "text-red-700" : "text-slate-700"}`}
+                                                  >
+                                                    {compactUrl(item.url)}
+                                                  </p>
+                                                  <span
+                                                    className={`shrink-0 text-[10px] font-black ${failed ? "text-red-600" : "text-amber-700"}`}
+                                                  >
+                                                    {failed
+                                                      ? "Failed"
+                                                      : `${percent}%`}
+                                                  </span>
+                                                </div>
+                                                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                                  <div
+                                                    className={`h-full rounded-full ${failed ? "bg-red-500" : pageStatus === "completed" ? "bg-emerald-500" : "bg-amber-500"}`}
+                                                    style={{
+                                                      width: `${percent}%`,
+                                                    }}
+                                                  />
+                                                </div>
+                                                <p
+                                                  className={`mt-1 leading-5 ${failed ? "text-red-600" : "text-slate-500"}`}
+                                                >
+                                                  {item.error ||
+                                                    pageStatus.replace(
+                                                      /_/g,
+                                                      " ",
+                                                    )}
+                                                </p>
+                                              </div>
+                                            );
+                                          })}
+                                        {(
                                           getScrapeReport(source)
                                             ?.failedPages || []
                                         )
-                                          .slice(0, 6)
+                                          .filter(
+                                            (failedPage) =>
+                                              !(
+                                                getScrapeProgress(source)
+                                                  ?.pages || []
+                                              ).some(
+                                                (item) =>
+                                                  item.url === failedPage.url,
+                                              ),
+                                          )
+                                          .slice(0, 10)
                                           .map((item, index) => (
                                             <div
                                               key={`failed-${source.id}-${index}`}
@@ -1059,26 +1239,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                                               </p>
                                               <p className="mt-1 leading-5 text-red-600">
                                                 {item.reason ||
-                                                  "This page could not be scraped."}
-                                              </p>
-                                            </div>
-                                          ))}
-                                        {(
-                                          getScrapeReport(source)?.warnings ||
-                                          []
-                                        )
-                                          .slice(0, 4)
-                                          .map((item, index) => (
-                                            <div
-                                              key={`warning-${source.id}-${index}`}
-                                              className="rounded-xl bg-white p-2 ring-1 ring-amber-100"
-                                            >
-                                              <p className="break-all font-black text-amber-700">
-                                                {compactUrl(item.url)}
-                                              </p>
-                                              <p className="mt-1 leading-5 text-amber-700">
-                                                {item.reason ||
-                                                  "This page needed extra cleanup."}
+                                                  "This page could not be scraped. Remove it or add the URL directly for a separate retry."}
                                               </p>
                                             </div>
                                           ))}
