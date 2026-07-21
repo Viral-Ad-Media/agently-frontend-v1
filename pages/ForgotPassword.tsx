@@ -2,6 +2,55 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../services/api";
 
+const EyeIcon = ({ hidden }: { hidden: boolean }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {hidden ? (
+      <>
+        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+        <path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+        <path d="m2 2 20 20" />
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+      </>
+    ) : (
+      <>
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    )}
+  </svg>
+);
+
+const PasswordVisibilityButton = ({
+  visible,
+  onToggle,
+  label,
+}: {
+  visible: boolean;
+  onToggle: () => void;
+  label: string;
+}) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="absolute inset-y-0 right-3 flex items-center text-[#0F172A]/42 transition hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B]/45"
+    aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+    title={visible ? `Hide ${label}` : `Show ${label}`}
+  >
+    <EyeIcon hidden={visible} />
+  </button>
+);
+
 const RecoveryIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -70,6 +119,8 @@ const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [devResetUrl, setDevResetUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -309,29 +360,47 @@ const ForgotPassword: React.FC = () => {
                       <label className="mb-1 block text-[12px] font-medium text-[#0F172A]">
                         New password
                       </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        placeholder="At least 8 characters"
-                        className="auth-input"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          minLength={8}
+                          placeholder="At least 8 characters"
+                          className="auth-input"
+                          style={{ paddingRight: "2.85rem" }}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <PasswordVisibilityButton
+                          visible={showPassword}
+                          onToggle={() => setShowPassword((value) => !value)}
+                          label="new password"
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="mb-1 block text-[12px] font-medium text-[#0F172A]">
                         Confirm password
                       </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        placeholder="Repeat password"
-                        className="auth-input"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          required
+                          minLength={8}
+                          placeholder="Repeat password"
+                          className="auth-input"
+                          style={{ paddingRight: "2.85rem" }}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                        <PasswordVisibilityButton
+                          visible={showConfirmPassword}
+                          onToggle={() =>
+                            setShowConfirmPassword((value) => !value)
+                          }
+                          label="confirmation password"
+                        />
+                      </div>
                     </div>
                     {error && (
                       <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
