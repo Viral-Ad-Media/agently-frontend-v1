@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState, useTransition } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useLocation } from "react-router-dom";
 import { CallRecord, Organization } from "../types";
 import AppModal from "../components/AppModal";
@@ -701,6 +707,30 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<CallMetrics | null>(null);
+  const [revealedMetricLabel, setRevealedMetricLabel] = useState<string | null>(
+    null,
+  );
+  const metricRevealTimer = useRef<number | null>(null);
+
+  const brieflyRevealMetricLabel = (label: string) => {
+    setRevealedMetricLabel(label);
+    if (metricRevealTimer.current) {
+      window.clearTimeout(metricRevealTimer.current);
+    }
+    metricRevealTimer.current = window.setTimeout(() => {
+      setRevealedMetricLabel(null);
+      metricRevealTimer.current = null;
+    }, 1700);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (metricRevealTimer.current) {
+        window.clearTimeout(metricRevealTimer.current);
+      }
+    };
+  }, []);
+
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<string | null>(null);
   const [rerunOpen, setRerunOpen] = useState(false);
   const [rerunBusy, setRerunBusy] = useState(false);
@@ -1262,26 +1292,40 @@ const CallLogs: React.FC<CallLogsProps> = ({
             icon: "fa-rotate-right",
             color: "bg-blue-50 text-blue-600",
           },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:gap-3 sm:p-3.5"
-          >
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${item.color}`}
+        ].map((item) => {
+          const isRevealed = revealedMetricLabel === item.label;
+
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => brieflyRevealMetricLabel(item.label)}
+              onBlur={() => setRevealedMetricLabel(null)}
+              aria-label={`${item.label}: ${item.value}`}
+              className="agently-mobile-metric-card relative flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition active:scale-[0.99] sm:gap-3 sm:p-3.5"
             >
-              <i className={`fa-sharp fa-solid ${item.icon} text-sm`} />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
+              <span
+                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
+                data-open={isRevealed ? "true" : "false"}
+              >
                 {item.label}
-              </p>
-              <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:text-base">
-                {item.value}
-              </p>
-            </div>
-          </div>
-        ))}
+              </span>
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${item.color}`}
+              >
+                <i className={`fa-sharp fa-solid ${item.icon} text-sm`} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
+                  {item.label}
+                </p>
+                <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:text-base">
+                  {item.value}
+                </p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-[minmax(0,1fr)_10.5rem_10.5rem_11rem]">

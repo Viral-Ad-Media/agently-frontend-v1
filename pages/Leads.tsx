@@ -363,6 +363,29 @@ const Leads: React.FC<LeadsProps> = ({
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [revealedMetricLabel, setRevealedMetricLabel] = useState<string | null>(
+    null,
+  );
+  const metricRevealTimer = useRef<number | null>(null);
+
+  const brieflyRevealMetricLabel = (label: string) => {
+    setRevealedMetricLabel(label);
+    if (metricRevealTimer.current) {
+      window.clearTimeout(metricRevealTimer.current);
+    }
+    metricRevealTimer.current = window.setTimeout(() => {
+      setRevealedMetricLabel(null);
+      metricRevealTimer.current = null;
+    }, 1700);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (metricRevealTimer.current) {
+        window.clearTimeout(metricRevealTimer.current);
+      }
+    };
+  }, []);
 
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1316,29 +1339,43 @@ const Leads: React.FC<LeadsProps> = ({
             icon: "fa-pen-to-square",
             color: "bg-slate-50 text-slate-600",
           },
-        ].map((metric) => (
-          <div
-            key={metric.label}
-            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:gap-3 sm:p-3.5"
-          >
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${metric.color}`}
+        ].map((metric) => {
+          const isRevealed = revealedMetricLabel === metric.label;
+
+          return (
+            <button
+              key={metric.label}
+              type="button"
+              onClick={() => brieflyRevealMetricLabel(metric.label)}
+              onBlur={() => setRevealedMetricLabel(null)}
+              aria-label={`${metric.label}: ${metric.value}. ${metric.hint}`}
+              className="agently-mobile-metric-card relative flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition active:scale-[0.99] sm:gap-3 sm:p-3.5"
             >
-              <i className={`fa-sharp fa-solid ${metric.icon} text-sm`} />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
+              <span
+                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
+                data-open={isRevealed ? "true" : "false"}
+              >
                 {metric.label}
-              </p>
-              <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:mt-1 sm:text-base">
-                {metric.value}
-              </p>
-              <p className="hidden truncate text-[10px] font-bold text-slate-400 sm:block">
-                {metric.hint}
-              </p>
-            </div>
-          </div>
-        ))}
+              </span>
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${metric.color}`}
+              >
+                <i className={`fa-sharp fa-solid ${metric.icon} text-sm`} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
+                  {metric.label}
+                </p>
+                <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:mt-1 sm:text-base">
+                  {metric.value}
+                </p>
+                <p className="hidden truncate text-[10px] font-bold text-slate-400 sm:block">
+                  {metric.hint}
+                </p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main grid */}

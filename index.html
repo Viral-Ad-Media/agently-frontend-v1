@@ -4,12 +4,39 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <title>Agently - AI Agent Platform</title>
     <link rel="icon" type="image/png" href="/agently-favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      (() => {
+        const viewportContent =
+          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+        const applyMobileViewport = () => {
+          const viewport = document.querySelector('meta[name="viewport"]');
+          if (
+            viewport &&
+            viewport.getAttribute("content") !== viewportContent
+          ) {
+            viewport.setAttribute("content", viewportContent);
+          }
+          document.documentElement.style.setProperty(
+            "--agently-viewport-width",
+            `${Math.max(320, window.innerWidth)}px`,
+          );
+        };
+        applyMobileViewport();
+        window.addEventListener("orientationchange", () => {
+          window.setTimeout(applyMobileViewport, 80);
+          window.setTimeout(applyMobileViewport, 300);
+        });
+        window.addEventListener("pageshow", applyMobileViewport);
+        document.addEventListener("visibilitychange", applyMobileViewport);
+      })();
+    </script>
     <script>
       tailwind.config = {
         theme: {
