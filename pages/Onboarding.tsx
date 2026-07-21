@@ -808,6 +808,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [citySuggestions, setCitySuggestions] = useState<NominatimResult[]>([]);
   const [cityLoading, setCityLoading] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  const cityRef = useRef<HTMLDivElement>(null);
   const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -820,16 +821,29 @@ const Onboarding: React.FC<OnboardingProps> = ({
   }, [agent.name, profile.name]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        industryRef.current &&
-        !industryRef.current.contains(e.target as Node)
-      ) {
+    const closeFloatingControls = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (industryRef.current && !industryRef.current.contains(target)) {
         setIndustryOpen(false);
       }
+      if (cityRef.current && !cityRef.current.contains(target)) {
+        setCityOpen(false);
+      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIndustryOpen(false);
+        setCityOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeFloatingControls);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeFloatingControls);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, []);
 
   useEffect(() => {
@@ -909,9 +923,28 @@ const Onboarding: React.FC<OnboardingProps> = ({
     "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/60 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10";
   const labelClass =
     "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/55";
+  const dropdownPanelClass =
+    "z-50 mt-2 max-h-56 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl md:absolute md:left-0 md:right-0 md:top-full";
+
+  const handleOnboardingContextMenu = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'input, textarea, select, button, a, [contenteditable="true"]',
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+  };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
+    <div
+      className="agently-mobile-stable agently-onboarding-root min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5"
+      onContextMenu={handleOnboardingContextMenu}
+    >
       <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-6xl items-center gap-4 lg:grid-cols-[0.48fr_1.52fr]">
         <aside className="relative hidden overflow-hidden rounded-[2rem] border border-[#0F172A]/10 bg-[#0F172A] p-5 text-white shadow-2xl lg:flex lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px] lg:flex-col">
           <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#F59E0B]/30 blur-3xl" />
@@ -1050,7 +1083,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                       />
                       <i className="fa-sharp fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#0F172A]/35" />
                       {industryOpen && (
-                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-56 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
+                        <div className={dropdownPanelClass}>
                           {filteredIndustries.length === 0 ? (
                             <p className="px-4 py-3 text-sm text-[#0F172A]/45">
                               No match
@@ -1078,7 +1111,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="relative">
+                  <div ref={cityRef} className="relative">
                     <label className={labelClass}>City / Location</label>
                     <input
                       type="text"
@@ -1099,12 +1132,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         }));
                       }}
                       onFocus={() =>
-                        citySearch.length >= 3 && setCityOpen(true)
+                        (citySearch || profile.location).length >= 3 &&
+                        setCityOpen(true)
                       }
                     />
                     {cityOpen &&
                       (citySuggestions.length > 0 || cityLoading) && (
-                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-52 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
+                        <div className={dropdownPanelClass}>
                           {cityLoading ? (
                             <div className="px-4 py-3 text-sm text-[#0F172A]/45">
                               Searching...
@@ -1114,7 +1148,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                               <button
                                 key={city.place_id}
                                 type="button"
-                                className="w-full rounded-2xl px-4 py-2.5 text-left text-sm text-[#0F172A]/75 transition-colors hover:bg-[#F1F5F9]"
+                                className="w-full rounded-2xl px-4 py-2.5 text-left text-sm text-[#0F172A]/75 transition-colors hover:bg-[#F1F5F9] break-words"
                                 onClick={() => {
                                   const displayName =
                                     getConciseLocationLabel(city);
@@ -1391,7 +1425,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         key={f}
                         type="button"
                         onClick={() => toggleField(f)}
-                        className={`rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "border-[#F59E0B]/35 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
+                        className={`rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "border-[#F59E0B]/65 bg-[#F59E0B]/20 text-[#B45309] shadow-sm shadow-[#F59E0B]/10" : "border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
                       >
                         {agent.dataCaptureFields.includes(f) && "✓ "}
                         {f}

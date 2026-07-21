@@ -790,9 +790,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="agently-mobile-stable relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.06),transparent_28%)]" />
-      <div className="relative flex min-h-screen">
+      <div className="relative flex min-h-screen w-full min-w-0 max-w-full">
         <div
           className={`fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
             mobileNavOpen
@@ -863,8 +863,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex-1 md:ml-[16.25rem] md:min-w-0">
-          <div className="flex h-screen min-h-0 flex-col">
+        <div className="min-w-0 max-w-full flex-1 md:ml-[16.25rem]">
+          <div className="flex h-screen min-h-0 w-full min-w-0 max-w-full flex-col">
             <header className="agently-app-topbar sticky top-0 z-[24] flex-shrink-0 overflow-visible border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_rgba(15,23,42,0.025)]">
               <div className="agently-app-topbar-inner flex min-h-[68px] w-full flex-col gap-2 overflow-visible px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 xl:px-8">
                 <div className="flex min-w-0 items-center gap-3">
@@ -986,14 +986,32 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavRef = useRef<HTMLDivElement | null>(null);
+  const mobileNavButtonRef = useRef<HTMLButtonElement | null>(null);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const closeOnOutsideTap = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        mobileNavRef.current?.contains(target) ||
+        mobileNavButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setMobileNavOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideTap);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideTap);
+  }, [mobileNavOpen]);
+
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="agently-mobile-stable relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.12),transparent_25%)]" />
 
       <header className="sticky top-0 z-40 px-3 py-3 sm:px-5">
@@ -1038,6 +1056,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             </div>
 
             <button
+              ref={mobileNavButtonRef}
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0F172A]/10 bg-white/70 text-[#0F172A]/72 shadow-sm lg:hidden"
@@ -1049,7 +1068,10 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         {mobileNavOpen && (
-          <div className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#0F172A]/10 bg-[#F8FAFC]/96 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden">
+          <div
+            ref={mobileNavRef}
+            className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#0F172A]/10 bg-[#F8FAFC]/96 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
+          >
             <nav className="grid gap-2">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <Link
