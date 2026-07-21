@@ -1224,7 +1224,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
             label: "Total calls",
@@ -1265,18 +1265,20 @@ const CallLogs: React.FC<CallLogsProps> = ({
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
+            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:gap-3 sm:p-3.5"
           >
             <div
-              className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.color}`}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${item.color}`}
             >
               <i className={`fa-sharp fa-solid ${item.icon} text-sm`} />
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
                 {item.label}
               </p>
-              <p className="font-black text-slate-900">{item.value}</p>
+              <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:text-base">
+                {item.value}
+              </p>
             </div>
           </div>
         ))}

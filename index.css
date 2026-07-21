@@ -2064,52 +2064,18 @@ main {
   }
 }
 
-/* ─── ONBOARDING FAQ REVIEW POLISH ─────────────────────────────
-   The generated FAQ review step should read like editable content,
-   not cramped form fields. These rules keep cards spacious on mobile
-   and prevent answer text from being clipped inside tiny textareas. */
-.ag-onboarding-faq-list {
-  max-height: min(56svh, 520px);
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-
-.ag-onboarding-faq-card {
-  max-width: 100%;
-}
-
-.ag-onboarding-faq-question,
-.ag-onboarding-faq-answer {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.ag-onboarding-faq-answer {
-  min-height: 7.25rem;
-}
-
-@media (max-width: 767px) {
-  .ag-onboarding-faq-list {
-    max-height: none;
-    overflow: visible;
-    padding-right: 0;
+/* ─── MOBILE DASHBOARD HARDENING ─────────────────────────────── */
+@media (max-width: 639px) {
+  .agently-app-topbar {
+    overflow: visible !important;
   }
 
-  .ag-onboarding-faq-card {
-    border-radius: 1.45rem !important;
-    padding: 1rem !important;
+  .agently-app-topbar-inner,
+  .agently-topbar-actions {
+    max-width: 100vw;
   }
 
-  .ag-onboarding-faq-question {
-    min-height: 2.75rem;
-    font-size: 16px !important;
-    line-height: 1.35 !important;
-  }
-
-  .ag-onboarding-faq-answer {
-    min-height: 8.75rem;
-    font-size: 16px !important;
-    line-height: 1.5 !important;
-    padding: 0.95rem 1rem !important;
+  .agently-topbar-actions>* {
+    min-width: 0;
   }
 }

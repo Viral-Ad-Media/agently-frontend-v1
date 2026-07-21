@@ -1,4 +1,4 @@
-export const DEFAULT_WORKSPACE_TIMEZONE = "America/Chicago";
+export const DEFAULT_WORKSPACE_TIMEZONE = "America/New_York";
 
 const FRIENDLY_TIMEZONE_LABELS: Record<string, string> = {
   "America/Chicago": "Central Time (US)",
@@ -152,8 +152,16 @@ export const resolveOrgTimezone = (org?: any) => {
       org?.defaultTimezone,
   );
 
-  // Do not let a browser/device default such as Africa/Lagos override a selected US business location.
-  if (locationTimezone && (!savedTimezone || savedTimezone === "Africa/Lagos")) {
+  const legacyAutoDefaults = new Set([
+    "",
+    "Africa/Lagos",
+    "America/Chicago",
+    DEFAULT_WORKSPACE_TIMEZONE,
+  ]);
+
+  // Business location should decide the default timezone. Eastern is only the
+  // fallback when no usable business location has been captured yet.
+  if (locationTimezone && legacyAutoDefaults.has(savedTimezone)) {
     return locationTimezone;
   }
 

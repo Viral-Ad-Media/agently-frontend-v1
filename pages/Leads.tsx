@@ -1269,7 +1269,7 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
           {
             label: "Total leads",
@@ -1319,21 +1319,21 @@ const Leads: React.FC<LeadsProps> = ({
         ].map((metric) => (
           <div
             key={metric.label}
-            className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
+            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:gap-3 sm:p-3.5"
           >
             <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${metric.color}`}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${metric.color}`}
             >
               <i className={`fa-sharp fa-solid ${metric.icon} text-sm`} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
                 {metric.label}
               </p>
-              <p className="mt-1 text-base font-black text-slate-900">
+              <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:mt-1 sm:text-base">
                 {metric.value}
               </p>
-              <p className="truncate text-[10px] font-bold text-slate-400">
+              <p className="hidden truncate text-[10px] font-bold text-slate-400 sm:block">
                 {metric.hint}
               </p>
             </div>

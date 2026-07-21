@@ -612,7 +612,7 @@ const NotificationBell: React.FC = () => {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-12 z-[120] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+        <div className="fixed left-4 right-4 top-[7.85rem] z-[120] mx-auto max-h-[calc(100dvh-9rem)] w-auto max-w-[24rem] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:max-h-none sm:w-[min(22rem,calc(100vw-2rem))] sm:max-w-none">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-sm font-black text-slate-900">Notifications</p>
@@ -630,7 +630,7 @@ const NotificationBell: React.FC = () => {
             </button>
           </div>
 
-          <div className="max-h-[22rem] overflow-y-auto p-2">
+          <div className="max-h-[min(22rem,calc(100dvh-14rem))] overflow-y-auto p-2 sm:max-h-[22rem]">
             {loading ? (
               <div className="p-6 text-center text-xs font-bold text-slate-400">
                 Loading alerts...
@@ -790,9 +790,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
-    <div className="agently-mobile-stable relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.06),transparent_28%)]" />
-      <div className="relative flex min-h-screen w-full min-w-0 max-w-full">
+      <div className="relative flex min-h-screen">
         <div
           className={`fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
             mobileNavOpen
@@ -863,8 +863,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="min-w-0 max-w-full flex-1 md:ml-[16.25rem]">
-          <div className="flex h-screen min-h-0 w-full min-w-0 max-w-full flex-col">
+        <div className="flex-1 md:ml-[16.25rem] md:min-w-0">
+          <div className="flex h-screen min-h-0 flex-col">
             <header className="agently-app-topbar sticky top-0 z-[24] flex-shrink-0 overflow-visible border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_rgba(15,23,42,0.025)]">
               <div className="agently-app-topbar-inner flex min-h-[68px] w-full flex-col gap-2 overflow-visible px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 xl:px-8">
                 <div className="flex min-w-0 items-center gap-3">
@@ -928,7 +928,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </header>
             <LowCreditTicker wallet={walletMini} />
 
-            <main className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-3 pb-8 pt-4 sm:px-5 md:pb-10 md:pt-5 lg:px-6 xl:px-8">
+            <main className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-4 pb-8 pt-4 sm:px-5 md:pb-10 md:pt-5 lg:px-6 xl:px-8">
               {user.role === "Viewer" &&
               [
                 "/agent",
@@ -986,32 +986,14 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const mobileNavRef = useRef<HTMLDivElement | null>(null);
-  const mobileNavButtonRef = useRef<HTMLButtonElement | null>(null);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (!mobileNavOpen) return;
-    const closeOnOutsideTap = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        mobileNavRef.current?.contains(target) ||
-        mobileNavButtonRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setMobileNavOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsideTap);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideTap);
-  }, [mobileNavOpen]);
-
   return (
-    <div className="agently-mobile-stable relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.12),transparent_25%)]" />
 
       <header className="sticky top-0 z-40 px-3 py-3 sm:px-5">
@@ -1056,7 +1038,6 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
             </div>
 
             <button
-              ref={mobileNavButtonRef}
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0F172A]/10 bg-white/70 text-[#0F172A]/72 shadow-sm lg:hidden"
@@ -1068,10 +1049,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         {mobileNavOpen && (
-          <div
-            ref={mobileNavRef}
-            className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#0F172A]/10 bg-[#F8FAFC]/96 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
-          >
+          <div className="mx-auto mt-3 max-w-7xl rounded-[1.75rem] border border-[#0F172A]/10 bg-[#F8FAFC]/96 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden">
             <nav className="grid gap-2">
               {PUBLIC_NAV_ITEMS.map((item) => (
                 <Link
