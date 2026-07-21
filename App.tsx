@@ -325,7 +325,34 @@ const App: React.FC = () => {
     agent: AgentConfig,
   ) => {
     await api.completeOnboarding(profile, agent);
-    await refreshWorkspace();
+
+    // Move the user out of onboarding immediately after the API confirms
+    // completion. The follow-up bootstrap refresh will load the full saved
+    // agent/chatbot/KB state, but this optimistic update prevents a short-lived
+    // cached org row from rendering step 1 again.
+    setWorkspace((currentWorkspace) => {
+      if (!currentWorkspace) return currentWorkspace;
+      return {
+        ...currentWorkspace,
+        organization: {
+          ...currentWorkspace.organization,
+          profile: {
+            ...currentWorkspace.organization.profile,
+            ...profile,
+            onboarded: true,
+          },
+        },
+      };
+    });
+
+    try {
+      await refreshWorkspace();
+    } catch (error) {
+      console.warn(
+        "[onboarding] workspace refresh after completion failed:",
+        error instanceof Error ? error.message : error,
+      );
+    }
   };
 
   const handleUpdateAgent = async (updates: Partial<AgentConfig>) => {
