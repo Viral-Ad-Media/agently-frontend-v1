@@ -1,4 +1,3 @@
-/* ─── TOKENS ─────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
   --agently-ink: #0F172A;
@@ -2077,5 +2076,107 @@ main {
 
   .agently-topbar-actions>* {
     min-width: 0;
+  }
+}
+
+
+/* Agently onboarding FAQ review polish - spacious editable generated answers */
+.ag-onboarding-faq-list {
+  max-height: min(56svh, 520px);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.ag-onboarding-faq-card {
+  max-width: 100%;
+}
+
+.ag-onboarding-faq-question,
+.ag-onboarding-faq-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ag-onboarding-faq-answer {
+  min-height: 7.25rem;
+}
+
+/* Agently onboarding interaction hardening - quick action suppression + stronger capture chips */
+.ag-onboarding-no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+.ag-onboarding-no-callout * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ag-onboarding-no-callout input,
+.ag-onboarding-no-callout textarea,
+.ag-onboarding-no-callout select,
+.ag-onboarding-no-callout [contenteditable="true"] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+}
+
+.ag-capture-field-chip {
+  min-height: 2.15rem;
+  letter-spacing: 0.01em;
+}
+
+.ag-capture-field-chip--active {
+  background: rgba(245, 158, 11, 0.24) !important;
+  border-color: rgba(245, 158, 11, 0.72) !important;
+  color: #9A5B00 !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, 0.35),
+    0 8px 18px rgba(245, 158, 11, 0.12) !important;
+}
+
+.ag-capture-field-chip--inactive {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
+@media (max-width: 767px) {
+  .ag-onboarding-faq-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .ag-onboarding-faq-card {
+    border-radius: 1.45rem !important;
+    padding: 1rem !important;
+  }
+
+  .ag-onboarding-faq-question {
+    min-height: 2.75rem;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
+  .ag-onboarding-faq-answer {
+    min-height: 8.75rem;
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+    padding: 0.95rem 1rem !important;
+  }
+
+  .ag-capture-field-chip {
+    min-height: 2.35rem;
+    padding-left: 0.95rem !important;
+    padding-right: 0.95rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .ag-capture-field-chip--active {
+    background: rgba(245, 158, 11, 0.28) !important;
+    border-color: rgba(245, 158, 11, 0.82) !important;
   }
 }

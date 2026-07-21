@@ -905,13 +905,18 @@ const Onboarding: React.FC<OnboardingProps> = ({
     }));
   };
 
+  const growTextarea = (element: HTMLTextAreaElement) => {
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  };
+
   const inputClass =
     "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/60 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10";
   const labelClass =
     "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/55";
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
+    <div className="ag-onboarding-no-callout min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
       <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-6xl items-center gap-4 lg:grid-cols-[0.48fr_1.52fr]">
         <aside className="relative hidden overflow-hidden rounded-[2rem] border border-[#0F172A]/10 bg-[#0F172A] p-5 text-white shadow-2xl lg:flex lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px] lg:flex-col">
           <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#F59E0B]/30 blur-3xl" />
@@ -1231,7 +1236,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     can keep improving them later.
                   </p>
                 </div>
-                <div className="max-h-[330px] space-y-2.5 overflow-y-auto pr-1">
+                <div className="ag-onboarding-faq-list space-y-3 overflow-y-auto pr-1">
                   {agent.faqs.length === 0 ? (
                     <div className="rounded-[2rem] border border-dashed border-[#0F172A]/15 bg-white/65 px-5 py-8 text-center text-sm text-[#0F172A]/55">
                       No FAQs were generated yet. You can add Knowledge Base
@@ -1241,41 +1246,58 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     agent.faqs.map((faq, i) => (
                       <div
                         key={faq.id}
-                        className="rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-3 shadow-sm"
+                        className="ag-onboarding-faq-card rounded-[1.6rem] border border-[#0F172A]/10 bg-white p-4 shadow-sm"
                       >
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[#F59E0B]/10 text-xs font-medium text-[#F59E0B]">
+                        <div className="mb-3 flex items-start gap-3">
+                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-[#F59E0B]/12 text-sm font-semibold text-[#D97706]">
                             {i + 1}
                           </span>
-                          <input
-                            type="text"
-                            value={faq.question}
+                          <label className="min-w-0 flex-1">
+                            <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-[#0F172A]/42">
+                              Question
+                            </span>
+                            <textarea
+                              rows={1}
+                              value={faq.question}
+                              onInput={(e) => growTextarea(e.currentTarget)}
+                              onFocus={(e) => growTextarea(e.currentTarget)}
+                              onChange={(e) =>
+                                setAgent((a) => ({
+                                  ...a,
+                                  faqs: a.faqs.map((f, j) =>
+                                    j === i
+                                      ? { ...f, question: e.target.value }
+                                      : f,
+                                  ),
+                                }))
+                              }
+                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden bg-transparent text-[15px] font-semibold leading-[1.35] text-[#0F172A] outline-none placeholder:text-[#0F172A]/35"
+                            />
+                          </label>
+                        </div>
+
+                        <label className="block">
+                          <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.16em] text-[#0F172A]/42">
+                            Answer
+                          </span>
+                          <textarea
+                            rows={4}
+                            value={faq.answer}
+                            onInput={(e) => growTextarea(e.currentTarget)}
+                            onFocus={(e) => growTextarea(e.currentTarget)}
                             onChange={(e) =>
                               setAgent((a) => ({
                                 ...a,
                                 faqs: a.faqs.map((f, j) =>
                                   j === i
-                                    ? { ...f, question: e.target.value }
+                                    ? { ...f, answer: e.target.value }
                                     : f,
                                 ),
                               }))
                             }
-                            className="w-full bg-transparent text-sm font-medium text-[#0F172A] outline-none"
+                            className="ag-onboarding-faq-answer w-full resize-none overflow-hidden rounded-[1.15rem] border border-[#0F172A]/8 bg-[#F8FAFC] px-4 py-3 text-[14px] leading-[1.55] text-[#0F172A]/78 outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/45 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10"
                           />
-                        </div>
-                        <textarea
-                          rows={2}
-                          value={faq.answer}
-                          onChange={(e) =>
-                            setAgent((a) => ({
-                              ...a,
-                              faqs: a.faqs.map((f, j) =>
-                                j === i ? { ...f, answer: e.target.value } : f,
-                              ),
-                            }))
-                          }
-                          className="w-full resize-none rounded-[1rem] bg-[#F1F5F9] px-3 py-2 text-[13px] leading-5 text-[#0F172A]/70 outline-none focus:ring-4 focus:ring-[#F59E0B]/10"
-                        />
+                        </label>
                       </div>
                     ))
                   )}
@@ -1391,7 +1413,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         key={f}
                         type="button"
                         onClick={() => toggleField(f)}
-                        className={`rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "border-[#F59E0B]/35 bg-[#F59E0B]/10 text-[#F59E0B]" : "border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
+                        className={`ag-capture-field-chip rounded-full border px-3 py-1.5 text-[11px] font-semibold capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "ag-capture-field-chip--active border-[#F59E0B]/70 bg-[#F59E0B]/25 text-[#9A5B00]" : "ag-capture-field-chip--inactive border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
                       >
                         {agent.dataCaptureFields.includes(f) && "✓ "}
                         {f}
