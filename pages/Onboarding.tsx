@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import knowledgeScrapeApi from "../services/knowledgeScrapeApi";
 import { BusinessProfile, FAQ, AgentConfig } from "../types";
 
 interface OnboardingProps {
@@ -100,19 +101,18 @@ const STEP_META = [
   {
     title: "Workspace",
     description:
-      "Set the basic details your agents will use to introduce the organization.",
+      "Tell us who you are so your agent can introduce your business correctly.",
     icon: "fa-building",
   },
   {
     title: "Knowledge",
-    description:
-      "Connect a website so Agently can prepare the first Knowledge Base draft.",
+    description: "Connecting your business so Agently can learn how you work.",
     icon: "fa-sparkles",
   },
   {
     title: "Review",
     description:
-      "Preview the starter answers before your agent begins using them.",
+      "Check the answers your agent will give — edit anything that is not right.",
     icon: "fa-list-check",
   },
   {
@@ -809,6 +809,21 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [cityLoading, setCityLoading] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   const cityDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // FIX: selecting a city called setCitySearch(displayName), which re-fired the
+  // effect keyed on [citySearch], refetched Nominatim and reopened the panel —
+  // which is why it popped up a second and third time after a selection.
+  // This flag suppresses exactly one search cycle after a deliberate pick.
+  const citySelectedRef = useRef(false);
+  // Page discovery result. Counts pages WITHOUT scraping them, so onboarding
+  // stays fast and the tenant is not charged to ingest a whole site they have
+  // not chosen yet.
+  const [discovery, setDiscovery] = useState<{
+    discoveryId: string;
+    totalPagesFound: number;
+    domain: string;
+    message: string;
+  } | null>(null);
+  const cityAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const orgName = profile.name || "your team";
@@ -833,31 +848,44 @@ const Onboarding: React.FC<OnboardingProps> = ({
   }, []);
 
   useEffect(() => {
+    // Consume the suppression flag set by a deliberate selection.
+    if (citySelectedRef.current) {
+      citySelectedRef.current = false;
+      return;
+    }
     if (citySearch.length < 3) {
       setCitySuggestions([]);
       setCityOpen(false);
       return;
     }
     if (cityDebounce.current) clearTimeout(cityDebounce.current);
+    cityAbortRef.current?.abort();
+
     cityDebounce.current = setTimeout(async () => {
+      const controller = new AbortController();
+      cityAbortRef.current = controller;
       setCityLoading(true);
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(citySearch)}&format=json&limit=8&addressdetails=1&featuretype=city`;
-        const res = await fetch(url, {
-          headers: { "User-Agent": "AgentlyOnboarding/1.0" },
-        });
+        const res = await fetch(url, { signal: controller.signal });
         const data = await res.json();
+        if (controller.signal.aborted) return;
         if (Array.isArray(data)) {
           setCitySuggestions(data);
           setCityOpen(data.length > 0);
         }
-      } catch (err) {
-        console.error("Nominatim search failed:", err);
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        console.error("City lookup failed:", err);
         setCitySuggestions([]);
       } finally {
-        setCityLoading(false);
+        if (!controller.signal.aborted) setCityLoading(false);
       }
     }, 400);
+
+    return () => {
+      if (cityDebounce.current) clearTimeout(cityDebounce.current);
+    };
   }, [citySearch]);
 
   const filteredIndustries = useMemo(
@@ -873,7 +901,33 @@ const Onboarding: React.FC<OnboardingProps> = ({
     try {
       if (step === 2) {
         setLoading(true);
-        const generated = await onGenerateFaqs(profile.website.trim());
+        const website = profile.website.trim();
+
+        // Phase 1 — enumerate the site and return a COUNT. Nothing is read yet.
+        if (website) {
+          try {
+            const found = await knowledgeScrapeApi.discover({
+              website,
+              duringOnboarding: true,
+            });
+            setDiscovery({
+              discoveryId: found.discoveryId,
+              totalPagesFound: found.totalPagesFound,
+              domain: found.domain,
+              message:
+                found.onboardingMessage ||
+                `We found ${found.totalPagesFound} pages on your website. For now we'll read just your homepage so you can get started quickly — you can choose the rest anytime from Settings.`,
+            });
+          } catch (discoveryError) {
+            // Discovery is a nicety, not a gate. If it fails we still generate
+            // FAQs from the homepage rather than blocking onboarding.
+            console.warn("Page discovery skipped:", discoveryError);
+          }
+        }
+
+        // Phase 2 — homepage only. Discovery already marked the homepage as the
+        // single selected page, so this reads one page and nothing more.
+        const generated = await onGenerateFaqs(website);
         setAgent((a) => ({ ...a, faqs: generated.slice(0, 5) }));
         setStep(3);
       } else if (step === TOTAL_STEPS) {
@@ -1130,8 +1184,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
                                     location: displayName,
                                     timezone: inferredTimezone,
                                   }));
+                                  // Suppress the search cycle this state
+                                  // change would otherwise trigger.
+                                  citySelectedRef.current = true;
                                   setCitySearch(displayName);
                                   setCityOpen(false);
+                                  setCitySuggestions([]);
                                 }}
                               >
                                 {city.display_name}
@@ -1159,9 +1217,18 @@ const Onboarding: React.FC<OnboardingProps> = ({
 
                 <div className="grid gap-3 rounded-[1.6rem] border border-[#0F172A]/10 bg-white/70 p-4 sm:grid-cols-3">
                   {[
-                    ["Greeting", "Personalized caller welcome"],
-                    ["Routing", "Cleaner handoff context"],
-                    ["Knowledge", "Website-backed answers"],
+                    [
+                      "How it answers",
+                      "Callers hear your business name and a warm welcome",
+                    ],
+                    [
+                      "When to pass on",
+                      "Your agent knows when a real person should take over",
+                    ],
+                    [
+                      "What it knows",
+                      "Answers come from your own website, not guesswork",
+                    ],
                   ].map(([title, copy]) => (
                     <div key={title}>
                       <p className="text-sm font-medium text-[#0F172A]">
@@ -1183,11 +1250,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     <i className="fa-sharp fa-solid fa-brain text-xl" />
                   </div>
                   <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Prepare your agent knowledge.
+                    Preparing your agent's knowledge.
                   </h1>
                   <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    Agently can scan your website and generate starter FAQs. You
-                    can edit everything before launch.
+                    Agently will read your website's homepage and turn it into
+                    starter questions and answers. You can change any of them
+                    before your agent goes live.
                   </p>
                 </div>
                 <div className="rounded-[1.65rem] border border-[#0F172A]/10 bg-white p-4 shadow-xl shadow-[#0F172A]/5">
@@ -1218,9 +1286,20 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     ))}
                   </div>
                   <p className="mt-4 text-[13px] leading-5 text-[#0F172A]/55">
-                    Continue to generate the starter Knowledge Base. This may
-                    take a few seconds.
+                    Continue and Agently will read your homepage to draft your
+                    first answers. This takes a few seconds.
                   </p>
+                  {discovery && (
+                    <div className="mt-3 rounded-[1.35rem] border border-[#0F172A]/10 bg-white/70 p-3.5">
+                      <p className="text-[13px] font-medium text-[#0F172A]">
+                        {discovery.totalPagesFound} pages found on{" "}
+                        {discovery.domain}
+                      </p>
+                      <p className="mt-1 text-[12px] leading-4 text-[#0F172A]/60">
+                        {discovery.message}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -1232,9 +1311,26 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     Review starter answers.
                   </h1>
                   <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    These FAQs become the first draft your agent can use. You
-                    can keep improving them later.
+                    These answers come from your homepage and are what your
+                    agent will say to callers.
                   </p>
+                  <div className="mt-3 flex items-start gap-2.5 rounded-[1.35rem] border border-[#F59E0B]/25 bg-[#F59E0B]/8 px-4 py-3">
+                    <i className="fa-sharp fa-solid fa-pen-to-square mt-0.5 text-[#D97706]" />
+                    <p className="text-[12px] leading-4 text-[#0F172A]/70">
+                      Tap any question or answer below to edit it — or leave
+                      them as they are and refine them later from Settings.
+                    </p>
+                  </div>
+                  {discovery && discovery.totalPagesFound > 1 && (
+                    <p className="mt-2 text-[12px] leading-4 text-[#0F172A]/55">
+                      There are{" "}
+                      <span className="font-medium text-[#0F172A]/75">
+                        {discovery.totalPagesFound - 1} more pages
+                      </span>{" "}
+                      we can learn from. Choose them in Settings → Knowledge
+                      Base once you are set up.
+                    </p>
+                  )}
                 </div>
                 <div className="ag-onboarding-faq-list space-y-3 overflow-y-auto pr-1">
                   {agent.faqs.length === 0 ? (
@@ -1340,7 +1436,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 </div>
 
                 <div>
-                  <label className={labelClass}>Communication tone</label>
+                  <label className={labelClass}>
+                    Choose a communication tone for your agent
+                  </label>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {TONE_OPTIONS.map((t) => (
                       <button
@@ -1367,7 +1465,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <div>
-                    <label className={labelClass}>Manager opens</label>
+                    <label className={labelClass}>
+                      Human assistant available from
+                    </label>
                     <input
                       type="time"
                       className={inputClass}
@@ -1378,7 +1478,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Manager closes</label>
+                    <label className={labelClass}>
+                      Human assistant available until
+                    </label>
                     <input
                       type="time"
                       className={inputClass}
@@ -1389,7 +1491,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Escalation number</label>
+                    <label className={labelClass}>
+                      Human assistant or manager contact
+                    </label>
                     <input
                       type="tel"
                       placeholder="Optional"
@@ -1404,6 +1508,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     />
                   </div>
                 </div>
+
+                <p className="-mt-2 text-[12px] leading-4 text-[#0F172A]/50">
+                  Set the hours a real person is around for call transfers
+                  (optional). This is the number your agent forwards calls to
+                  when a caller needs a human. You can change both anytime from
+                  Settings.
+                </p>
 
                 <div>
                   <label className={labelClass}>Capture from callers</label>

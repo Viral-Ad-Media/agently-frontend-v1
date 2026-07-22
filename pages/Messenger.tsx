@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { resizeAvatar } from "../lib/imageResize";
 import { Link } from "react-router-dom";
 import {
   ChatMessage,
@@ -203,6 +204,9 @@ const DEFAULT_BOT: ChatbotConfig & {
   embedScript: "",
   widgetScriptUrl: "",
   chatVoice: "alloy",
+  // Issue 7a: lead capture was hardcoded on. Defaults to true so no live
+  // chatbot changes behaviour when this ships.
+  leadCaptureEnabled: true,
   chatLanguages: ["en"],
 };
 
@@ -271,6 +275,7 @@ const Messenger: React.FC<MessengerProps> = ({
       setDraft({
         ...activeChatbot,
         chatVoice: (activeChatbot as any).chatVoice || "alloy",
+        leadCaptureEnabled: (activeChatbot as any).leadCaptureEnabled !== false,
         chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
       });
     }
@@ -442,7 +447,11 @@ const Messenger: React.FC<MessengerProps> = ({
       .listKnowledgeBaseFaqs(knowledgeBaseId)
       .then((result) => {
         if (cancelled) return;
-        const kbFaqs = (result.manualFaqs || [])
+        // FIX: this read only manualFaqs, silently discarding every FAQ the
+        // scraper generated — which is why the FAQ card looked empty even
+        // though the knowledge base had dozens of them. Show all of them, and
+        // mark which are editable.
+        const kbFaqs = (result.faqs || result.manualFaqs || [])
           .map((faq, index) => ({
             id: String((faq as any).id || `kb-${knowledgeBaseId}-faq-${index}`),
             question: String((faq as any).question || "").trim(),
@@ -606,9 +615,25 @@ const Messenger: React.FC<MessengerProps> = ({
         previewAudioRef.current.onended = () => setPreviewingVoice(null);
         await previewAudioRef.current.play();
       } else {
+        // FIX: this branch used to silently reset state, so a 402 credit block
+        // was indistinguishable from a dead button — which is exactly how "the
+        // voice previews stopped working" presented, for every voice at once.
+        let message = "We couldn't play that sample. Please try again.";
+        try {
+          const body = await resp.json();
+          message = body?.error?.message || message;
+        } catch {
+          /* non-JSON error body */
+        }
+        setError(message);
         setPreviewingVoice(null);
       }
-    } catch {
+    } catch (err) {
+      setError(
+        err instanceof Error && err.name === "NotAllowedError"
+          ? "Your browser blocked audio playback. Click the play icon again."
+          : "We couldn't play that sample. Please try again.",
+      );
       setPreviewingVoice(null);
     }
   };
@@ -1546,6 +1571,48 @@ const Messenger: React.FC<MessengerProps> = ({
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Lead capture toggle + language burn-rate note (issues 7a, 7b, 7f) */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-base font-black text-slate-900">
+              Collect visitor details
+            </h3>
+            <p className="mt-1 max-w-md text-xs text-slate-500">
+              When this is on, your chatbot asks for a name and contact details
+              during the conversation and saves them to Leads. Turn it off for a
+              pure support experience.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={draft.leadCaptureEnabled !== false}
+            onClick={() =>
+              patch({ leadCaptureEnabled: draft.leadCaptureEnabled === false })
+            }
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+              draft.leadCaptureEnabled !== false
+                ? "bg-emerald-500"
+                : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                draft.leadCaptureEnabled !== false ? "left-6" : "left-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-4 flex gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
+          <span className="text-base">&#9889;</span>
+          <p className="text-[11px] leading-4 text-amber-800">
+            Selecting multiple language options burns credit faster — replies in
+            other languages use roughly 30% more processing than English.
+          </p>
         </div>
       </div>
 

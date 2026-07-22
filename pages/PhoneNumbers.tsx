@@ -14,6 +14,7 @@ import {
   AvailableTwilioNumber,
   voiceCallsApi,
 } from "../services/voiceCallsApi";
+import AppModal from "../components/AppModal";
 const CallLogs = lazy(() => import("./CallLogs"));
 
 const FLAG_MAP: Record<string, string> = {
@@ -112,6 +113,24 @@ const StatusPill = ({
     {normalizeStatusText(value)}
   </span>
 );
+
+const COUNTRY_LABELS: Record<string, string> = {
+  US: "United States",
+  CA: "Canada",
+  GB: "United Kingdom",
+  AU: "Australia",
+  IE: "Ireland",
+  NZ: "New Zealand",
+};
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  US: "\u{1F1FA}\u{1F1F8}",
+  CA: "\u{1F1E8}\u{1F1E6}",
+  GB: "\u{1F1EC}\u{1F1E7}",
+  AU: "\u{1F1E6}\u{1F1FA}",
+  IE: "\u{1F1EE}\u{1F1EA}",
+  NZ: "\u{1F1F3}\u{1F1FF}",
+};
 
 const getOrgId = (number: TwilioNumberRecord) =>
   String(
@@ -218,6 +237,22 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     Record<string, string>
   >({});
   const [areaCode, setAreaCode] = useState("");
+  // FIX: country was hardcoded to "US" and the input was disabled, so
+  // GB/AU/IE/NZ inventory could never be reached even once the backend filter
+  // was corrected. The list now comes from the server.
+  const [country, setCountry] = useState("US");
+  const [countryOptions, setCountryOptions] = useState<string[]>(["US"]);
+  // FIX: purchase used window.confirm(), which is a browser dialog that named
+  // our carrier. Low-credit used a top-anchored toast that is easy to miss on
+  // mobile. Both are now in-app modals.
+  const [purchaseTarget, setPurchaseTarget] =
+    useState<AvailableTwilioNumber | null>(null);
+  const [creditBlock, setCreditBlock] = useState<{
+    title: string;
+    message: string;
+    ctaLabel: string;
+    topUpPath: string;
+  } | null>(null);
   const [contains, setContains] = useState("");
   const [availableNumbers, setAvailableNumbers] = useState<
     AvailableTwilioNumber[]
@@ -302,7 +337,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     try {
       const result =
         await voiceCallsApi.phoneNumbers.searchAvailableTwilioNumbers({
-          country: "US",
+          country,
           type: "Local",
           areaCode: areaCode || undefined,
           contains: contains || undefined,
@@ -312,6 +347,12 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
           limit: 20,
         });
       setAvailableNumbers(result.numbers || []);
+      const sellable =
+        (result as any).sellableCountries ||
+        (result as any).supportedCountries ||
+        [];
+      if (Array.isArray(sellable) && sellable.length)
+        setCountryOptions(sellable);
       setSearchDone(true);
     } catch (error: any) {
       showToast(error?.message || "Number search failed.", false);
@@ -323,12 +364,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
   const handlePurchase = async (number: AvailableTwilioNumber) => {
     const phoneNumber = number.phoneNumber || number.phone_number;
     if (!phoneNumber) return;
-    if (
-      !window.confirm(
-        `Purchase ${phoneNumber}? This may charge the connected Twilio account.`,
-      )
-    )
-      return;
     setBusy(`purchase-${phoneNumber}`);
     try {
       const defaultAgent =
@@ -357,7 +392,26 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       updateTab("numbers");
       window.setTimeout(() => onAgentUpdated?.(), 0);
     } catch (error: any) {
-      showToast(error?.message || "Purchase failed.", false);
+      // The 402 payload already carries title/ctaLabel/topUpPath. It was being
+      // thrown into a toast at the top of the page, which is exactly why a
+      // failing purchase looked like nothing happened on mobile.
+      const details = error?.details as any;
+      if (error?.status === 402 || error?.code === "INSUFFICIENT_CREDIT") {
+        setCreditBlock({
+          title: details?.title || "Usage credit required",
+          message:
+            error?.message ||
+            "Add credit to your balance before buying a number.",
+          ctaLabel: details?.ctaLabel || "Go to billing",
+          topUpPath: details?.topUpPath || "#/billing",
+        });
+      } else {
+        showToast(
+          error?.message ||
+            "We couldn't complete that purchase. Your balance was not charged.",
+          false,
+        );
+      }
     } finally {
       setBusy(null);
     }
@@ -512,6 +566,12 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     } finally {
       setBusy(null);
     }
+  };
+
+  const confirmPurchase = async () => {
+    const target = purchaseTarget;
+    setPurchaseTarget(null);
+    if (target) await handlePurchase(target);
   };
 
   const renderNumberCard = (number: TwilioNumberRecord) => {
@@ -825,8 +885,8 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                 No phone numbers found
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                No rows were returned for this organization from
-                twilio_phone_numbers.
+                You haven't added a phone number yet. Buy one to let your agent
+                take and make calls.
               </p>
               <div className="mt-5 flex justify-center gap-3">
                 <button
@@ -857,26 +917,41 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  Search US voice-capable numbers
+                  Find a number for your business
                 </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Search is restricted to US numbers while readiness rules are
-                  validated.
+                  Every number shown is ready for calls and texts the moment you
+                  buy it.
                 </p>
               </div>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                US only
-              </span>
             </div>
             <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <Label>Country</Label>
-                <Input value="United States (US)" disabled />
+                <select
+                  value={country}
+                  onChange={(event) => {
+                    setCountry(event.target.value);
+                    setSearchDone(false);
+                    setAvailableNumbers([]);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold outline-none focus:border-amber-300"
+                >
+                  {countryOptions.map((iso) => (
+                    <option key={iso} value={iso}>
+                      {COUNTRY_LABELS[iso] || iso}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
-                <Label>Area code</Label>
+                <Label>
+                  {["US", "CA"].includes(country) ? "Area code" : "Starts with"}
+                </Label>
                 <Input
-                  placeholder="e.g. 212"
+                  placeholder={
+                    ["US", "CA"].includes(country) ? "e.g. 212" : "e.g. 20"
+                  }
                   value={areaCode}
                   onChange={(event) =>
                     setAreaCode(
@@ -947,7 +1022,11 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                               {phoneNumber}
                             </p>
                           </div>
-                          <span className="text-lg">🇺🇸</span>
+                          <span className="text-lg">
+                            {COUNTRY_FLAGS[
+                              number.isoCountry || number.iso_country || country
+                            ] || "🌐"}
+                          </span>
                         </div>
                         {(number.locality || number.region) && (
                           <p className="mb-3 text-xs text-slate-500">
@@ -969,7 +1048,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                           )}
                         </div>
                         <button
-                          onClick={() => void handlePurchase(number)}
+                          onClick={() => setPurchaseTarget(number)}
                           disabled={!!busy}
                           className="w-full rounded-xl bg-slate-900 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
                         >
@@ -986,6 +1065,66 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
           )}
         </div>
       )}
+      <AppModal
+        open={!!purchaseTarget}
+        onClose={() => setPurchaseTarget(null)}
+        title="Confirm your new number"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setPurchaseTarget(null)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void confirmPurchase()}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+            >
+              Buy this number
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          You're about to add{" "}
+          <span className="font-black text-slate-900">
+            {purchaseTarget?.phoneNumber || purchaseTarget?.phone_number}
+          </span>{" "}
+          to your workspace. The cost is taken from your usage balance, and the
+          number is set up for calls and texts automatically.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          If anything goes wrong during setup, the number is returned and you
+          are not charged.
+        </p>
+      </AppModal>
+
+      <AppModal
+        open={!!creditBlock}
+        onClose={() => setCreditBlock(null)}
+        title={creditBlock?.title || "Usage credit required"}
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setCreditBlock(null)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              Not now
+            </button>
+            <a
+              href={creditBlock?.topUpPath || "#/billing"}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+            >
+              {creditBlock?.ctaLabel || "Go to billing"}
+            </a>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">{creditBlock?.message}</p>
+      </AppModal>
     </div>
   );
 };

@@ -381,6 +381,20 @@ export interface ChatbotConfig {
   widgetScriptUrl: string;
   chatVoice?: string;
   chatLanguages?: string[];
+  /**
+   * Issue 7(a)/(b): lead capture used to be hardcoded on. Optional + treated as
+   * `!== false` everywhere, so existing chatbots with no value keep capturing
+   * leads and nothing changes for anything already deployed.
+   */
+  leadCaptureEnabled?: boolean;
+  /**
+   * Avatar. `avatarDataUri` is the self-contained image inlined into the widget
+   * script — the fix for avatars not rendering once the widget runs on the
+   * customer's own domain, where a blob:/same-origin URL is unreachable.
+   */
+  avatarUrl?: string | null;
+  avatarDataUri?: string | null;
+  avatarMimeType?: string | null;
 }
 
 
