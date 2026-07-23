@@ -2317,3 +2317,42 @@ main {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ISSUE 3 — onboarding steps 3 and 4 appear "zoomed in" on mobile.
+
+   This is not a layout bug. iOS Safari force-zooms the viewport whenever a
+   focused input has a computed font-size below 16px, and it never zooms back
+   out. Steps 3 and 4 are the first with text inputs (agent name, FAQ editing),
+   which is exactly why those two steps and no others.
+
+   The usual "fix" is maximum-scale=1 on the viewport meta, which also disables
+   pinch-zoom for everyone — an accessibility regression. Setting 16px on the
+   controls themselves solves it without taking zoom away.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  input:not([type]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Onboarding panels should open at the top of the step, not scrolled into the
+   middle of a form. */
+@media (max-width: 768px) {
+  .agently-onboarding-step {
+    scroll-margin-top: 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}

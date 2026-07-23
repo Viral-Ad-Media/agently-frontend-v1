@@ -23,7 +23,7 @@ import {
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
-import { ProductTour, useProductTour } from "./lib/productTour";
+import { ProductTour, useProductTour, usePageTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -328,6 +328,13 @@ const App: React.FC = () => {
     justOnboarded,
     enabled: !!org?.profile?.onboarded,
   });
+  // ISSUE 2 — per-page walkthroughs. Fires the first time each page is opened,
+  // after the one-time overview has been seen or skipped.
+  const pageTour = usePageTour(
+    typeof window !== "undefined"
+      ? window.location.hash.replace(/^#/, "").split("?")[0] || "/"
+      : "/",
+  );
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
@@ -781,6 +788,11 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <Dashboard org={org} dashboard={dashboard} />
                   <ProductTour open={tour.open} onClose={tour.close} />
+                  <ProductTour
+                    steps={pageTour.steps}
+                    open={pageTour.open}
+                    onClose={pageTour.close}
+                  />
                 </ProtectedRoute>
               ) : (
                 <Navigate to="/login" />

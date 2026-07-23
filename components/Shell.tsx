@@ -884,6 +884,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     onClick={() => setMobileNavOpen(true)}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#CBD5E1] bg-white text-[#0F172A] shadow-sm md:hidden"
                     aria-label="Open navigation"
+                    data-tour="menu-toggle"
                   >
                     <MenuButtonIcon />
                   </button>

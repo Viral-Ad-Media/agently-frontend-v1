@@ -37,11 +37,204 @@ export interface TourStep {
   body: string;
   /** Preferred side. Falls back automatically if it would overflow. */
   placement?: "right" | "left" | "top" | "bottom" | "center";
+  /** Mobile only: the sidebar must be open before this step can be shown. */
+  requiresMenuOpen?: boolean;
+  /** Skip this step entirely if the anchor is not in the DOM. */
+  optional?: boolean;
 }
 
 const TOUR_KEY = "phase1_onboarding";
+
+/**
+ * ISSUE 2 — "what about the next phase that now happens when you open a
+ * specific page"
+ *
+ * Phase 1 (above) is the one-time orientation. These are the per-page tours:
+ * each fires the FIRST time that page is opened, walks the page's own
+ * furniture, and never fires again. Keyed separately so completing the
+ * overview does not silently mark every page tour as seen.
+ */
+export const PAGE_TOURS: Record<string, TourStep[]> = {
+  "/dashboard": [
+    {
+      placement: "center",
+      title: "Your Command Center",
+      body: "This is where you check how your agents are doing. Let me point out the parts that matter.",
+    },
+    {
+      anchor: "topbar-credit",
+      placement: "bottom",
+      title: "Your usage balance",
+      body: "Calls, chats and website scans all draw from here. When it runs low your agents stop answering, so keep an eye on it.",
+      optional: true,
+    },
+    {
+      anchor: "topbar-notifications",
+      placement: "bottom",
+      title: "Notifications",
+      body: "New leads, finished website scans, and low-balance warnings land here.",
+      optional: true,
+    },
+    {
+      anchor: "topbar-agent",
+      placement: "bottom",
+      title: "Active agent",
+      body: "Shows which agent is currently live. Switch between them here if you run more than one.",
+      optional: true,
+    },
+    {
+      anchor: "dashboard-stats",
+      placement: "top",
+      title: "Your numbers at a glance",
+      body: "Calls answered, calls completed, minutes used and leads captured — for whichever period you pick below.",
+      optional: true,
+    },
+    {
+      anchor: "dashboard-filters",
+      placement: "top",
+      title: "Narrow it down",
+      body: "Filter by a single agent or a different date range. Everything above updates to match.",
+      optional: true,
+    },
+    {
+      anchor: "dashboard-chart",
+      placement: "top",
+      title: "Call activity over time",
+      body: "Spot your busiest hours. Useful for deciding when a real person should be available for transfers.",
+      optional: true,
+    },
+    {
+      anchor: "dashboard-recent",
+      placement: "top",
+      title: "Recent calls",
+      body: "Your latest conversations. Tap any one for the recording, transcript and a summary of what the caller wanted.",
+      optional: true,
+    },
+  ],
+
+  "/phone-numbers": [
+    {
+      placement: "center",
+      title: "Phone Numbers",
+      body: "Your agent needs a number before it can take calls. This is where you buy and manage them.",
+    },
+    {
+      anchor: "numbers-search",
+      placement: "bottom",
+      title: "Find a number",
+      body: "Pick a country and, if you like, an area code. Every number shown is ready to use the moment you buy it.",
+      optional: true,
+    },
+    {
+      anchor: "numbers-list",
+      placement: "top",
+      title: "Your numbers",
+      body: "Numbers you already own, and which agent answers each one.",
+      optional: true,
+    },
+  ],
+
+  "/agent": [
+    {
+      placement: "center",
+      title: "Voice Agent",
+      body: "Everything about how your agent sounds and behaves on a call.",
+    },
+    {
+      anchor: "agent-persona",
+      placement: "bottom",
+      title: "Voice and personality",
+      body: "Pick the voice and tone. Preview it before you commit — it's what every caller will hear.",
+      optional: true,
+    },
+    {
+      anchor: "agent-knowledge",
+      placement: "top",
+      title: "What it knows",
+      body: "Connect a knowledge base so the agent answers from your real business details instead of guessing.",
+      optional: true,
+    },
+    {
+      anchor: "agent-escalation",
+      placement: "top",
+      title: "Handing over to a human",
+      body: "Set the hours a real person is around, and the number to transfer to when a caller needs one.",
+      optional: true,
+    },
+  ],
+
+  "/messenger": [
+    {
+      placement: "center",
+      title: "Chatbot Agent",
+      body: "The chat bubble for your website. Same knowledge as your voice agent, different channel.",
+    },
+    {
+      anchor: "messenger-appearance",
+      placement: "bottom",
+      title: "Make it yours",
+      body: "Colours, avatar, greeting and the prompts visitors see first.",
+      optional: true,
+    },
+    {
+      anchor: "messenger-deploy",
+      placement: "top",
+      title: "Put it on your site",
+      body: "Copy this snippet into your website and the chat bubble goes live. No other setup needed.",
+      optional: true,
+    },
+  ],
+
+  "/leads": [
+    {
+      placement: "center",
+      title: "Lead CRM",
+      body: "Everyone who called or chatted, with their details and where the conversation got to.",
+    },
+    {
+      anchor: "leads-table",
+      placement: "top",
+      title: "Your leads",
+      body: "Sort, filter and export. Each row opens the full conversation that produced it.",
+      optional: true,
+    },
+  ],
+
+  "/calls": [
+    {
+      placement: "center",
+      title: "Call Logs",
+      body: "Every call your agent handled.",
+    },
+    {
+      anchor: "calls-table",
+      placement: "top",
+      title: "Recordings and transcripts",
+      body: "Open any call for the recording, a full transcript, and a summary of what the caller wanted.",
+      optional: true,
+    },
+  ],
+};
 const TOUR_VERSION = 1;
 const STORAGE_KEY = `agently.tour.${TOUR_KEY}.v${TOUR_VERSION}`;
+
+/** Viewport check used to branch the tour on mobile. */
+export const isMobileViewport = () =>
+  typeof window !== "undefined" && window.innerWidth < 1024;
+
+/**
+ * ISSUE 1 — on mobile the sidebar lives behind the hamburger, so every
+ * nav-anchored step had nothing to point at and the spotlight sat on a closed
+ * menu. This step is injected only on small screens and asks the person to
+ * open the menu before the nav walkthrough begins.
+ */
+const OPEN_MENU_STEP: TourStep = {
+  anchor: "menu-toggle",
+  placement: "bottom",
+  title: "Open your menu",
+  body: "Tap this button to open the menu, then press Next. Everything I'm about to show you lives in there.",
+  requiresMenuOpen: true,
+};
 
 export const DASHBOARD_TOUR: TourStep[] = [
   {
@@ -157,26 +350,68 @@ export const ProductTour: React.FC<{
   onClose: (completed: boolean) => void;
   onStep?: (index: number) => void;
 }> = ({ steps = DASHBOARD_TOUR, open, onClose, onStep }) => {
+  // ISSUE 1 — prepend the "open your menu" step on small screens, where the
+  // sidebar is behind a hamburger and every nav anchor is off-screen.
+  const resolvedSteps = React.useMemo(() => {
+    const needsMenu =
+      isMobileViewport() && steps.some((s) => s.anchor?.startsWith("nav-"));
+    const withMenu = needsMenu
+      ? [steps[0], OPEN_MENU_STEP, ...steps.slice(1)]
+      : steps;
+    // Drop optional steps whose anchor is not on this page.
+    return withMenu.filter(
+      (s) =>
+        !s.optional ||
+        (typeof document !== "undefined" &&
+          document.querySelector(`[data-tour="${s.anchor}"]`)),
+    );
+  }, [steps, open]);
+
   const [index, setIndex] = useState(0);
   const [tick, setTick] = useState(0);
-  const step = steps[index];
+  const step = resolvedSteps[index];
   const rect = useAnchorRect(step?.anchor, tick);
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) setTick((t) => t + 1);
   }, [open, index]);
+
+  /*
+   * When a step needs the sidebar and we are on mobile, click the hamburger
+   * ourselves rather than leaving the person staring at a spotlight on a
+   * closed menu. Only fires if the menu is not already open.
+   */
+  useEffect(() => {
+    if (!open || !step) return;
+    if (!isMobileViewport()) return;
+    if (!step.anchor?.startsWith("nav-")) return;
+
+    const nav = document.querySelector<HTMLElement>(
+      `[data-tour="${step.anchor}"]`,
+    );
+    const visible = nav && nav.getBoundingClientRect().width > 0;
+    if (visible) return;
+
+    const toggleBtn = document.querySelector<HTMLElement>(
+      '[data-tour="menu-toggle"]',
+    );
+    if (toggleBtn) {
+      toggleBtn.click();
+      window.setTimeout(() => setTick((t) => t + 1), 320);
+    }
+  }, [open, index, step]);
   useEffect(() => {
     if (open) onStep?.(index);
   }, [index, open, onStep]);
 
   const next = useCallback(() => {
-    if (index >= steps.length - 1) {
+    if (index >= resolvedSteps.length - 1) {
       onClose(true);
       return;
     }
     setIndex((i) => i + 1);
-  }, [index, steps.length, onClose]);
+  }, [index, resolvedSteps.length, onClose]);
 
   const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
@@ -252,7 +487,7 @@ export const ProductTour: React.FC<{
         style={cardStyle}
       >
         <div className="mb-3 flex items-center gap-1.5">
-          {steps.map((_, i) => (
+          {resolvedSteps.map((_, i) => (
             <span
               key={i}
               className={`h-1 rounded-full transition-all ${
@@ -289,7 +524,7 @@ export const ProductTour: React.FC<{
               onClick={next}
               className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
             >
-              {index === steps.length - 1 ? "Finish" : "Next"}
+              {index === resolvedSteps.length - 1 ? "Finish" : "Next"}
             </button>
           </div>
         </div>
@@ -378,6 +613,81 @@ export function useProductTour(
   }, []);
 
   return { open, close, restart, setOpen };
+}
+
+/**
+ * ISSUE 2 — drives the per-page tours. Mount once inside the app shell; it
+ * watches the route and fires that page's tour the first time it is opened.
+ *
+ * Each page is tracked separately, so finishing the Dashboard tour does not
+ * suppress the Phone Numbers one.
+ */
+export function usePageTour(pathname: string) {
+  const [open, setOpen] = useState(false);
+  const [steps, setSteps] = useState<TourStep[]>([]);
+  const firedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const route = Object.keys(PAGE_TOURS).find(
+      (key) => pathname === key || pathname.startsWith(`${key}/`),
+    );
+    if (!route) return;
+    if (firedRef.current.has(route)) return;
+
+    const storageKey = `agently.tour.page.${route}.v${TOUR_VERSION}`;
+    let seen = false;
+    try {
+      seen = !!window.localStorage.getItem(storageKey);
+    } catch {
+      /* private mode */
+    }
+    if (seen) return;
+
+    // Don't stack on top of the first-run overview.
+    let overviewPending = false;
+    try {
+      overviewPending = window.localStorage.getItem(STORAGE_KEY) === null;
+    } catch {
+      /* ignore */
+    }
+    if (overviewPending) return;
+
+    firedRef.current.add(route);
+    // Let the page render its content before we try to measure anchors.
+    const timer = window.setTimeout(() => {
+      setSteps(PAGE_TOURS[route]);
+      setOpen(true);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [pathname]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    const route = Object.keys(PAGE_TOURS).find(
+      (key) => pathname === key || pathname.startsWith(`${key}/`),
+    );
+    if (!route) return;
+    try {
+      window.localStorage.setItem(
+        `agently.tour.page.${route}.v${TOUR_VERSION}`,
+        "done",
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [pathname]);
+
+  /** Wire to a "Show me around this page" button. */
+  const replay = useCallback(() => {
+    const route = Object.keys(PAGE_TOURS).find(
+      (key) => pathname === key || pathname.startsWith(`${key}/`),
+    );
+    if (!route) return;
+    setSteps(PAGE_TOURS[route]);
+    setOpen(true);
+  }, [pathname]);
+
+  return { open, steps, close, replay };
 }
 
 export default ProductTour;

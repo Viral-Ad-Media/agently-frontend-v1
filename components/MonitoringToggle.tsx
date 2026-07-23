@@ -7,13 +7,13 @@
  *  section — something like 4 new changes discovered in .product page"
  */
 
-import React, { useEffect, useState } from 'react';
-import knowledgeScrapeApi from '../services/knowledgeScrapeApi';
+import React, { useEffect, useState } from "react";
+import knowledgeScrapeApi from "../services/knowledgeScrapeApi";
 
 interface Props {
   knowledgeBaseId: string;
   initialEnabled?: boolean;
-  initialMode?: 'notify_only' | 'auto_rescrape';
+  initialMode?: "notify_only" | "auto_rescrape";
   initialIntervalHours?: number;
   lastCheckedAt?: string | null;
   onToast?: (message: string, ok?: boolean) => void;
@@ -22,7 +22,7 @@ interface Props {
 const MonitoringToggle: React.FC<Props> = ({
   knowledgeBaseId,
   initialEnabled = false,
-  initialMode = 'notify_only',
+  initialMode = "notify_only",
   initialIntervalHours = 24,
   lastCheckedAt = null,
   onToast,
@@ -30,7 +30,9 @@ const MonitoringToggle: React.FC<Props> = ({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [mode, setMode] = useState(initialMode);
   const [interval, setIntervalHours] = useState(initialIntervalHours);
-  const [changes, setChanges] = useState<Array<{ id: string; url: string; detectedAt: string }>>([]);
+  const [changes, setChanges] = useState<
+    Array<{ id: string; url: string; detectedAt: string }>
+  >([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -41,13 +43,15 @@ const MonitoringToggle: React.FC<Props> = ({
       .catch(() => undefined);
   }, [enabled, knowledgeBaseId]);
 
-  const save = async (patch: Parameters<typeof knowledgeScrapeApi.setMonitoring>[1]) => {
+  const save = async (
+    patch: Parameters<typeof knowledgeScrapeApi.setMonitoring>[1],
+  ) => {
     setBusy(true);
     try {
       await knowledgeScrapeApi.setMonitoring(knowledgeBaseId, patch);
-      onToast?.('Monitoring settings saved.');
+      onToast?.("Monitoring settings saved.");
     } catch (err: any) {
-      onToast?.(err?.message || 'Could not save monitoring settings.', false);
+      onToast?.(err?.message || "Could not save monitoring settings.", false);
     } finally {
       setBusy(false);
     }
@@ -60,7 +64,7 @@ const MonitoringToggle: React.FC<Props> = ({
       onToast?.(result.message);
       setChanges([]);
     } catch (err: any) {
-      onToast?.(err?.message || 'Could not start the update.', false);
+      onToast?.(err?.message || "Could not start the update.", false);
     } finally {
       setBusy(false);
     }
@@ -70,10 +74,13 @@ const MonitoringToggle: React.FC<Props> = ({
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-black text-slate-900">Keep this up to date</h3>
+          <h3 className="text-base font-black text-slate-900">
+            Keep this up to date
+          </h3>
           <p className="mt-1 max-w-md text-xs text-slate-500">
-            We'll check the pages you selected every {interval} hours and tell you when
-            something on your website changes — new products, updated prices, new blog posts.
+            We'll check the pages you selected every {interval} hours and tell
+            you when something on your website changes — new products, updated
+            prices, new blog posts.
           </p>
         </div>
         <button
@@ -85,9 +92,11 @@ const MonitoringToggle: React.FC<Props> = ({
             setEnabled(next);
             void save({ enabled: next });
           }}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${enabled ? 'bg-emerald-500' : 'bg-slate-300'} disabled:opacity-50`}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${enabled ? "bg-emerald-500" : "bg-slate-300"} disabled:opacity-50`}
         >
-          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
+          <span
+            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? "left-6" : "left-1"}`}
+          />
         </button>
       </div>
 
@@ -96,8 +105,11 @@ const MonitoringToggle: React.FC<Props> = ({
           <div className="grid gap-3 sm:grid-cols-2">
             {/* Issue 4(k) — the two modes. */}
             <button
-              onClick={() => { setMode('notify_only'); void save({ mode: 'notify_only' }); }}
-              className={`rounded-2xl border p-4 text-left transition-all ${mode === 'notify_only' ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
+              onClick={() => {
+                setMode("notify_only");
+                void save({ mode: "notify_only" });
+              }}
+              className={`rounded-2xl border p-4 text-left transition-all ${mode === "notify_only" ? "border-amber-400 bg-amber-50" : "border-slate-200 hover:border-slate-300"}`}
             >
               <p className="text-xs font-black text-slate-900">Tell me first</p>
               <p className="mt-1 text-[11px] text-slate-500">
@@ -105,12 +117,18 @@ const MonitoringToggle: React.FC<Props> = ({
               </p>
             </button>
             <button
-              onClick={() => { setMode('auto_rescrape'); void save({ mode: 'auto_rescrape' }); }}
-              className={`rounded-2xl border p-4 text-left transition-all ${mode === 'auto_rescrape' ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
+              onClick={() => {
+                setMode("auto_rescrape");
+                void save({ mode: "auto_rescrape" });
+              }}
+              className={`rounded-2xl border p-4 text-left transition-all ${mode === "auto_rescrape" ? "border-amber-400 bg-amber-50" : "border-slate-200 hover:border-slate-300"}`}
             >
-              <p className="text-xs font-black text-slate-900">Update automatically</p>
+              <p className="text-xs font-black text-slate-900">
+                Update automatically
+              </p>
               <p className="mt-1 text-[11px] text-slate-500">
-                We re-read changed pages for you and notify you that we started. Uses credit.
+                We re-read changed pages for you and notify you that we started.
+                Uses credit.
               </p>
             </button>
           </div>
@@ -146,20 +164,29 @@ const MonitoringToggle: React.FC<Props> = ({
           {changes.length > 0 && (
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
               <p className="text-xs font-black text-indigo-900">
-                {changes.length} change{changes.length === 1 ? '' : 's'} found
+                {changes.length} change{changes.length === 1 ? "" : "s"} found
               </p>
               <ul className="mt-2 space-y-1">
                 {changes.slice(0, 5).map((c) => {
                   let path = c.url;
-                  try { path = new URL(c.url).pathname; } catch { /* keep url */ }
+                  try {
+                    path = new URL(c.url).pathname;
+                  } catch {
+                    /* keep url */
+                  }
                   return (
-                    <li key={c.id} className="truncate font-mono text-[11px] text-indigo-700">
+                    <li
+                      key={c.id}
+                      className="truncate font-mono text-[11px] text-indigo-700"
+                    >
                       {path}
                     </li>
                   );
                 })}
                 {changes.length > 5 && (
-                  <li className="text-[11px] text-indigo-600">and {changes.length - 5} more</li>
+                  <li className="text-[11px] text-indigo-600">
+                    and {changes.length - 5} more
+                  </li>
                 )}
               </ul>
               <button
@@ -167,7 +194,7 @@ const MonitoringToggle: React.FC<Props> = ({
                 disabled={busy}
                 className="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
               >
-                {busy ? 'Starting…' : 'Update these pages'}
+                {busy ? "Starting…" : "Update these pages"}
               </button>
             </div>
           )}

@@ -7,6 +7,368 @@ interface OnboardingProps {
   onComplete: (profile: BusinessProfile, agent: AgentConfig) => Promise<void>;
 }
 
+/**
+ * ISSUE 8 — "my industry is sport ... it should at least suggest something
+ * similar like entertainment ... if I input nursing and nursing is not there it
+ * should know that could also be similar to healthcare"
+ *
+ * The old filter was `industry.toLowerCase().includes(search)` — a raw
+ * substring test. "sport" matched nothing. "nursing" matched nothing. The list
+ * simply went blank and the person was left guessing what vocabulary we wanted.
+ *
+ * This maps what people actually type to the category we actually have. It is
+ * a curated synonym table rather than fuzzy string distance, because edit
+ * distance gets "nursing" -> "Cleaning Services" wrong in a way that looks
+ * broken, while a table gets it right and is trivial to extend.
+ */
+const INDUSTRY_SYNONYMS: Record<string, string[]> = {
+  "Healthcare & Medical": [
+    "nursing",
+    "nurse",
+    "doctor",
+    "clinic",
+    "hospital",
+    "medical",
+    "physician",
+    "surgery",
+    "pharmacy",
+    "pharmacist",
+    "therapy",
+    "physiotherapy",
+    "chiropractor",
+    "paediatric",
+    "pediatric",
+    "midwife",
+    "care home",
+    "nursing home",
+    "diagnostic",
+    "laboratory",
+    "mental health",
+    "psychology",
+    "psychiatry",
+    "radiology",
+    "health",
+  ],
+  "Fitness & Gym": [
+    "sport",
+    "sports",
+    "gym",
+    "fitness",
+    "training",
+    "trainer",
+    "coach",
+    "athletic",
+    "yoga",
+    "pilates",
+    "crossfit",
+    "martial arts",
+    "boxing",
+    "football",
+    "soccer",
+    "basketball",
+    "tennis",
+    "swimming",
+    "exercise",
+    "workout",
+    "wellness centre",
+  ],
+  "Event Planning": [
+    "event",
+    "events",
+    "wedding",
+    "party",
+    "conference",
+    "entertainment",
+    "concert",
+    "festival",
+    "catering event",
+    "venue",
+    "banquet",
+    "celebration",
+    "dj",
+    "mc",
+    "production",
+    "show",
+    "booking agency",
+  ],
+  "Beauty & Wellness": [
+    "spa",
+    "nail",
+    "nails",
+    "makeup",
+    "cosmetic",
+    "skincare",
+    "aesthetic",
+    "facial",
+    "lash",
+    "brow",
+    "waxing",
+    "tanning",
+    "wellness",
+    "therapist",
+    "massage",
+  ],
+  "Food & Restaurant": [
+    "food",
+    "restaurant",
+    "cafe",
+    "coffee",
+    "bakery",
+    "catering",
+    "kitchen",
+    "chef",
+    "takeaway",
+    "takeout",
+    "juice",
+    "smoothie",
+    "bar",
+    "pub",
+    "diner",
+    "fast food",
+    "grocery",
+    "deli",
+    "pizzeria",
+    "juicing",
+  ],
+  "IT & Technology": [
+    "tech",
+    "technology",
+    "software",
+    "it",
+    "developer",
+    "programming",
+    "saas",
+    "app",
+    "web",
+    "computer",
+    "network",
+    "cyber",
+    "data",
+    "ai",
+    "cloud",
+    "hosting",
+    "startup",
+  ],
+  "Legal / Law Firm": [
+    "law",
+    "legal",
+    "lawyer",
+    "attorney",
+    "solicitor",
+    "barrister",
+    "notary",
+    "paralegal",
+    "litigation",
+    "conveyancing",
+    "advocate",
+  ],
+  "Education & Tutoring": [
+    "school",
+    "teaching",
+    "teacher",
+    "tutor",
+    "education",
+    "training centre",
+    "academy",
+    "college",
+    "university",
+    "childcare",
+    "nursery",
+    "daycare",
+    "learning",
+    "course",
+  ],
+  "Auto Repair & Mechanic": [
+    "car",
+    "auto",
+    "mechanic",
+    "garage",
+    "vehicle",
+    "tyre",
+    "tire",
+    "bodyshop",
+    "detailing",
+    "motor",
+    "truck",
+    "fleet",
+    "dealership",
+  ],
+  "Real Estate": [
+    "property",
+    "real estate",
+    "realtor",
+    "estate agent",
+    "letting",
+    "rental",
+    "landlord",
+    "housing",
+    "apartment",
+    "broker",
+    "mortgage broker",
+  ],
+  "Construction & Contracting": [
+    "construction",
+    "builder",
+    "building",
+    "contractor",
+    "renovation",
+    "carpentry",
+    "roofing",
+    "masonry",
+    "concrete",
+    "civil",
+    "demolition",
+    "scaffolding",
+  ],
+  "Marketing Agency": [
+    "marketing",
+    "advertising",
+    "agency",
+    "branding",
+    "seo",
+    "social media",
+    "design",
+    "creative",
+    "pr",
+    "public relations",
+    "media",
+    "content",
+    "copywriting",
+  ],
+  "Financial Services": [
+    "finance",
+    "financial",
+    "investment",
+    "banking",
+    "wealth",
+    "advisor",
+    "broker",
+    "trading",
+    "crypto",
+    "fintech",
+    "tax",
+    "payroll",
+  ],
+  "Freight & Logistics": [
+    "logistics",
+    "freight",
+    "shipping",
+    "courier",
+    "delivery",
+    "haulage",
+    "transport",
+    "warehouse",
+    "supply chain",
+    "dispatch",
+    "trucking",
+  ],
+  "Home Services": [
+    "handyman",
+    "repair",
+    "maintenance",
+    "pest control",
+    "locksmith",
+    "appliance",
+    "gardening",
+    "window",
+    "gutter",
+    "pressure washing",
+  ],
+  "E-commerce": [
+    "ecommerce",
+    "e-commerce",
+    "online store",
+    "shopify",
+    "dropshipping",
+    "retail online",
+    "marketplace",
+    "webshop",
+  ],
+  Retail: [
+    "shop",
+    "store",
+    "boutique",
+    "retail",
+    "merchandise",
+    "clothing",
+    "fashion",
+  ],
+  "Hotel & Hospitality": [
+    "hotel",
+    "hospitality",
+    "guest house",
+    "bnb",
+    "airbnb",
+    "lodge",
+    "resort",
+    "hostel",
+    "accommodation",
+    "travel",
+    "tourism",
+  ],
+  Insurance: [
+    "insurance",
+    "underwriting",
+    "claims",
+    "broker insurance",
+    "policy",
+  ],
+  "Cleaning Services": [
+    "cleaning",
+    "cleaner",
+    "janitorial",
+    "housekeeping",
+    "laundry",
+    "dry cleaning",
+  ],
+  "Non-Profit": [
+    "charity",
+    "nonprofit",
+    "non-profit",
+    "ngo",
+    "foundation",
+    "volunteer",
+    "church",
+    "mosque",
+    "religious",
+  ],
+  Veterinary: ["vet", "veterinary", "animal", "pet", "grooming", "kennel"],
+  "Barbershop & Hair Salon": [
+    "barber",
+    "hair",
+    "salon",
+    "haircut",
+    "braiding",
+    "dreadlocks",
+    "weave",
+    "wig",
+  ],
+  Manufacturing: [
+    "manufacturing",
+    "factory",
+    "production",
+    "industrial",
+    "fabrication",
+    "assembly",
+  ],
+  Consulting: [
+    "consulting",
+    "consultant",
+    "advisory",
+    "strategy",
+    "coaching business",
+  ],
+  Photography: [
+    "photography",
+    "photographer",
+    "videography",
+    "video",
+    "film",
+    "studio",
+    "media production",
+  ],
+};
+
 const INDUSTRIES = [
   "Accounting & Bookkeeping",
   "Architecture",
@@ -991,13 +1353,40 @@ const Onboarding: React.FC<OnboardingProps> = ({
     };
   }, [citySearch]);
 
-  const filteredIndustries = useMemo(
-    () =>
-      INDUSTRIES.filter((i) =>
-        i.toLowerCase().includes(industrySearch.toLowerCase()),
-      ),
-    [industrySearch],
-  );
+  const filteredIndustries = useMemo(() => {
+    const query = industrySearch.trim().toLowerCase();
+    if (!query) return INDUSTRIES;
+
+    const direct = INDUSTRIES.filter((i) => i.toLowerCase().includes(query));
+
+    // Synonym pass: "sport" -> Fitness & Gym, "nursing" -> Healthcare & Medical.
+    const suggested: string[] = [];
+    for (const [industry, words] of Object.entries(INDUSTRY_SYNONYMS)) {
+      if (direct.includes(industry)) continue;
+      const hit = words.some(
+        (word) => word.includes(query) || query.includes(word),
+      );
+      if (hit && INDUSTRIES.includes(industry)) suggested.push(industry);
+    }
+
+    // Last resort: match any single word of a multi-word category, so
+    // "juice" still surfaces "Food & Restaurant" via its own label tokens.
+    const loose =
+      direct.length + suggested.length === 0
+        ? INDUSTRIES.filter((i) =>
+            i
+              .toLowerCase()
+              .split(/[^a-z]+/)
+              .some(
+                (token) =>
+                  token.length > 2 &&
+                  (token.startsWith(query) || query.startsWith(token)),
+              ),
+          )
+        : [];
+
+    return Array.from(new Set([...direct, ...suggested, ...loose]));
+  }, [industrySearch]);
 
   const handleNext = async () => {
     setError("");
