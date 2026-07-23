@@ -1290,7 +1290,9 @@ const SuperAdmin: React.FC = () => {
 
   const loadUsers = async (page = userPage, search = userSearch) => {
     try {
-      const response = await adminApi.users(search, page, 25);
+      // ISSUE 2f: "the user table on the admin panel should be paginated after
+      // list of 10". Pagination controls already existed; the page size was 25.
+      const response = await adminApi.users(search, page, 10);
       setUsers(response.rows);
       setUserTotal(response.total);
       setUserPage(response.page);
@@ -1679,14 +1681,37 @@ const SuperAdmin: React.FC = () => {
     setError("");
     try {
       await adminApi.previewDeleteUser(deleteTarget.id, deleteScope);
-      await adminApi.deleteUser(deleteTarget.id, deleteScope, deleteConfirm);
+      const result: any = await adminApi.deleteUser(
+        deleteTarget.id,
+        deleteScope,
+        deleteConfirm,
+      );
+
+      // FIX (2a): close the modal FIRST, then refresh. Previously the reload
+      // happened while the modal was still mounted, so on a slow list load it
+      // sat open looking like the delete had not worked.
       setDeleteTarget(null);
       setDeleteConfirm("");
+
+      const released = result?.numbers?.released;
+      setMessage(
+        typeof released === "number" && released > 0
+          ? `Account removed. ${released} phone number${released === 1 ? "" : "s"} returned to the carrier.`
+          : "The selected account was permanently removed.",
+      );
+
       await Promise.all([loadUsers(1, userSearch), loadOverview()]);
-      setMessage("The selected account was permanently removed.");
     } catch (err) {
+      // FIX (2c/2d): the "column reference table_name is ambiguous" error came
+      // from the Supabase RPC and is fixed in 003_fix_delete_rpc_and_balance.sql.
+      // Keep the modal OPEN on failure so the admin can read what happened and
+      // retry, rather than losing the confirmation they just typed.
+      const message =
+        err instanceof Error ? err.message : "Unable to delete this account.";
       setError(
-        err instanceof Error ? err.message : "Unable to delete this account.",
+        /ambiguous/i.test(message)
+          ? "The deletion routine needs migration 003 applied. Run sql/003_fix_delete_rpc_and_balance.sql, then try again."
+          : message,
       );
     } finally {
       setLoading(false);
@@ -2010,40 +2035,42 @@ const SuperAdmin: React.FC = () => {
             {tab === "blog" ? (
               <div className="space-y-4">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F59E0B]">
-                        Blog workspace
-                      </p>
-                      <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
-                        Build manually or generate through n8n
-                      </h2>
-                      <p className="mt-2 text-sm text-slate-500">
-                        Every manual or automated post is stored in the same
-                        Supabase table and remains editable after publishing.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                  {/*
+                    ISSUE 7 — was an eyebrow + h2 + explanatory paragraph + three
+                    equal-weight buttons, stacked vertically on anything under
+                    1280px. Three titles for one panel. Now: one title, one row,
+                    secondary actions demoted to icon buttons with tooltips, and
+                    the only primary action kept as a button.
+                  */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-base font-black tracking-tight text-slate-900">
+                      Blog workspace
+                    </h2>
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => void loadPosts()}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+                        title="Refresh posts"
+                        aria-label="Refresh posts"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-amber-300 hover:text-amber-600"
                       >
-                        Refresh posts
+                        <i className="fa-solid fa-rotate-right text-xs" />
                       </button>
                       <button
                         type="button"
                         onClick={restoreLocalDraft}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600"
+                        title="Restore unsaved browser draft"
+                        aria-label="Restore browser draft"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-amber-300 hover:text-amber-600"
                       >
-                        Restore browser draft
+                        <i className="fa-solid fa-clock-rotate-left text-xs" />
                       </button>
                       <button
                         type="button"
                         onClick={() => startNewPost()}
-                        className="h-10 rounded-xl bg-[#F59E0B] px-5 text-xs font-black uppercase tracking-[0.1em] text-white"
+                        className="h-9 rounded-xl bg-[#F59E0B] px-4 text-[10px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-amber-600"
                       >
-                        + New blog post
+                        + New post
                       </button>
                     </div>
                   </div>

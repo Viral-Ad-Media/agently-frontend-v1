@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { resizeAvatar } from "../lib/imageResize";
+import { CreditModal, useCreditGuard } from "../components/CreditModal";
 import { Link } from "react-router-dom";
 import {
   ChatMessage,
@@ -240,6 +241,8 @@ const Messenger: React.FC<MessengerProps> = ({
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState("");
+  // Insufficient-credit responses render as a modal, not a page-top alert.
+  const credit = useCreditGuard();
   const [saveSuccess, setSaveSuccess] = useState("");
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
@@ -619,14 +622,18 @@ const Messenger: React.FC<MessengerProps> = ({
         // was indistinguishable from a dead button — which is exactly how "the
         // voice previews stopped working" presented, for every voice at once.
         let message = "We couldn't play that sample. Please try again.";
+        let details: any = null;
         try {
           const body = await resp.json();
           message = body?.error?.message || message;
+          details = body?.error?.details || null;
         } catch {
           /* non-JSON error body */
         }
-        setError(message);
         setPreviewingVoice(null);
+        if (!credit.handle({ status: resp.status, message, details })) {
+          setError(message);
+        }
       }
     } catch (err) {
       setError(
@@ -1735,6 +1742,7 @@ const Messenger: React.FC<MessengerProps> = ({
           {saveSuccess || "Saved successfully."}
         </div>
       </AppModal>
+      <CreditModal {...credit.modalProps} />
     </div>
   );
 };

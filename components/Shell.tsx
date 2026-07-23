@@ -9,46 +9,54 @@ const NAV_ITEMS: Array<{
   to: string;
   icon: string;
   label: string;
+  tourId?: string;
   description: string;
 }> = [
   {
     to: "/dashboard",
+    tourId: "nav-dashboard",
     icon: "/nav/dashboard.png",
     label: "Dashboard",
     description: "Live performance and workload",
   },
   {
-    to: "/agent",
-    icon: "/nav/voice-agent.png",
-    label: "Voice Agent",
-    description: "Configure lines, scripts, and knowledge",
-  },
-  {
     to: "/phone-numbers",
+    tourId: "nav-phone-numbers",
     icon: "/nav/phone-numbers.png",
     label: "Phone Numbers",
     description: "Search, purchase, and assign numbers",
   },
   {
+    to: "/agent",
+    tourId: "nav-agent",
+    icon: "/nav/voice-agent.png",
+    label: "Voice Agent",
+    description: "Configure lines, scripts, and knowledge",
+  },
+  {
     to: "/messenger",
+    tourId: "nav-messenger",
     icon: "/nav/chatbot-agent.png",
     label: "Chatbot Agent",
     description: "Widget design and chatbot knowledge",
   },
   {
     to: "/calls",
+    tourId: "nav-calls",
     icon: "/nav/call-logs.png",
     label: "Call Logs",
     description: "Review transcripts, outcomes, and recordings",
   },
   {
     to: "/leads",
+    tourId: "nav-leads",
     icon: "/nav/lead-crm.png",
     label: "Lead CRM",
     description: "Pipeline health and contact capture",
   },
   {
     to: "/settings",
+    tourId: "nav-settings",
     icon: "/nav/settings.png",
     label: "Settings",
     description: "Workspace, team, billing, and phone setup",
@@ -341,8 +349,10 @@ const SidebarLink: React.FC<{
   icon: string;
   label: string;
   description: string;
+  /** Stable DOM hook for the product tour. Without it Driver has no anchor. */
+  tourId?: string;
   onNavigate?: () => void;
-}> = memo(({ to, icon, label, description, onNavigate }) => {
+}> = memo(({ to, icon, label, description, tourId, onNavigate }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const isActive = location.pathname === to;
@@ -370,6 +380,7 @@ const SidebarLink: React.FC<{
     <a
       href={`#${to}`}
       title={description}
+      data-tour={tourId}
       onClick={handleNavigate}
       className={`group relative flex h-10 items-center gap-3 px-7 text-[13px] font-normal tracking-[0.001em] transition-all duration-200 ${
         isActive
@@ -1086,7 +1097,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
           <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[1.1fr_1.35fr] lg:px-10 lg:py-10">
             <div className="max-w-md">
               <PublicBrand inverted />
-              <h2 className="font-display mt-8 max-w-sm text-[clamp(2.25rem,4vw,3.6rem)] font-medium leading-[0.96] tracking-[-0.06em] text-[#F8FAFC]">
+              <h2 className="font-display mt-8 max-w-sm text-[clamp(1.7rem,2.7vw,2.3rem)] font-medium leading-[1.12] tracking-[-0.04em] text-[#F8FAFC]">
                 Everyday conversations. Extraordinary outcomes.
               </h2>
               <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#F8FAFC]/68">

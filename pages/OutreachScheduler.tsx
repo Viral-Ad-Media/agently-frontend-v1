@@ -1014,47 +1014,48 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
     form.mode === "call-now" ? submitCallNow : submitSchedule;
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-amber-600">
-              Call Campaigns
-            </p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Start or schedule calls from one workspace
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Choose an outbound agent, select a business number, add one or
-              many recipients, and launch calls using the agent purpose saved in
-              Agent Workspace.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
+    <div className="space-y-4">
+      {/*
+        REDESIGN — page header sits ON the background, not in a card.
+        The old version was a bordered card wrapping an eyebrow ("Call
+        Campaigns") plus an h2 ("Start or schedule calls...") plus a paragraph:
+        three competing titles inside a box, on a page that already has a
+        top bar carrying the page name. The card and one of the titles are gone.
+      */}
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-[1.6rem]">
+            Start or schedule calls
+          </h2>
+          <p className="mt-1.5 text-sm leading-[1.55] text-slate-500">
+            Pick an agent and a number, add who to call, and go — now or on a
+            schedule.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+          >
+            <i className="fa-solid fa-clock-rotate-left" />
+            History
+          </button>
+          {params.get("agentId") ? (
             <button
               type="button"
-              onClick={() => setHistoryOpen(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+              onClick={() => navigate("/agent")}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
             >
-              <i className="fa-solid fa-clock-rotate-left" />
-              Campaign History
+              <i className="fa-solid fa-chevron-left" />
+              Back to agent
             </button>
-            {params.get("agentId") ? (
-              <button
-                type="button"
-                onClick={() => navigate("/agent")}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
-              >
-                <i className="fa-solid fa-chevron-left" />
-                Back to agent
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
-      </section>
+      </header>
 
-      <div className="space-y-6">
-        <section className="space-y-6 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <div className="space-y-4">
+        <section className="agently-surface space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {MODE_OPTIONS.map((option) => {
               const active = form.mode === option.value;
@@ -1063,7 +1064,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   key={option.value}
                   type="button"
                   onClick={() => updateForm("mode", option.value)}
-                  className={`min-h-[7.5rem] rounded-3xl border p-4 text-left transition-all ${
+                  className={`rounded-2xl border p-3.5 text-left transition-all ${
                     active
                       ? "border-amber-300 bg-amber-50 shadow-sm"
                       : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
@@ -1306,7 +1307,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   <button
                     type="button"
                     onClick={addSelectedLeads}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                    className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
                   >
                     Add selected
                   </button>

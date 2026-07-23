@@ -1,409 +1,383 @@
 /**
- * agently/lib/productTour.tsx   <-- NEW FILE
+ * agently/lib/productTour.tsx   — FULL REPLACEMENT
  *
- * PATCH 13 — CURRENT_ISSUES → "LAST BUT NOT THE LEAST".
+ * You onboarded a test user and got nothing. You were right to call that out.
+ * The previous version imported `driver.js`, which was never installed, so the
+ * dynamic import rejected and the tour silently no-opped. Worse, nothing ever
+ * *called* it — it was a module nobody imported.
  *
- * LIBRARY CHOICE: Driver.js.
- *   You listed React Joyride, Driver.js and Shepherd.js. Driver.js is the right
- *   pick for this codebase specifically:
- *     - 5KB, zero dependencies. Joyride pulls react-floater + popper.
- *     - Renders outside React's tree, so it cannot fight Shell.tsx's sidebar
- *       state or your useTransition tab switching — Joyride's portal has known
- *       conflicts with transition-driven remounts, which Shell.tsx uses.
- *     - Fully styleable from CSS, so it matches your slate/amber system exactly.
- *     - Framework-agnostic: the same tour definitions will survive a future
- *       framework change.
+ * This version has NO external dependency. It is ~200 lines of React and CSS,
+ * so it cannot fail to load, cannot be skipped by a missing npm install, and
+ * cannot be broken by a package upgrade. Delete `driver.js` from package.json;
+ * it is not needed.
  *
- *   INSTALL:  npm install driver.js
+ * It renders:
+ *   1. A welcome dialog  — "let me briefly walk you through the interface"
+ *   2. A features-at-a-glance card
+ *   3. A step per sidebar section, each spotlighting the real nav element via
+ *      its data-tour attribute (added in Shell.tsx)
  *
- * DESIGN MATCHES YOUR SPEC
- *   Phase 1 — walk the SIDEBAR, one item at a time, summarising each section.
- *   Phase 2 — enter the DASHBOARD and walk it in steps, auto-scrolling to each
- *             region, with skip-to-next-phase available throughout.
- *   Both phases end with a "Watch the walkthrough" button (placeholder links).
- *   Shown to newly onboarded users, and re-shown when tourVersion is bumped.
+ * Progress persists to the backend (user_tour_progress, migration 001) and to
+ * localStorage as a fallback, so a refresh mid-tour resumes rather than
+ * restarting, and a completed tour never nags again.
  */
 
-import { driver, type DriveStep, type Driver } from "driver.js";
-import "driver.js/dist/driver.css";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
-/* ══════════════════════════════════════════════════════════════════════════
- * Theme — matches the existing slate/amber design system.
- * Inject once at app start.
- * ══════════════════════════════════════════════════════════════════════════ */
-export const TOUR_STYLES = `
-.driver-popover.agently-tour {
-  background: #ffffff;
-  border-radius: 1.35rem;
-  border: 1px solid rgb(226 232 240);
-  box-shadow: 0 20px 60px -12px rgba(15, 23, 42, 0.28);
-  padding: 1.35rem 1.5rem;
-  max-width: 22rem;
-  font-family: inherit;
-}
-.driver-popover.agently-tour .driver-popover-title {
-  font-size: 1rem;
-  font-weight: 900;
-  color: rgb(15 23 42);
-  letter-spacing: -0.01em;
-  margin-bottom: 0.4rem;
-}
-.driver-popover.agently-tour .driver-popover-description {
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: rgb(100 116 139);
-}
-.driver-popover.agently-tour .driver-popover-progress-text {
-  font-size: 0.625rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: rgb(148 163 184);
-}
-.driver-popover.agently-tour .driver-popover-next-btn {
-  background: rgb(15 23 42);
-  color: #fff;
-  border: none;
-  border-radius: 0.75rem;
-  padding: 0.55rem 1.1rem;
-  font-size: 0.625rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  text-shadow: none;
-}
-.driver-popover.agently-tour .driver-popover-next-btn:hover { background: rgb(217 119 6); }
-.driver-popover.agently-tour .driver-popover-prev-btn {
-  background: transparent;
-  color: rgb(100 116 139);
-  border: 1px solid rgb(226 232 240);
-  border-radius: 0.75rem;
-  padding: 0.55rem 1rem;
-  font-size: 0.625rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  text-shadow: none;
-}
-.driver-popover.agently-tour .driver-popover-close-btn { color: rgb(148 163 184); }
-.driver-popover.agently-tour .agently-tour-video {
-  display: flex; align-items: center; gap: 0.5rem;
-  margin-top: 1rem; padding-top: 0.9rem;
-  border-top: 1px solid rgb(241 245 249);
-  font-size: 0.75rem; font-weight: 800;
-  color: rgb(217 119 6); text-decoration: none;
-}
-.driver-popover.agently-tour .agently-tour-video:hover { text-decoration: underline; }
-.driver-active-element { border-radius: 0.9rem !important; }
-`;
-
-export function injectTourStyles() {
-  if (typeof document === "undefined") return;
-  if (document.getElementById("agently-tour-styles")) return;
-  const el = document.createElement("style");
-  el.id = "agently-tour-styles";
-  el.textContent = TOUR_STYLES;
-  document.head.appendChild(el);
+export interface TourStep {
+  /** Matches a data-tour="..." attribute in the DOM. Omit for a centred card. */
+  anchor?: string;
+  title: string;
+  body: string;
+  /** Preferred side. Falls back automatically if it would overflow. */
+  placement?: "right" | "left" | "top" | "bottom" | "center";
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
- * Video links. Placeholders for now, per your note.
- * Swap these for real URLs and nothing else needs to change.
- * ══════════════════════════════════════════════════════════════════════════ */
-export const TOUR_VIDEOS: Record<string, string> = {
-  phase1_sidebar: "https://example.com/agently/walkthrough/getting-started",
-  phase2_dashboard: "https://example.com/agently/walkthrough/dashboard",
-  phase3_phone_numbers: "https://example.com/agently/walkthrough/phone-numbers",
-  phase4_knowledge: "https://example.com/agently/walkthrough/knowledge-base",
+const TOUR_KEY = "phase1_onboarding";
+const TOUR_VERSION = 1;
+const STORAGE_KEY = `agently.tour.${TOUR_KEY}.v${TOUR_VERSION}`;
+
+export const DASHBOARD_TOUR: TourStep[] = [
+  {
+    placement: "center",
+    title: "Welcome to Agently",
+    body: "Let me briefly walk you through your workspace — it takes about a minute. You can skip and come back to this anytime from Settings.",
+  },
+  {
+    placement: "center",
+    title: "What you can do here, at a glance",
+    body: "Answer calls with an AI voice agent. Reply to website visitors with a chatbot. Capture every enquiry as a lead. Teach both from your own website, and see what each conversation cost you.",
+  },
+  {
+    anchor: "nav-dashboard",
+    placement: "right",
+    title: "Dashboard",
+    body: "Your daily view: calls answered, chats handled, leads captured, and what you've spent.",
+  },
+  {
+    anchor: "nav-phone-numbers",
+    placement: "right",
+    title: "Phone Numbers — start here",
+    body: "Buy a number so your agent can take calls. It's set up automatically the moment you buy it, and the cost comes out of your usage balance.",
+  },
+  {
+    anchor: "nav-agent",
+    placement: "right",
+    title: "Voice Agent",
+    body: "Set how your agent sounds, what it knows, and when it should hand a caller to a real person.",
+  },
+  {
+    anchor: "nav-messenger",
+    placement: "right",
+    title: "Chatbot Agent",
+    body: "Build the chat bubble for your website. Copy one line of code and it's live.",
+  },
+  {
+    anchor: "nav-calls",
+    placement: "right",
+    title: "Call Logs",
+    body: "Every call, with a recording, transcript and summary of what the caller wanted.",
+  },
+  {
+    anchor: "nav-leads",
+    placement: "right",
+    title: "Lead CRM",
+    body: "Everyone who called or chatted, with their details and where they got to.",
+  },
+  {
+    anchor: "nav-settings",
+    placement: "right",
+    title: "Settings",
+    body: "Your business details, knowledge base, billing and team. Replay this tour from here anytime.",
+  },
+  {
+    placement: "center",
+    title: "You're set",
+    body: "The quickest way to see it working: buy a phone number, then call it. Everything else can wait.",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Rect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+const PAD = 8;
+
+function useAnchorRect(anchor?: string, tick = 0): Rect | null {
+  const [rect, setRect] = useState<Rect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!anchor) {
+      setRect(null);
+      return;
+    }
+    const measure = () => {
+      const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
+      if (!el) {
+        setRect(null);
+        return;
+      }
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const r = el.getBoundingClientRect();
+      setRect({
+        top: r.top - PAD,
+        left: r.left - PAD,
+        width: r.width + PAD * 2,
+        height: r.height + PAD * 2,
+      });
+    };
+    measure();
+    const t = window.setTimeout(measure, 220);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [anchor, tick]);
+
+  return rect;
+}
+
+export const ProductTour: React.FC<{
+  steps?: TourStep[];
+  open: boolean;
+  onClose: (completed: boolean) => void;
+  onStep?: (index: number) => void;
+}> = ({ steps = DASHBOARD_TOUR, open, onClose, onStep }) => {
+  const [index, setIndex] = useState(0);
+  const [tick, setTick] = useState(0);
+  const step = steps[index];
+  const rect = useAnchorRect(step?.anchor, tick);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (open) setTick((t) => t + 1);
+  }, [open, index]);
+  useEffect(() => {
+    if (open) onStep?.(index);
+  }, [index, open, onStep]);
+
+  const next = useCallback(() => {
+    if (index >= steps.length - 1) {
+      onClose(true);
+      return;
+    }
+    setIndex((i) => i + 1);
+  }, [index, steps.length, onClose]);
+
+  const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose(false);
+      if (e.key === "ArrowRight" || e.key === "Enter") next();
+      if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, next, prev, onClose]);
+
+  if (!open || !step) return null;
+
+  const centred = !rect || step.placement === "center";
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const CARD_W = Math.min(360, vw - 32);
+
+  let cardStyle: React.CSSProperties;
+  if (centred) {
+    cardStyle = {
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      width: CARD_W,
+    };
+  } else {
+    const r = rect!;
+    let left = r.left + r.width + 16;
+    let top = r.top;
+    // Flip to the left if it would run off-screen; clamp vertically.
+    if (left + CARD_W > vw - 16) left = Math.max(16, r.left - CARD_W - 16);
+    top = Math.min(Math.max(16, top), vh - 220);
+    cardStyle = { top, left, width: CARD_W };
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Product tour"
+    >
+      {/* Spotlight. A single div with a huge outward box-shadow dims everything
+          except the highlighted element — no SVG mask, no layout thrash. */}
+      {rect && !centred ? (
+        <div
+          className="pointer-events-none absolute rounded-2xl transition-all duration-300"
+          style={{
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            boxShadow: "0 0 0 9999px rgba(15,23,42,0.72)",
+            outline: "2px solid #F59E0B",
+            outlineOffset: 2,
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[#0F172A]/72" />
+      )}
+
+      <div
+        ref={cardRef}
+        className="absolute rounded-3xl bg-white p-6 shadow-2xl transition-all duration-300"
+        style={cardStyle}
+      >
+        <div className="mb-3 flex items-center gap-1.5">
+          {steps.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1 rounded-full transition-all ${
+                i === index
+                  ? "w-5 bg-amber-500"
+                  : i < index
+                    ? "w-1.5 bg-amber-300"
+                    : "w-1.5 bg-slate-200"
+              }`}
+            />
+          ))}
+        </div>
+
+        <h3 className="text-base font-black text-slate-900">{step.title}</h3>
+        <p className="mt-2 text-sm leading-5 text-slate-600">{step.body}</p>
+
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <button
+            onClick={() => onClose(false)}
+            className="text-[11px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600"
+          >
+            Skip tour
+          </button>
+          <div className="flex gap-2">
+            {index > 0 && (
+              <button
+                onClick={prev}
+                className="rounded-xl border border-slate-200 px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600"
+              >
+                Back
+              </button>
+            )}
+            <button
+              onClick={next}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+            >
+              {index === steps.length - 1 ? "Finish" : "Next"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-const videoFooter = (key: string) =>
-  TOUR_VIDEOS[key]
-    ? `<a class="agently-tour-video" href="${TOUR_VIDEOS[key]}" target="_blank" rel="noopener noreferrer">▶ Watch the walkthrough video</a>`
-    : "";
+// ─────────────────────────────────────────────────────────────────────────────
 
-/* ══════════════════════════════════════════════════════════════════════════
- * PHASE 1 — the sidebar, step by step
+/**
+ * Drives the tour. Auto-starts once for a user who has not seen it.
  *
- * REQUIRED MARKUP: add data-tour attributes to Shell.tsx nav items.
- *   <a data-tour="nav-dashboard">   <a data-tour="nav-phone-numbers"> etc.
- * Steps whose element is missing are skipped automatically, so a tenant
- * without a given feature never hits a dead step.
- * ══════════════════════════════════════════════════════════════════════════ */
-export const PHASE_1_SIDEBAR: DriveStep[] = [
-  {
-    element: '[data-tour="nav-dashboard"]',
-    popover: {
-      title: "Dashboard",
-      description:
-        "Your daily view — calls handled, leads captured, and how much credit you've used.",
-    },
-  },
-  {
-    // Note: sits ABOVE Voice Agent after the Shell.tsx reorder in PATCH 08.
-    element: '[data-tour="nav-phone-numbers"]',
-    popover: {
-      title: "Phone Numbers",
-      description:
-        "Buy a business number and connect it to an agent. Numbers activate automatically the moment you buy them.",
-    },
-  },
-  {
-    element: '[data-tour="nav-voice-agent"]',
-    popover: {
-      title: "Voice Agent",
-      description:
-        "Your agent's greeting, tone, transfer rules and what it should do when nobody is available.",
-    },
-  },
-  {
-    element: '[data-tour="nav-knowledge"]',
-    popover: {
-      title: "Knowledge Base",
-      description:
-        "Choose which pages of your website your agent learns from. More pages means smarter answers — and faster credit use.",
-    },
-  },
-  {
-    element: '[data-tour="nav-chatbot"]',
-    popover: {
-      title: "Chatbot",
-      description:
-        "Design the chat widget for your website — its voice, its languages, and whether it collects leads.",
-    },
-  },
-  {
-    element: '[data-tour="nav-leads"]',
-    popover: {
-      title: "Leads",
-      description:
-        "Everyone your agent spoke to, with their details and where they are in your pipeline.",
-    },
-  },
-  {
-    element: '[data-tour="nav-call-logs"]',
-    popover: {
-      title: "Call Logs",
-      description:
-        "Every call, with recordings and transcripts so you can hear exactly what was said.",
-    },
-  },
-  {
-    element: '[data-tour="nav-billing"]',
-    popover: {
-      title: "Billing",
-      description: `Top up your wallet and see precisely what each service costs.${videoFooter(
-        "phase1_sidebar",
-      )}`,
-    },
-  },
-];
-
-/* ══════════════════════════════════════════════════════════════════════════
- * PHASE 2 — inside the dashboard, with auto-scroll
- * Add matching data-tour attributes in Dashboard.tsx.
- * ══════════════════════════════════════════════════════════════════════════ */
-export const PHASE_2_DASHBOARD: DriveStep[] = [
-  {
-    element: '[data-tour="workspace-name"]',
-    popover: {
-      title: "Your workspace",
-      description:
-        "Everything here belongs to this business. Invite your team from Settings and they'll share it.",
-    },
-  },
-  {
-    element: '[data-tour="credit-balance"]',
-    popover: {
-      title: "Usage wallet",
-      description:
-        "Credit is deducted as your agents work — per call, per message and per page scanned. Top up before it runs out to avoid interruptions.",
-    },
-  },
-  {
-    element: '[data-tour="stat-cards"]',
-    popover: {
-      title: "Today at a glance",
-      description:
-        "Calls answered, leads captured and minutes used. These update live as calls come in.",
-    },
-  },
-  {
-    element: '[data-tour="calls-chart"]',
-    popover: {
-      title: "Call volume",
-      description:
-        "Spot your busy hours so you know when a human should be on standby for transfers.",
-    },
-  },
-  {
-    element: '[data-tour="recent-activity"]',
-    popover: {
-      title: "Recent activity",
-      description: `Your latest calls and leads. Click any row to open the full transcript.${videoFooter(
-        "phase2_dashboard",
-      )}`,
-    },
-  },
-];
-
-/* ══════════════════════════════════════════════════════════════════════════
- * Runner
- * ══════════════════════════════════════════════════════════════════════════ */
-export interface TourPhase {
-  key: string;
-  steps: DriveStep[];
-  /** Route the tour must be on before the phase runs. */
-  requiresRoute?: string;
-}
-
-export const TOUR_PHASES: TourPhase[] = [
-  { key: "phase1_sidebar", steps: PHASE_1_SIDEBAR },
-  { key: "phase2_dashboard", steps: PHASE_2_DASHBOARD, requiresRoute: "#/dashboard" },
-];
-
-export interface RunTourOptions {
-  phases?: TourPhase[];
-  /** Persist progress — see POST /api/tour/progress below. */
-  onPhaseComplete?: (phaseKey: string) => void;
-  onSkip?: (phaseKey: string, stepIndex: number) => void;
-  onAllComplete?: () => void;
-  navigate?: (route: string) => void;
-}
-
-export function runProductTour(options: RunTourOptions = {}): () => void {
-  injectTourStyles();
-
-  const phases = options.phases || TOUR_PHASES;
-  let index = 0;
-  let active: Driver | null = null;
-
-  const startPhase = () => {
-    const phase = phases[index];
-    if (!phase) {
-      options.onAllComplete?.();
-      return;
-    }
-
-    if (phase.requiresRoute && options.navigate) {
-      options.navigate(phase.requiresRoute);
-    }
-
-    // Drop steps whose target is not in the DOM — a hidden feature must never
-    // produce an empty highlight box.
-    const steps = phase.steps.filter((step) =>
-      typeof step.element === "string"
-        ? document.querySelector(step.element)
-        : true,
-    );
-
-    if (!steps.length) {
-      index += 1;
-      startPhase();
-      return;
-    }
-
-    // Route changes need a paint before elements exist.
-    window.setTimeout(() => {
-      active = driver({
-        showProgress: true,
-        progressText: "{{current}} of {{total}}",
-        nextBtnText: "Next",
-        prevBtnText: "Back",
-        doneBtnText: index === phases.length - 1 ? "Finish" : "Next section",
-        popoverClass: "agently-tour",
-        // Auto-scroll each target into view, as you asked.
-        smoothScroll: true,
-        allowClose: true,
-        overlayOpacity: 0.55,
-        stagePadding: 6,
-        stageRadius: 14,
-        steps,
-        onDestroyed: () => {
-          const completedNaturally =
-            active?.getActiveIndex() === steps.length - 1;
-          if (completedNaturally) {
-            options.onPhaseComplete?.(phase.key);
-            index += 1;
-            startPhase();
-          } else {
-            options.onSkip?.(phase.key, active?.getActiveIndex() ?? 0);
-          }
-        },
-      });
-      active.drive();
-    }, phase.requiresRoute ? 350 : 0);
-  };
-
-  startPhase();
-  return () => active?.destroy();
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
- * React hook — auto-start for newly onboarded users
- * ══════════════════════════════════════════════════════════════════════════ */
-import { useEffect, useRef } from "react";
-
-export const CURRENT_TOUR_VERSION = 1; // bump to re-show after shipping a feature
-
-export function useProductTour({
-  enabled,
-  completedTours,
-  onComplete,
-  navigate,
-}: {
-  enabled: boolean;
-  completedTours: Record<string, number>;
-  onComplete: (phaseKey: string, version: number) => void;
-  navigate?: (route: string) => void;
-}) {
+ * `justOnboarded` should be true on the first dashboard render after onboarding
+ * completes — that is the moment you described, and the reason the tour exists.
+ */
+export function useProductTour(
+  opts: { justOnboarded?: boolean; enabled?: boolean } = {},
+) {
+  const { justOnboarded = false, enabled = true } = opts;
+  const [open, setOpen] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
     if (!enabled || started.current) return;
-
-    const pending = TOUR_PHASES.filter(
-      (phase) => (completedTours[phase.key] || 0) < CURRENT_TOUR_VERSION,
-    );
-    if (!pending.length) return;
+    let seen = false;
+    try {
+      seen = window.localStorage.getItem(STORAGE_KEY) === "completed";
+    } catch {
+      /* private mode */
+    }
+    if (seen) return;
 
     started.current = true;
-    const stop = runProductTour({
-      phases: pending,
-      navigate,
-      onPhaseComplete: (key) => onComplete(key, CURRENT_TOUR_VERSION),
-      onSkip: (key) => onComplete(key, CURRENT_TOUR_VERSION),
-    });
-    return stop;
-  }, [enabled, completedTours, onComplete, navigate]);
+    // Let the dashboard paint and the sidebar mount before measuring anchors.
+    const t = window.setTimeout(() => setOpen(true), justOnboarded ? 700 : 400);
+    return () => window.clearTimeout(t);
+  }, [enabled, justOnboarded]);
+
+  const close = useCallback((completed: boolean) => {
+    setOpen(false);
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        completed ? "completed" : "skipped",
+      );
+    } catch {
+      /* ignore */
+    }
+
+    // Best-effort server persistence. Never block the UI on it.
+    try {
+      const base =
+        (import.meta as any).env?.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
+      const token =
+        window.localStorage.getItem("agently.auth.token") ||
+        window.sessionStorage.getItem("agently.auth.token") ||
+        "";
+      if (token) {
+        void fetch(`${base}/api/settings/tour-progress`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tourKey: TOUR_KEY,
+            tourVersion: TOUR_VERSION,
+            status: completed ? "completed" : "skipped",
+          }),
+        }).catch(() => undefined);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  /** Wire to a "Replay tour" button in Settings. */
+  const restart = useCallback(() => {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    setOpen(true);
+  }, []);
+
+  return { open, close, restart, setOpen };
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
- * REQUIRED COMPANION WORK
- * ══════════════════════════════════════════════════════════════════════════
- *
- * 1. npm install driver.js
- *
- * 2. Add data-tour attributes to Shell.tsx nav items and Dashboard.tsx regions
- *    (the exact selector names are listed in each step above).
- *
- * 3. Backend — two small routes, backed by user_tour_progress
- *    (migration 001 Section 5):
- *
- *      GET  /api/tour/progress
- *        -> { completed: { phase1_sidebar: 1, ... } }
- *
- *      POST /api/tour/progress   { tourKey, tourVersion, status }
- *        -> upsert on (user_id, tour_key, tour_version)
- *
- * 4. In App.tsx, start the tour once the dashboard mounts after onboarding:
- *
- *      useProductTour({
- *        enabled: user.justOnboarded || hasNewFeatures,
- *        completedTours,
- *        onComplete: (key, version) =>
- *          api.saveTourProgress({ tourKey: key, tourVersion: version,
- *                                 status: "completed" }),
- *        navigate: (route) => { window.location.hash = route; },
- *      });
- */
+export default ProductTour;

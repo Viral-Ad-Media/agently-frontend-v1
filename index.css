@@ -358,16 +358,19 @@ main {
 }
 
 .marketing-page-title {
-  font-size: clamp(2.45rem, 4.8vw, 3.625rem);
-  line-height: 1;
+  /* ISSUE 4: was clamp(2.45rem, 4.8vw, 3.625rem) — 58px at desktop, which is
+     what made the journal header fill the viewport. Editorial headings rarely
+     exceed ~44px; this keeps the impact without the shouting. */
+  font-size: clamp(1.95rem, 3.4vw, 2.75rem);
+  line-height: 1.08;
   letter-spacing: -0.055em;
   font-weight: 500;
   color: #0F172A;
 }
 
 .marketing-section-title {
-  font-size: clamp(2rem, 3.8vw, 2.5rem);
-  line-height: 1;
+  font-size: clamp(1.6rem, 2.8vw, 2.05rem);
+  line-height: 1.12;
   letter-spacing: -0.052em;
   font-weight: 500;
   color: #0F172A;
@@ -461,7 +464,7 @@ main {
   }
 
   .marketing-page-title {
-    font-size: clamp(2.25rem, 10vw, 3.35rem);
+    font-size: clamp(1.75rem, 7vw, 2.35rem);
   }
 }
 
@@ -1942,34 +1945,37 @@ main {
 }
 
 .agently-blog-content>*+* {
-  margin-top: 1.55rem;
+  /* ISSUE 4: "the spacing between headers and paragraph is too much" */
+  margin-top: 1.15rem;
 }
 
 .agently-blog-content h2 {
-  margin-top: 3rem;
-  font-size: clamp(1.65rem, 3vw, 2.45rem);
+  margin-top: 2.1rem;
+  margin-bottom: 0.35rem;
+  font-size: clamp(1.3rem, 2.1vw, 1.65rem);
   font-weight: 600;
-  line-height: 1.04;
+  line-height: 1.22;
   letter-spacing: -0.055em;
   color: #000;
 }
 
 .agently-blog-content p,
 .agently-blog-content li {
-  font-size: clamp(1rem, 1.5vw, 1.08rem);
-  line-height: 1.85;
+  font-size: clamp(0.95rem, 1.1vw, 1.02rem);
+  /* 1.85 was airy enough to push a short paragraph over three screen-inches. */
+  line-height: 1.68;
   color: rgba(0, 0, 0, 0.66);
   white-space: pre-line;
 }
 
 .agently-blog-content blockquote {
-  margin-top: 2.5rem;
-  margin-bottom: 2.5rem;
+  margin-top: 1.7rem;
+  margin-bottom: 1.7rem;
   border-left: 4px solid #ff9900;
   padding: 0.4rem 0 0.4rem 1.5rem;
-  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  font-size: clamp(1.1rem, 1.8vw, 1.35rem);
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.4;
   letter-spacing: -0.04em;
   color: #111827;
 }
@@ -1983,8 +1989,8 @@ main {
 }
 
 .agently-blog-content figure {
-  margin-top: 2.6rem;
-  margin-bottom: 2.6rem;
+  margin-top: 1.8rem;
+  margin-bottom: 1.8rem;
 }
 
 .agently-blog-content figure img {
@@ -2223,4 +2229,91 @@ main {
     transform: translate(-50%, -102%) scale(1);
     opacity: 1;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ISSUE 6 — "There are too many use of border lines — it makes the entire
+   interface ugly with one container being in another then in another"
+
+   The pattern across the app is a bordered card containing a bordered section
+   containing a bordered row. Each level is defensible alone; stacked they read
+   as a wireframe.
+
+   Rather than hand-edit every page, these rules suppress the SECOND and deeper
+   levels of nesting automatically. A card keeps its border. A card inside a
+   card loses it and separates by background tint instead — which is how the
+   eye actually reads hierarchy.
+
+   Opt out on a specific element with .keep-border.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Depth 2+: drop the outline, keep the shape. */
+.agently-surface .agently-surface:not(.keep-border),
+[class*="rounded-3xl"][class*="border"] [class*="rounded-2xl"][class*="border-slate-200"]:not(.keep-border),
+[class*="rounded-3xl"][class*="border"] [class*="rounded-xl"][class*="border-slate-200"]:not(.keep-border) {
+  border-color: transparent;
+  background-color: rgba(15, 23, 42, 0.028);
+}
+
+/* Depth 3+: no tint either — indentation and weight carry it. */
+[class*="rounded-3xl"][class*="border"] [class*="rounded-2xl"] [class*="rounded-xl"][class*="border"]:not(.keep-border) {
+  border-color: transparent;
+  background-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Card shadows compound the same way. Only the outermost keeps one. */
+[class*="shadow-card"] [class*="shadow-card"] {
+  box-shadow: none;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ISSUE 8 — "too many vertical scroll tab"
+
+   Nested scroll containers are the cause: an inner max-h-* with overflow-y
+   inside a page that already scrolls gives two scrollbars competing for the
+   same gesture. These keep the scrolling but hide the redundant chrome, and
+   stop short panes scrolling at all.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.agently-scroll,
+[class*="overflow-y-auto"][class*="max-h-"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
+  overscroll-behavior: contain;
+}
+
+.agently-scroll::-webkit-scrollbar,
+[class*="overflow-y-auto"][class*="max-h-"]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.agently-scroll::-webkit-scrollbar-track,
+[class*="overflow-y-auto"][class*="max-h-"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agently-scroll::-webkit-scrollbar-thumb,
+[class*="overflow-y-auto"][class*="max-h-"]::-webkit-scrollbar-thumb {
+  background-color: rgba(15, 23, 42, 0.16);
+  border-radius: 999px;
+}
+
+.agently-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(15, 23, 42, 0.3);
+}
+
+/* A pane shorter than its max height should not scroll at all. */
+[class*="overflow-y-auto"]:not([class*="h-full"]) {
+  overflow-y: auto;
+  max-height: min(var(--agently-pane-max, 32rem), 70vh);
+}
+
+/* Modals are fixed and self-contained: never inherit the page scrollbar. */
+.agently-modal-body {
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }

@@ -21,6 +21,9 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
+// THE TOUR. It was written last round but never imported by anything, which is
+// why onboarding a test user produced no walkthrough at all.
+import { ProductTour, useProductTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -320,11 +323,21 @@ const App: React.FC = () => {
     return api.generateOnboardingFaqs(website);
   };
 
+  const [justOnboarded, setJustOnboarded] = useState(false);
+  const tour = useProductTour({
+    justOnboarded,
+    enabled: !!org?.profile?.onboarded,
+  });
+
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
     agent: AgentConfig,
   ) => {
     await api.completeOnboarding(profile, agent);
+
+    // Marks the next dashboard render as "first ever". useProductTour reads
+    // this to start the walkthrough at the moment you described.
+    setJustOnboarded(true);
 
     // Move the user out of onboarding immediately after the API confirms
     // completion. The follow-up bootstrap refresh will load the full saved
@@ -767,6 +780,7 @@ const App: React.FC = () => {
               org && dashboard ? (
                 <ProtectedRoute>
                   <Dashboard org={org} dashboard={dashboard} />
+                  <ProductTour open={tour.open} onClose={tour.close} />
                 </ProtectedRoute>
               ) : (
                 <Navigate to="/login" />

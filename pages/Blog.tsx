@@ -107,7 +107,7 @@ const Blog: React.FC = () => {
                     <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-[#F59E0B]">
                       Latest update
                     </p>
-                    <h2 className="mt-5 text-[clamp(2rem,4vw,3.9rem)] font-medium leading-[0.98] tracking-[-0.065em]">
+                    <h2 className="mt-5 text-[clamp(1.5rem,2.6vw,2.1rem)] font-medium leading-[1.14] tracking-[-0.04em]">
                       {featured.title}
                     </h2>
                     <p className="mt-5 max-w-xl text-base leading-7 text-white/65">

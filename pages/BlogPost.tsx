@@ -79,10 +79,10 @@ const BlogPost: React.FC = () => {
             <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-[#B45309]">
               {formatDate(post.publishedAt)} · {post.authorName}
             </p>
-            <h1 className="mt-5 text-[clamp(2.6rem,7vw,6.5rem)] font-medium leading-[0.9] tracking-[-0.075em] text-[#0F172A]">
+            <h1 className="mt-5 text-[clamp(1.85rem,3.6vw,2.9rem)] font-medium leading-[1.08] tracking-[-0.045em] text-[#0F172A]">
               {post.title}
             </h1>
-            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-600">
+            <p className="mt-4 max-w-2xl text-[15px] leading-[1.6] text-slate-600">
               {post.excerpt}
             </p>
           </div>

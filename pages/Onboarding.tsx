@@ -224,6 +224,104 @@ const getConciseLocationLabel = (city: NominatimResult) => {
   return [locality, address.state, address.country].filter(Boolean).join(", ");
 };
 
+/**
+ * FIX: selecting Lagos produced "Eastern Time (US)".
+ *
+ * The old chain was: US states -> a small regex fallback list -> hardcoded
+ * "America/New_York". Nigeria matched nothing, so every non-US, non-listed
+ * city on earth silently became New York. Defaulting a timezone to the
+ * author's own is a bug that only shows up for everyone else.
+ *
+ * New order:
+ *   1. US states (unchanged — the US genuinely needs sub-country resolution)
+ *   2. ISO country code -> capital timezone. Covers every country Nominatim
+ *      returns, which is the actual signal we already had and were ignoring.
+ *   3. The existing regex list, for sub-country cases outside the US.
+ *   4. The browser's own timezone — a far better guess than New York, because
+ *      most people set up their workspace from where they operate.
+ */
+const COUNTRY_TIMEZONES: Record<string, string> = {
+  ng: "Africa/Lagos",
+  gh: "Africa/Accra",
+  ke: "Africa/Nairobi",
+  za: "Africa/Johannesburg",
+  eg: "Africa/Cairo",
+  ma: "Africa/Casablanca",
+  tz: "Africa/Dar_es_Salaam",
+  ug: "Africa/Kampala",
+  et: "Africa/Addis_Ababa",
+  ci: "Africa/Abidjan",
+  sn: "Africa/Dakar",
+  cm: "Africa/Douala",
+  dz: "Africa/Algiers",
+  tn: "Africa/Tunis",
+  zw: "Africa/Harare",
+  zm: "Africa/Lusaka",
+  rw: "Africa/Kigali",
+  bw: "Africa/Gaborone",
+  gb: "Europe/London",
+  ie: "Europe/Dublin",
+  fr: "Europe/Paris",
+  de: "Europe/Berlin",
+  es: "Europe/Madrid",
+  it: "Europe/Rome",
+  pt: "Europe/Lisbon",
+  nl: "Europe/Amsterdam",
+  be: "Europe/Brussels",
+  ch: "Europe/Zurich",
+  at: "Europe/Vienna",
+  se: "Europe/Stockholm",
+  no: "Europe/Oslo",
+  dk: "Europe/Copenhagen",
+  fi: "Europe/Helsinki",
+  pl: "Europe/Warsaw",
+  cz: "Europe/Prague",
+  gr: "Europe/Athens",
+  ro: "Europe/Bucharest",
+  hu: "Europe/Budapest",
+  ua: "Europe/Kyiv",
+  ru: "Europe/Moscow",
+  tr: "Europe/Istanbul",
+  ae: "Asia/Dubai",
+  sa: "Asia/Riyadh",
+  qa: "Asia/Qatar",
+  il: "Asia/Jerusalem",
+  in: "Asia/Kolkata",
+  pk: "Asia/Karachi",
+  bd: "Asia/Dhaka",
+  lk: "Asia/Colombo",
+  cn: "Asia/Shanghai",
+  hk: "Asia/Hong_Kong",
+  tw: "Asia/Taipei",
+  jp: "Asia/Tokyo",
+  kr: "Asia/Seoul",
+  sg: "Asia/Singapore",
+  my: "Asia/Kuala_Lumpur",
+  th: "Asia/Bangkok",
+  vn: "Asia/Ho_Chi_Minh",
+  id: "Asia/Jakarta",
+  ph: "Asia/Manila",
+  au: "Australia/Sydney",
+  nz: "Pacific/Auckland",
+  br: "America/Sao_Paulo",
+  ar: "America/Argentina/Buenos_Aires",
+  cl: "America/Santiago",
+  co: "America/Bogota",
+  pe: "America/Lima",
+  mx: "America/Mexico_City",
+  jm: "America/Jamaica",
+  tt: "America/Port_of_Spain",
+  ca: "America/Toronto",
+};
+
+const browserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
 const inferTimezoneFromNominatim = (city: NominatimResult) => {
   const address = city.address || {};
   const state = String(address.state || "")
@@ -232,13 +330,18 @@ const inferTimezoneFromNominatim = (city: NominatimResult) => {
   const countryCode = String(address.country_code || "")
     .trim()
     .toLowerCase();
+
   if (countryCode === "us" && state && US_STATE_TIMEZONES[state])
     return US_STATE_TIMEZONES[state];
+
+  if (countryCode && COUNTRY_TIMEZONES[countryCode])
+    return COUNTRY_TIMEZONES[countryCode];
+
   const haystack = `${city.display_name || ""} ${address.city || ""} ${address.town || ""} ${address.state || ""} ${address.country || ""}`;
   const match = LOCATION_TIMEZONE_FALLBACKS.find(([pattern]) =>
     pattern.test(haystack),
   );
-  return match?.[1] || "America/New_York";
+  return match?.[1] || browserTimezone();
 };
 
 const inferTimezoneFromLocationText = (location: string) => {

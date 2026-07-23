@@ -103,7 +103,19 @@ const AppModal: React.FC<AppModalProps> = ({
           ) : null}
 
           <div
-            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 ${hideHeader ? "p-0 sm:p-0 lg:p-0 " : ""}${bodyClassName}`}
+            className={
+              /*
+              ISSUE 2b: "the modal should be fixed on the screen — no vertical
+              scroll tab is needed for fixed modals".
+
+              The modal already IS fixed. What you were seeing is the body's own
+              scrollbar rendering at full browser chrome width even when the
+              content barely overflows. `agently-scroll` (index.css) makes it a
+              6px overlay that only appears on hover, so a modal that fits shows
+              no scroll chrome at all.
+            */
+              `agently-scroll agently-modal-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 ${hideHeader ? "p-0 sm:p-0 lg:p-0 " : ""}${bodyClassName}`
+            }
           >
             {children}
           </div>
