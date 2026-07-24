@@ -1028,7 +1028,10 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       </div>
 
       {error && (
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600">
+        <div
+          className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600"
+          data-tour="dashboard-stats"
+        >
           {error}
         </div>
       )}
@@ -1103,7 +1106,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               Calls
             </div>
           </div>
-          <div className="h-[22rem] sm:h-[25rem]">
+          <div className="h-[22rem] sm:h-[25rem]" data-tour="dashboard-chart">
             {chartsReady ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart

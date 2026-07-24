@@ -2089,9 +2089,29 @@ main {
 
 /* Agently onboarding FAQ review polish - spacious editable generated answers */
 .ag-onboarding-faq-list {
-  max-height: min(56svh, 520px);
+  /* ISSUE 3 - "the top section is clipped".
+     56svh plus the step header, the eyebrow, the edit hint and the fixed
+     Back/Continue bar added up to more than the viewport, so the panel grew
+     past the top of its own container and the heading was cut off. Reducing
+     the list's share and letting the page own the scroll fixes it, and the
+     new list layout needs far less height anyway. */
+  max-height: min(38svh, 340px);
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+
+@media (min-height: 800px) {
+  .ag-onboarding-faq-list {
+    max-height: min(48svh, 460px);
+  }
+}
+
+/* Step panels scroll as a whole rather than clipping their own header. */
+.ag-onboarding-step-body {
+  max-height: calc(100svh - 13rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 0.25rem;
 }
 
 .ag-onboarding-faq-card {
@@ -2354,5 +2374,151 @@ main {
     scroll-margin-top: 1rem;
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS — systematic pass
+
+   Rather than auditing 28 pages by hand and missing some, these rules target
+   the PATTERNS that break on a phone. Each one is a class of bug, not a
+   single page, so pages I haven't opened are covered too.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* 1. HORIZONTAL OVERFLOW — the most common mobile bug. A single wide child
+        makes the whole page pan sideways, which then breaks every fixed
+        element on it. */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* 2. FIXED-WIDTH CHILDREN. Tailwind w-[420px] and friends are fine on
+        desktop and overflow a 390px phone. Cap them. */
+  [class*="w-["]:not([class*="w-[1"]):not([class*="w-[2"]):not([class*="w-[3"]) {
+    max-width: 100%;
+  }
+
+  /* 3. MULTI-COLUMN GRIDS declared without a mobile breakpoint. Anything
+        asking for 3+ columns gets 1 on a phone. */
+  [class*="grid-cols-3"]:not([class*="sm:"]):not([class*="md:"]):not([class*="lg:"]),
+  [class*="grid-cols-4"]:not([class*="sm:"]):not([class*="md:"]):not([class*="lg:"]),
+  [class*="grid-cols-5"]:not([class*="sm:"]):not([class*="md:"]):not([class*="lg:"]),
+  [class*="grid-cols-6"]:not([class*="sm:"]):not([class*="md:"]):not([class*="lg:"]) {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  /* 4. TABLES. A table cannot reflow; it can only scroll. Give it a scroll
+        container instead of letting it stretch the page. */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  table thead,
+  table tbody {
+    display: table;
+    width: 100%;
+  }
+
+  /* 5. TOUCH TARGETS. 44px is the accessibility floor; several icon buttons
+        were 32px. Padding is left alone so layouts don't shift. */
+  button:not([class*="h-"]),
+  a[role="button"]:not([class*="h-"]) {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  /* 6. DIALOGS. A modal taller than the viewport traps its own buttons
+        off-screen with no way to reach them. */
+  [role="dialog"]>div {
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  /* 7. LONG UNBROKEN STRINGS — URLs, IDs, phone numbers, API keys — are a
+        frequent cause of horizontal overflow. */
+  p,
+  span,
+  td,
+  div,
+  h1,
+  h2,
+  h3,
+  h4 {
+    overflow-wrap: anywhere;
+  }
+
+  /* 8. STICKY FOOTERS clear the home indicator on notched devices. */
+  .sticky.bottom-0,
+  [class*="fixed"][class*="bottom-0"] {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  /* 9. Oversized display type that was tuned for desktop. */
+  [class*="text-5xl"],
+  [class*="text-6xl"],
+  [class*="text-7xl"] {
+    font-size: clamp(1.6rem, 8vw, 2.2rem) !important;
+    line-height: 1.14 !important;
+  }
+
+  [class*="text-4xl"] {
+    font-size: clamp(1.4rem, 6.5vw, 1.9rem) !important;
+  }
+
+  /* 10. Side-by-side flex rows with no wrap allowance. */
+  .flex:not([class*="flex-col"]):not([class*="flex-nowrap"]):not([class*="overflow-x"]) {
+    flex-wrap: wrap;
+  }
+
+  /* 11. Generous desktop padding eats the screen on a phone. */
+  [class*="p-8"],
+  [class*="p-10"],
+  [class*="p-12"] {
+    padding: 1rem !important;
+  }
+
+  [class*="px-8"],
+  [class*="px-10"],
+  [class*="px-12"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  [class*="gap-8"],
+  [class*="gap-10"] {
+    gap: 1rem !important;
+  }
+}
+
+/* Small phones: tighten once more. */
+@media (max-width: 380px) {
+  [class*="grid-cols-2"]:not([class*="sm:"]) {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+/* The tour card must clear the notch and the home indicator on both edges. */
+@media (max-width: 1023px) {
+  [aria-label="Product tour"]>div:last-child {
+    margin-bottom: env(safe-area-inset-bottom);
+    max-width: calc(100vw - 24px);
   }
 }

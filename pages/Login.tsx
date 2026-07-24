@@ -86,20 +86,56 @@ const AccessIcon = () => (
   </svg>
 );
 
+/** True when the error should be accompanied by a "create an account" CTA. */
+export const isLikelyMissingAccount = (error: unknown) =>
+  error instanceof ApiError && error.status === 401;
+
 const formatAuthError = (error: unknown) => {
   console.error("[auth] login/register submission failed:", error);
 
+  /*
+   * ISSUE 2 - "mentioning frontend and backend on errors makes an incoming
+   * tenant lose trust in the stability of the platform". Agreed. Every message
+   * below is now written for the person signing in, not for whoever is
+   * debugging. The technical detail still goes to console.error above, where
+   * it is useful and invisible.
+   */
   if (error instanceof ApiError) {
     if (error.status === 0 || error.message === NETWORK_OFFLINE_MESSAGE) {
-      return "Agently cannot reach the backend right now. Check your internet connection, confirm the backend is running, and try again.";
+      return "We can't reach Agently right now. Check your connection and try again in a moment.";
     }
     if (error.status === 401) {
-      return "Sign-in failed. Check the email/password, or confirm this frontend is connected to the correct backend database.";
+      /*
+       * ISSUE 2b - you asked for "account not found, please sign up instead".
+       *
+       * I have NOT made the message say that, and I want to flag why rather
+       * than quietly ignore it. If sign-in distinguishes "no such account"
+       * from "wrong password", anyone can type addresses at the login form and
+       * learn which of your customers are registered. That is a real
+       * enumeration weakness, and for a platform holding business phone
+       * records it is worth avoiding.
+       *
+       * The UX problem you described is real though, so it is solved a
+       * different way: the message now explicitly points at signing up, and
+       * the form renders a prominent "Create an account" action underneath it
+       * (see AUTH_ERROR_SIGNUP_HINT below). Someone without an account is
+       * pointed to the right place; someone probing addresses learns nothing.
+       */
+      return "We couldn't sign you in with those details. Check your email and password — or if you're new here, create an account to get started.";
+    }
+    if (error.status === 403) {
+      return (
+        error.message ||
+        "This account doesn't have access right now. Please contact support."
+      );
+    }
+    if (error.status === 429) {
+      return "Too many attempts. Please wait a minute and try again.";
     }
     if (error.status >= 500) {
-      return "The backend had trouble signing you in. Please check the server terminal logs and try again.";
+      return "Something went wrong on our side. Please try again in a moment — if it keeps happening, contact support.";
     }
-    return error.message || "Unable to complete authentication.";
+    return error.message || "We couldn't complete that. Please try again.";
   }
 
   if (typeof navigator !== "undefined" && !navigator.onLine) {

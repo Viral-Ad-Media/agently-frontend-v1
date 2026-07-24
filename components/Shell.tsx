@@ -833,6 +833,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onClick={() => setMobileNavOpen(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#334155] text-[#94A3B8] md:hidden"
                 aria-label="Close navigation"
+                data-tour="menu-close"
               >
                 <MenuButtonIcon open />
               </button>
@@ -912,8 +913,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 </div>
 
                 <div className="agently-topbar-actions flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
-                  <WalletCreditBadge wallet={walletMini} />
-                  <NotificationBell />
+                  <span
+                    data-tour="topbar-credit"
+                    className="contents-safe inline-flex"
+                  >
+                    <WalletCreditBadge wallet={walletMini} />
+                  </span>
+                  <span
+                    data-tour="topbar-notifications"
+                    className="inline-flex"
+                  >
+                    <NotificationBell />
+                  </span>
 
                   <div className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 text-[12px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:px-3.5">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />

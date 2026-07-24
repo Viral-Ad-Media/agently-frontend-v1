@@ -1824,29 +1824,41 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     </p>
                   )}
                 </div>
-                <div className="ag-onboarding-faq-list space-y-3 overflow-y-auto pr-1">
+                {/*
+                  ISSUE 3a - "the editable questions and answer cards are too
+                  big ... this will look more presentable in a list or table,
+                  consuming less space. I do not like cards and boxes."
+                //
+                  Rewritten as a bordered LIST: one hairline rule between rows,
+                  no card per FAQ, no shadow, no rounded box around the answer.
+                  Each row is a numbered question with its answer directly
+                  underneath, and both stay inline-editable - clicking either
+                  puts the cursor in it exactly as before.
+                //
+                  Roughly a third of the previous vertical space per FAQ, so
+                  three or four fit on screen where one and a half did.
+                */}
+                <div className="ag-onboarding-faq-list divide-y divide-[#0F172A]/8 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white">
                   {agent.faqs.length === 0 ? (
-                    <div className="rounded-[2rem] border border-dashed border-[#0F172A]/15 bg-white/65 px-5 py-8 text-center text-sm text-[#0F172A]/55">
-                      No FAQs were generated yet. You can add Knowledge Base
-                      content later inside the workspace.
+                    <div className="px-5 py-8 text-center text-sm text-[#0F172A]/55">
+                      No answers were generated yet. You can add knowledge later
+                      from Settings.
                     </div>
                   ) : (
                     agent.faqs.map((faq, i) => (
                       <div
                         key={faq.id}
-                        className="ag-onboarding-faq-card rounded-[1.6rem] border border-[#0F172A]/10 bg-white p-4 shadow-sm"
+                        className="group px-4 py-3 transition-colors hover:bg-[#F59E0B]/[0.035]"
                       >
-                        <div className="mb-3 flex items-start gap-3">
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-[#F59E0B]/12 text-sm font-semibold text-[#D97706]">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-[3px] w-4 shrink-0 text-right text-[11px] font-bold tabular-nums text-[#D97706]">
                             {i + 1}
                           </span>
-                          <label className="min-w-0 flex-1">
-                            <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-[#0F172A]/42">
-                              Question
-                            </span>
+                          <div className="min-w-0 flex-1">
                             <textarea
                               rows={1}
                               value={faq.question}
+                              aria-label={`Question ${i + 1}`}
                               onInput={(e) => growTextarea(e.currentTarget)}
                               onFocus={(e) => growTextarea(e.currentTarget)}
                               onChange={(e) =>
@@ -1859,33 +1871,28 @@ const Onboarding: React.FC<OnboardingProps> = ({
                                   ),
                                 }))
                               }
-                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden bg-transparent text-[15px] font-semibold leading-[1.35] text-[#0F172A] outline-none placeholder:text-[#0F172A]/35"
+                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[14px] font-semibold leading-[1.35] text-[#0F172A] outline-none transition-colors focus:bg-[#F59E0B]/[0.06]"
                             />
-                          </label>
+                            <textarea
+                              rows={2}
+                              value={faq.answer}
+                              aria-label={`Answer ${i + 1}`}
+                              onInput={(e) => growTextarea(e.currentTarget)}
+                              onFocus={(e) => growTextarea(e.currentTarget)}
+                              onChange={(e) =>
+                                setAgent((a) => ({
+                                  ...a,
+                                  faqs: a.faqs.map((f, j) =>
+                                    j === i
+                                      ? { ...f, answer: e.target.value }
+                                      : f,
+                                  ),
+                                }))
+                              }
+                              className="ag-onboarding-faq-answer mt-0.5 w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[13px] leading-[1.5] text-[#0F172A]/70 outline-none transition-colors focus:bg-[#F59E0B]/[0.06]"
+                            />
+                          </div>
                         </div>
-
-                        <label className="block">
-                          <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.16em] text-[#0F172A]/42">
-                            Answer
-                          </span>
-                          <textarea
-                            rows={4}
-                            value={faq.answer}
-                            onInput={(e) => growTextarea(e.currentTarget)}
-                            onFocus={(e) => growTextarea(e.currentTarget)}
-                            onChange={(e) =>
-                              setAgent((a) => ({
-                                ...a,
-                                faqs: a.faqs.map((f, j) =>
-                                  j === i
-                                    ? { ...f, answer: e.target.value }
-                                    : f,
-                                ),
-                              }))
-                            }
-                            className="ag-onboarding-faq-answer w-full resize-none overflow-hidden rounded-[1.15rem] border border-[#0F172A]/8 bg-[#F8FAFC] px-4 py-3 text-[14px] leading-[1.55] text-[#0F172A]/78 outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/45 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10"
-                          />
-                        </label>
                       </div>
                     ))
                   )}

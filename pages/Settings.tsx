@@ -64,6 +64,7 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
   const settingCards = [
     {
       title: "Knowledge Bases",
+      tourId: "settings-knowledge",
       description:
         "Create separate knowledge bases and assign them to agents or chatbots.",
       href: "/knowledge-bases",
@@ -72,6 +73,7 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
     },
     {
       title: "Team",
+      tourId: "settings-team",
       description:
         "Invite members, manage roles, and control workspace access.",
       href: "/team",
@@ -80,6 +82,7 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
     },
     {
       title: "Billing",
+      tourId: "settings-billing",
       description: "Review your plan, usage, invoices, and payment settings.",
       href: "/billing",
       icon: "fa-credit-card",
@@ -119,7 +122,10 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card lg:col-span-2 sm:p-6">
-          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div
+            className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+            data-tour="settings-general"
+          >
             <div>
               <h3 className="text-base font-black text-slate-900">General</h3>
               <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
@@ -201,6 +207,7 @@ const Settings: React.FC<SettingsProps> = ({ org, onSave }) => {
               key={card.title}
               to={card.href}
               className="group block rounded-3xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-lg"
+              data-tour={(card as any).tourId}
             >
               <div className="flex items-start gap-4">
                 <span

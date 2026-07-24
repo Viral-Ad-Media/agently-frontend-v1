@@ -904,7 +904,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div
+              className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+              data-tour="numbers-list"
+            >
               {numbers.map(renderNumberCard)}
             </div>
           )}
@@ -914,7 +917,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       {tab === "search" && (
         <div className="space-y-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div
+              className="mb-5 flex items-start justify-between gap-4"
+              data-tour="numbers-search"
+            >
               <div>
                 <h3 className="text-base font-black text-slate-900">
                   Find a number for your business
@@ -984,7 +990,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
 
           {searchDone && (
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-              <div className="mb-5 flex items-center justify-between">
+              <div
+                className="mb-5 flex items-center justify-between"
+                data-tour="numbers-buy"
+              >
                 <h3 className="text-base font-black text-slate-900">
                   {availableNumbers.length
                     ? `${availableNumbers.length} numbers available`

@@ -1254,7 +1254,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6" data-tour="calls-stats">
         {[
           {
             label: "Total calls",

@@ -318,6 +318,36 @@ const AdminLogin: React.FC<{ onAuthenticated: (email: string) => void }> = ({
   );
 };
 
+/**
+ * ISSUE - "imagine after populating a very long paragraph, and I have to scroll
+ * all the way down to see the next paragraph I am adding. I want each element
+ * collapsible."
+ *
+ * First line of a block's content, for the collapsed summary. A collapsed row
+ * has to say what it contains or collapsing just hides your work.
+ */
+function blockPreview(block: any): string {
+  const text =
+    block?.text ||
+    (Array.isArray(block?.items) ? block.items.join(" · ") : "") ||
+    block?.caption ||
+    block?.alt ||
+    block?.url ||
+    "";
+  const clean = String(text).replace(/\s+/g, " ").trim();
+  if (!clean) return "Empty";
+  return clean.length > 84 ? `${clean.slice(0, 84)}…` : clean;
+}
+
+const BLOCK_ICONS: Record<string, string> = {
+  heading: "fa-heading",
+  paragraph: "fa-align-left",
+  quote: "fa-quote-left",
+  bullets: "fa-list-ul",
+  image: "fa-image",
+  video: "fa-film",
+};
+
 const BlockEditor: React.FC<{
   blocks: BlogBlock[];
   onChange: (blocks: BlogBlock[]) => void;
@@ -325,6 +355,9 @@ const BlockEditor: React.FC<{
 }> = ({ blocks, onChange, onUpload }) => {
   const [newBlockType, setNewBlockType] =
     useState<BlogBlock["type"]>("paragraph");
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(
+    new Set(),
+  );
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(
     blocks[0]?.id || null,
@@ -574,8 +607,35 @@ const BlockEditor: React.FC<{
       </div>
 
       <div className="mt-4 space-y-3">
+        {blocks.length > 1 ? (
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              {blocks.length} blocks
+            </span>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setCollapsedBlocks(new Set(blocks.map((b) => b.id)))
+                }
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 transition-colors hover:border-amber-300 hover:text-amber-700"
+              >
+                Collapse all
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollapsedBlocks(new Set())}
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 transition-colors hover:border-amber-300 hover:text-amber-700"
+              >
+                Expand all
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {blocks.map((block, index) => {
           const style = block.style || {};
+          const collapsed = collapsedBlocks.has(block.id);
           return (
             <div
               key={block.id}
@@ -585,7 +645,7 @@ const BlockEditor: React.FC<{
                 if (draggedIndex !== null) moveTo(draggedIndex, index);
                 setDraggedIndex(null);
               }}
-              className={`rounded-2xl border bg-white p-4 transition ${
+              className={`rounded-2xl border bg-white transition ${collapsed ? "p-2.5" : "p-4"} ${
                 draggedIndex === index
                   ? "border-amber-400 opacity-60"
                   : selectedBlockId === block.id
@@ -607,10 +667,40 @@ const BlockEditor: React.FC<{
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                      {index + 1}. {block.type}
-                    </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setCollapsedBlocks((current) => {
+                          const next = new Set(current);
+                          next.has(block.id)
+                            ? next.delete(block.id)
+                            : next.add(block.id);
+                          return next;
+                        });
+                      }}
+                      className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-2 text-left transition-colors hover:bg-slate-50"
+                      aria-expanded={!collapsed}
+                      title={collapsed ? "Expand" : "Collapse"}
+                    >
+                      <i
+                        className={`fa-solid fa-chevron-right shrink-0 text-[10px] text-slate-400 transition-transform ${collapsed ? "" : "rotate-90"}`}
+                      />
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#F59E0B]/12 text-[10px] text-[#D97706]">
+                        <i
+                          className={`fa-solid ${BLOCK_ICONS[block.type] || "fa-square"}`}
+                        />
+                      </span>
+                      <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        {index + 1}. {block.type}
+                      </span>
+                      {collapsed ? (
+                        <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                          {blockPreview(block)}
+                        </span>
+                      ) : null}
+                    </button>
                     <div className="flex gap-1">
                       <button
                         type="button"
@@ -648,79 +738,40 @@ const BlockEditor: React.FC<{
                     </div>
                   </div>
 
-                  {block.type === "image" ? (
-                    <div className="space-y-3">
-                      {block.url ? (
-                        <img
-                          src={block.url}
-                          alt=""
-                          className="max-h-56 w-full rounded-xl object-cover"
-                        />
-                      ) : null}
-                      <label className="inline-flex cursor-pointer items-center rounded-lg bg-[#0F172A] px-3 py-2 text-xs font-bold text-white">
-                        {block.url ? "Replace image" : "Upload image"}
+                  {/* Body — hidden when collapsed. Everything below is the
+                      block's own editor; only its visibility changes, so
+                      collapsing never touches the content. */}
+                  <div className={collapsed ? "hidden" : "mt-3"}>
+                    {block.type === "image" ? (
+                      <div className="space-y-3">
+                        {block.url ? (
+                          <img
+                            src={block.url}
+                            alt=""
+                            className="max-h-56 w-full rounded-xl object-cover"
+                          />
+                        ) : null}
+                        <label className="inline-flex cursor-pointer items-center rounded-lg bg-[#0F172A] px-3 py-2 text-xs font-bold text-white">
+                          {block.url ? "Replace image" : "Upload image"}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={async (event) => {
+                              const file = event.target.files?.[0];
+                              if (!file) return;
+                              const url = await onUpload(file);
+                              update(index, { ...block, url });
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
                         <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          onChange={async (event) => {
-                            const file = event.target.files?.[0];
-                            if (!file) return;
-                            const url = await onUpload(file);
-                            update(index, { ...block, url });
-                            event.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                      <input
-                        value={block.alt || ""}
-                        onChange={(event) =>
-                          update(index, { ...block, alt: event.target.value })
-                        }
-                        placeholder="Alternative text"
-                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
-                      />
-                      <input
-                        value={block.caption || ""}
-                        onChange={(event) =>
-                          update(index, {
-                            ...block,
-                            caption: event.target.value,
-                          })
-                        }
-                        placeholder="Optional caption"
-                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
-                      />
-                    </div>
-                  ) : block.type === "video" ? (
-                    <div className="space-y-3">
-                      {block.url ? (
-                        <video
-                          src={block.url}
-                          poster={block.posterUrl || undefined}
-                          controls
-                          preload="metadata"
-                          className="max-h-64 w-full rounded-xl bg-slate-950"
-                        />
-                      ) : null}
-                      <input
-                        value={block.url}
-                        onChange={(event) =>
-                          update(index, { ...block, url: event.target.value })
-                        }
-                        placeholder="Paste a lightweight MP4 or hosted video URL"
-                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
-                      />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <input
-                          value={block.posterUrl || ""}
+                          value={block.alt || ""}
                           onChange={(event) =>
-                            update(index, {
-                              ...block,
-                              posterUrl: event.target.value,
-                            })
+                            update(index, { ...block, alt: event.target.value })
                           }
-                          placeholder="Optional poster image URL"
+                          placeholder="Alternative text"
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
                         />
                         <input
@@ -735,360 +786,407 @@ const BlockEditor: React.FC<{
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
                         />
                       </div>
-                    </div>
-                  ) : block.type === "bullets" ? (
-                    <div className="space-y-2">
-                      {block.items.map((item, itemIndex) => (
-                        <div key={itemIndex} className="flex gap-2">
+                    ) : block.type === "video" ? (
+                      <div className="space-y-3">
+                        {block.url ? (
+                          <video
+                            src={block.url}
+                            poster={block.posterUrl || undefined}
+                            controls
+                            preload="metadata"
+                            className="max-h-64 w-full rounded-xl bg-slate-950"
+                          />
+                        ) : null}
+                        <input
+                          value={block.url}
+                          onChange={(event) =>
+                            update(index, { ...block, url: event.target.value })
+                          }
+                          placeholder="Paste a lightweight MP4 or hosted video URL"
+                          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
+                        />
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <input
-                            value={item}
+                            value={block.posterUrl || ""}
                             onChange={(event) =>
                               update(index, {
                                 ...block,
-                                items: block.items.map((entry, entryIndex) =>
-                                  entryIndex === itemIndex
-                                    ? event.target.value
-                                    : entry,
-                                ),
+                                posterUrl: event.target.value,
                               })
                             }
-                            placeholder={`List item ${itemIndex + 1}`}
-                            className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
+                            placeholder="Optional poster image URL"
+                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
                           />
-                          <button
-                            type="button"
-                            onClick={() =>
+                          <input
+                            value={block.caption || ""}
+                            onChange={(event) =>
                               update(index, {
                                 ...block,
-                                items: block.items.filter(
-                                  (_, entryIndex) => entryIndex !== itemIndex,
-                                ),
+                                caption: event.target.value,
                               })
                             }
-                            className="h-10 w-10 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500"
-                          >
-                            ×
-                          </button>
+                            placeholder="Optional caption"
+                            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
+                          />
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() =>
+                      </div>
+                    ) : block.type === "bullets" ? (
+                      <div className="space-y-2">
+                        {block.items.map((item, itemIndex) => (
+                          <div key={itemIndex} className="flex gap-2">
+                            <input
+                              value={item}
+                              onChange={(event) =>
+                                update(index, {
+                                  ...block,
+                                  items: block.items.map((entry, entryIndex) =>
+                                    entryIndex === itemIndex
+                                      ? event.target.value
+                                      : entry,
+                                  ),
+                                })
+                              }
+                              placeholder={`List item ${itemIndex + 1}`}
+                              className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-amber-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                update(index, {
+                                  ...block,
+                                  items: block.items.filter(
+                                    (_, entryIndex) => entryIndex !== itemIndex,
+                                  ),
+                                })
+                              }
+                              className="h-10 w-10 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            update(index, {
+                              ...block,
+                              items: [...block.items, ""],
+                            })
+                          }
+                          className="text-xs font-bold text-amber-700"
+                        >
+                          + Add list item
+                        </button>
+                      </div>
+                    ) : (
+                      <textarea
+                        value={block.text}
+                        onChange={(event) =>
                           update(index, {
                             ...block,
-                            items: [...block.items, ""],
-                          })
+                            text: event.target.value,
+                          } as BlogBlock)
                         }
-                        className="text-xs font-bold text-amber-700"
-                      >
-                        + Add list item
-                      </button>
-                    </div>
-                  ) : (
-                    <textarea
-                      value={block.text}
-                      onChange={(event) =>
-                        update(index, {
-                          ...block,
-                          text: event.target.value,
-                        } as BlogBlock)
-                      }
-                      rows={block.type === "heading" ? 2 : 5}
-                      placeholder={
-                        block.type === "heading"
-                          ? "Section heading"
-                          : block.type === "quote"
-                            ? "Pull quote"
-                            : "Write the paragraph"
-                      }
-                      className="w-full resize-y rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-amber-400"
-                    />
-                  )}
+                        rows={block.type === "heading" ? 2 : 5}
+                        placeholder={
+                          block.type === "heading"
+                            ? "Section heading"
+                            : block.type === "quote"
+                              ? "Pull quote"
+                              : "Write the paragraph"
+                        }
+                        className="w-full resize-y rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-amber-400"
+                      />
+                    )}
 
-                  <details className="mt-4 rounded-xl bg-slate-50 p-3">
-                    <summary className="cursor-pointer text-xs font-bold text-slate-600">
-                      More block settings: width, spacing, background image, and
-                      corners
-                    </summary>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {isTextBlock(block) ? (
-                        <>
-                          <label>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Font
-                            </span>
-                            <select
-                              value={style.fontFamily || "default"}
-                              onChange={(event) =>
-                                updateStyle(index, {
-                                  fontFamily: event.target.value as NonNullable<
-                                    BlogBlock["style"]
-                                  >["fontFamily"],
-                                })
-                              }
-                              className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
-                            >
-                              <option value="default">Site default</option>
-                              <option value="sans">Clean sans</option>
-                              <option value="display">Display</option>
-                              <option value="serif">Editorial serif</option>
-                              <option value="mono">Monospace</option>
-                            </select>
-                          </label>
-                          <label>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Font size
-                            </span>
-                            <input
-                              type="number"
-                              min="12"
-                              max="92"
-                              value={style.fontSize || ""}
-                              onChange={(event) =>
-                                updateStyle(index, {
-                                  fontSize: Number(event.target.value),
-                                })
-                              }
-                              className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
-                            />
-                          </label>
-                          <label>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Text color
-                            </span>
-                            <div className="mt-1 flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2">
-                              <input
-                                type="color"
-                                value={style.textColor || "#0f172a"}
+                    <details className="mt-4 rounded-xl bg-slate-50 p-3">
+                      <summary className="cursor-pointer text-xs font-bold text-slate-600">
+                        More block settings: width, spacing, background image,
+                        and corners
+                      </summary>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {isTextBlock(block) ? (
+                          <>
+                            <label>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Font
+                              </span>
+                              <select
+                                value={style.fontFamily || "default"}
                                 onChange={(event) =>
                                   updateStyle(index, {
-                                    textColor: event.target.value,
+                                    fontFamily: event.target
+                                      .value as NonNullable<
+                                      BlogBlock["style"]
+                                    >["fontFamily"],
                                   })
                                 }
-                                className="h-7 w-9 border-0 bg-transparent"
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateStyle(index, { textColor: undefined })
-                                }
-                                className="text-[10px] font-bold text-slate-400"
+                                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
                               >
-                                Reset
-                              </button>
-                            </div>
-                          </label>
-                          <label>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Background
-                            </span>
-                            <div className="mt-1 flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2">
+                                <option value="default">Site default</option>
+                                <option value="sans">Clean sans</option>
+                                <option value="display">Display</option>
+                                <option value="serif">Editorial serif</option>
+                                <option value="mono">Monospace</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Font size
+                              </span>
                               <input
-                                type="color"
-                                value={style.backgroundColor || "#ffffff"}
+                                type="number"
+                                min="12"
+                                max="92"
+                                value={style.fontSize || ""}
                                 onChange={(event) =>
                                   updateStyle(index, {
-                                    backgroundColor: event.target.value,
+                                    fontSize: Number(event.target.value),
                                   })
                                 }
-                                className="h-7 w-9 border-0 bg-transparent"
+                                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
                               />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateStyle(index, {
-                                    backgroundColor: undefined,
-                                  })
-                                }
-                                className="text-[10px] font-bold text-slate-400"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </label>
-                        </>
-                      ) : null}
-
-                      <label>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Alignment
-                        </span>
-                        <select
-                          value={style.textAlign || "left"}
-                          onChange={(event) =>
-                            updateStyle(index, {
-                              textAlign: event.target.value as NonNullable<
-                                BlogBlock["style"]
-                              >["textAlign"],
-                            })
-                          }
-                          className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
-                        >
-                          <option value="left">Left</option>
-                          <option value="center">Center</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </label>
-
-                      <label>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Width: {style.widthPercent || 100}%
-                        </span>
-                        <input
-                          type="range"
-                          min="35"
-                          max="100"
-                          step="5"
-                          value={style.widthPercent || 100}
-                          onChange={(event) =>
-                            updateStyle(index, {
-                              widthPercent: Number(event.target.value),
-                            })
-                          }
-                          className="mt-3 w-full accent-amber-500"
-                        />
-                      </label>
-
-                      <label>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Rounded corners
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="48"
-                          value={style.borderRadius ?? 20}
-                          onChange={(event) =>
-                            updateStyle(index, {
-                              borderRadius: Number(event.target.value),
-                            })
-                          }
-                          className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
-                        />
-                      </label>
-
-                      {isTextBlock(block) ? (
-                        <>
-                          <label>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Vertical padding
-                            </span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="96"
-                              value={style.paddingY || 0}
-                              onChange={(event) =>
-                                updateStyle(index, {
-                                  paddingY: Number(event.target.value),
-                                })
-                              }
-                              className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
-                            />
-                          </label>
-                          <label className="sm:col-span-2 lg:col-span-3">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                              Background image
-                            </span>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600">
-                                {style.backgroundImageUrl
-                                  ? "Replace background"
-                                  : "Upload background"}
+                            </label>
+                            <label>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Text color
+                              </span>
+                              <div className="mt-1 flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2">
                                 <input
-                                  type="file"
-                                  accept="image/jpeg,image/png,image/webp"
-                                  className="hidden"
-                                  onChange={async (event) => {
-                                    const file = event.target.files?.[0];
-                                    if (!file) return;
-                                    const url = await onUpload(file);
+                                  type="color"
+                                  value={style.textColor || "#0f172a"}
+                                  onChange={(event) =>
                                     updateStyle(index, {
-                                      backgroundImageUrl: url,
-                                    });
-                                    event.currentTarget.value = "";
-                                  }}
+                                      textColor: event.target.value,
+                                    })
+                                  }
+                                  className="h-7 w-9 border-0 bg-transparent"
                                 />
-                              </label>
-                              {style.backgroundImageUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateStyle(index, { textColor: undefined })
+                                  }
+                                  className="text-[10px] font-bold text-slate-400"
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </label>
+                            <label>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Background
+                              </span>
+                              <div className="mt-1 flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2">
+                                <input
+                                  type="color"
+                                  value={style.backgroundColor || "#ffffff"}
+                                  onChange={(event) =>
+                                    updateStyle(index, {
+                                      backgroundColor: event.target.value,
+                                    })
+                                  }
+                                  className="h-7 w-9 border-0 bg-transparent"
+                                />
                                 <button
                                   type="button"
                                   onClick={() =>
                                     updateStyle(index, {
-                                      backgroundImageUrl: undefined,
+                                      backgroundColor: undefined,
                                     })
                                   }
-                                  className="text-[11px] font-bold text-red-500"
+                                  className="text-[10px] font-bold text-slate-400"
                                 >
-                                  Remove background
+                                  Clear
                                 </button>
-                              ) : null}
-                            </div>
-                          </label>
-                          {style.backgroundImageUrl ? (
-                            <label className="sm:col-span-2 lg:col-span-3">
-                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                Image overlay:{" "}
-                                {Math.round(
-                                  (style.overlayOpacity ?? 0.5) * 100,
-                                )}
-                                %
-                              </span>
-                              <input
-                                type="range"
-                                min="0"
-                                max="0.92"
-                                step="0.05"
-                                value={style.overlayOpacity ?? 0.5}
-                                onChange={(event) =>
-                                  updateStyle(index, {
-                                    overlayOpacity: Number(event.target.value),
-                                  })
-                                }
-                                className="mt-3 w-full accent-amber-500"
-                              />
+                              </div>
                             </label>
-                          ) : null}
-                          <label className="flex items-center gap-2 text-xs font-bold text-slate-600 sm:col-span-2 lg:col-span-3">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(
-                                "readAloud" in block && block.readAloud,
-                              )}
-                              onChange={(event) =>
-                                update(index, {
-                                  ...block,
-                                  readAloud: event.target.checked,
-                                } as BlogBlock)
-                              }
-                              className="h-4 w-4 accent-amber-500"
-                            />
-                            Show a listen button for this section
-                          </label>
-                        </>
-                      ) : (
+                          </>
+                        ) : null}
+
                         <label>
                           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                            Media fit
+                            Alignment
                           </span>
                           <select
-                            value={style.mediaFit || "cover"}
+                            value={style.textAlign || "left"}
                             onChange={(event) =>
                               updateStyle(index, {
-                                mediaFit: event.target.value as NonNullable<
+                                textAlign: event.target.value as NonNullable<
                                   BlogBlock["style"]
-                                >["mediaFit"],
+                                >["textAlign"],
                               })
                             }
                             className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
                           >
-                            <option value="cover">Fill area</option>
-                            <option value="contain">Show full media</option>
+                            <option value="left">Left</option>
+                            <option value="center">Center</option>
+                            <option value="right">Right</option>
                           </select>
                         </label>
-                      )}
-                    </div>
-                  </details>
+
+                        <label>
+                          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                            Width: {style.widthPercent || 100}%
+                          </span>
+                          <input
+                            type="range"
+                            min="35"
+                            max="100"
+                            step="5"
+                            value={style.widthPercent || 100}
+                            onChange={(event) =>
+                              updateStyle(index, {
+                                widthPercent: Number(event.target.value),
+                              })
+                            }
+                            className="mt-3 w-full accent-amber-500"
+                          />
+                        </label>
+
+                        <label>
+                          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                            Rounded corners
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="48"
+                            value={style.borderRadius ?? 20}
+                            onChange={(event) =>
+                              updateStyle(index, {
+                                borderRadius: Number(event.target.value),
+                              })
+                            }
+                            className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                          />
+                        </label>
+
+                        {isTextBlock(block) ? (
+                          <>
+                            <label>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Vertical padding
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="96"
+                                value={style.paddingY || 0}
+                                onChange={(event) =>
+                                  updateStyle(index, {
+                                    paddingY: Number(event.target.value),
+                                  })
+                                }
+                                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                              />
+                            </label>
+                            <label className="sm:col-span-2 lg:col-span-3">
+                              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Background image
+                              </span>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600">
+                                  {style.backgroundImageUrl
+                                    ? "Replace background"
+                                    : "Upload background"}
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="hidden"
+                                    onChange={async (event) => {
+                                      const file = event.target.files?.[0];
+                                      if (!file) return;
+                                      const url = await onUpload(file);
+                                      updateStyle(index, {
+                                        backgroundImageUrl: url,
+                                      });
+                                      event.currentTarget.value = "";
+                                    }}
+                                  />
+                                </label>
+                                {style.backgroundImageUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateStyle(index, {
+                                        backgroundImageUrl: undefined,
+                                      })
+                                    }
+                                    className="text-[11px] font-bold text-red-500"
+                                  >
+                                    Remove background
+                                  </button>
+                                ) : null}
+                              </div>
+                            </label>
+                            {style.backgroundImageUrl ? (
+                              <label className="sm:col-span-2 lg:col-span-3">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                  Image overlay:{" "}
+                                  {Math.round(
+                                    (style.overlayOpacity ?? 0.5) * 100,
+                                  )}
+                                  %
+                                </span>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="0.92"
+                                  step="0.05"
+                                  value={style.overlayOpacity ?? 0.5}
+                                  onChange={(event) =>
+                                    updateStyle(index, {
+                                      overlayOpacity: Number(
+                                        event.target.value,
+                                      ),
+                                    })
+                                  }
+                                  className="mt-3 w-full accent-amber-500"
+                                />
+                              </label>
+                            ) : null}
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-600 sm:col-span-2 lg:col-span-3">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(
+                                  "readAloud" in block && block.readAloud,
+                                )}
+                                onChange={(event) =>
+                                  update(index, {
+                                    ...block,
+                                    readAloud: event.target.checked,
+                                  } as BlogBlock)
+                                }
+                                className="h-4 w-4 accent-amber-500"
+                              />
+                              Show a listen button for this section
+                            </label>
+                          </>
+                        ) : (
+                          <label>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                              Media fit
+                            </span>
+                            <select
+                              value={style.mediaFit || "cover"}
+                              onChange={(event) =>
+                                updateStyle(index, {
+                                  mediaFit: event.target.value as NonNullable<
+                                    BlogBlock["style"]
+                                  >["mediaFit"],
+                                })
+                              }
+                              className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                            >
+                              <option value="cover">Fill area</option>
+                              <option value="contain">Show full media</option>
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </div>
             </div>

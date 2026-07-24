@@ -23,7 +23,7 @@ import {
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
-import { ProductTour, useProductTour, usePageTour } from "./lib/productTour";
+import { ProductTour, useProductTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -330,11 +330,6 @@ const App: React.FC = () => {
   });
   // ISSUE 2 — per-page walkthroughs. Fires the first time each page is opened,
   // after the one-time overview has been seen or skipped.
-  const pageTour = usePageTour(
-    typeof window !== "undefined"
-      ? window.location.hash.replace(/^#/, "").split("?")[0] || "/"
-      : "/",
-  );
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
@@ -787,11 +782,25 @@ const App: React.FC = () => {
               org && dashboard ? (
                 <ProtectedRoute>
                   <Dashboard org={org} dashboard={dashboard} />
-                  <ProductTour open={tour.open} onClose={tour.close} />
+                  {/*
+                    The tour drives itself across every page, so it is mounted
+                    once here rather than per-route. It receives navigate() and
+                    the current path and moves itself between phases.
+                  */}
                   <ProductTour
-                    steps={pageTour.steps}
-                    open={pageTour.open}
-                    onClose={pageTour.close}
+                    open={tour.open}
+                    startIndex={tour.startIndex}
+                    onClose={tour.close}
+                    navigate={(path) => {
+                      window.location.hash = `#${path}`;
+                    }}
+                    currentPath={
+                      typeof window !== "undefined"
+                        ? window.location.hash
+                            .replace(/^#/, "")
+                            .split("?")[0] || "/"
+                        : "/"
+                    }
                   />
                 </ProtectedRoute>
               ) : (

@@ -341,9 +341,11 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[18rem_1fr]">
-          {/* Sidebar */}
-          <aside className="space-y-2">
+        // The knowledge base list is now CARDS ACROSS THE TOP - like the
+        // chatbot and voice-agent cards - with the detail underneath using the
+        // full width. It was a narrow left column wasting most of the row.
+        <div className="space-y-5">
+          <div className="agently-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
             {bases.map((kb) => {
               const isActive = kb.id === activeId;
               const pending = (kb as any).pendingChangeCount || 0;
@@ -351,10 +353,10 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                 <button
                   key={kb.id}
                   onClick={() => setActiveId(kb.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                  className={`w-[15rem] shrink-0 rounded-2xl border p-4 text-left transition-all ${
                     isActive
-                      ? "border-amber-400 bg-amber-50 shadow-sm"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      ? "border-amber-400 bg-amber-50 shadow-sm ring-2 ring-amber-200"
+                      : "border-slate-200 bg-white hover:border-amber-300"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -375,9 +377,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                 </button>
               );
             })}
-          </aside>
+          </div>
 
-          {/* Detail */}
+          {/* Detail - now the full width of the page */}
           <section className="space-y-4">
             {active ? (
               <>

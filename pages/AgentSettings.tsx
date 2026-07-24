@@ -2991,7 +2991,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
 
             <div className="rounded-3xl border border-sky-100 bg-sky-50/40 p-5 space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div
+                className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                data-tour="agent-escalation"
+              >
                 <div>
                   <p className="text-sm font-medium text-[#232f3e]">
                     Call Screening Assistants
@@ -3328,7 +3331,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
             {/* Assigned schedules */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div
+                className="flex items-center justify-between mb-3"
+                data-tour="agent-call-now"
+              >
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                   Call Campaigns
                 </p>
