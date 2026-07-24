@@ -682,10 +682,7 @@ const AgentFilterToolbar: React.FC<{
           </button>
         </div>
 
-        <div
-          className="flex shrink-0 items-center justify-between gap-2 sm:justify-end"
-          data-tour="dashboard-filters"
-        >
+        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end" data-tour="dashboard-filters">
           <span className="text-[13px] font-medium text-[#64748b]">
             Time Range:
           </span>
@@ -1028,10 +1025,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       </div>
 
       {error && (
-        <div
-          className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600"
-          data-tour="dashboard-stats"
-        >
+        <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600" data-tour="dashboard-stats">
           {error}
         </div>
       )}
@@ -1270,10 +1264,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
 
         <div className="min-w-0 ag-panel p-4 sm:p-5">
-          <div
-            className="mb-4 flex items-center justify-between gap-3"
-            data-tour="dashboard-recent"
-          >
+          <div className="mb-4 flex items-center justify-between gap-3" data-tour="dashboard-recent">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
                 Recent calls

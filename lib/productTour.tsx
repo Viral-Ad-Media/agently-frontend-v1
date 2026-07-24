@@ -88,55 +88,13 @@ export const TOUR_PHASES: TourPhase[] = [
         title: "What you can do here",
         body: "Answer calls with an AI voice agent. Reply to website visitors with a chatbot. Capture every enquiry as a lead. Teach both from your own website, and see exactly what each conversation cost.",
       },
-      {
-        anchor: "nav-dashboard",
-        placement: "right",
-        needsSidebar: true,
-        title: "Dashboard",
-        body: "Your daily view — calls, chats, leads and spend.",
-      },
-      {
-        anchor: "nav-phone-numbers",
-        placement: "right",
-        needsSidebar: true,
-        title: "Phone Numbers",
-        body: "Buy and manage the numbers your agent answers on.",
-      },
-      {
-        anchor: "nav-agent",
-        placement: "right",
-        needsSidebar: true,
-        title: "Voice Agent",
-        body: "How your agent sounds, what it knows, when it hands over to a person.",
-      },
-      {
-        anchor: "nav-messenger",
-        placement: "right",
-        needsSidebar: true,
-        title: "Chatbot Agent",
-        body: "The chat bubble for your website.",
-      },
-      {
-        anchor: "nav-calls",
-        placement: "right",
-        needsSidebar: true,
-        title: "Call Logs",
-        body: "Recordings, transcripts and summaries of every call.",
-      },
-      {
-        anchor: "nav-leads",
-        placement: "right",
-        needsSidebar: true,
-        title: "Lead CRM",
-        body: "Everyone who called or chatted, and where they got to.",
-      },
-      {
-        anchor: "nav-settings",
-        placement: "right",
-        needsSidebar: true,
-        title: "Settings",
-        body: "Business details, knowledge, team and billing.",
-      },
+      { anchor: "nav-dashboard", placement: "right", needsSidebar: true, title: "Dashboard", body: "Your daily view — calls, chats, leads and spend." },
+      { anchor: "nav-phone-numbers", placement: "right", needsSidebar: true, title: "Phone Numbers", body: "Buy and manage the numbers your agent answers on." },
+      { anchor: "nav-agent", placement: "right", needsSidebar: true, title: "Voice Agent", body: "How your agent sounds, what it knows, when it hands over to a person." },
+      { anchor: "nav-messenger", placement: "right", needsSidebar: true, title: "Chatbot Agent", body: "The chat bubble for your website." },
+      { anchor: "nav-calls", placement: "right", needsSidebar: true, title: "Call Logs", body: "Recordings, transcripts and summaries of every call." },
+      { anchor: "nav-leads", placement: "right", needsSidebar: true, title: "Lead CRM", body: "Everyone who called or chatted, and where they got to." },
+      { anchor: "nav-settings", placement: "right", needsSidebar: true, title: "Settings", body: "Business details, knowledge, team and billing." },
     ],
   },
 
@@ -146,53 +104,14 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Your Dashboard",
     route: "/dashboard",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 2 — your Command Center",
-        body: "This is the page you'll open most. Let me take you through it piece by piece.",
-      },
-      {
-        anchor: "topbar-credit",
-        placement: "bottom",
-        title: "Usage balance",
-        body: "Calls, chats and website scans all draw from here. When it empties your agents stop answering, so it's worth watching.",
-      },
-      {
-        anchor: "topbar-notifications",
-        placement: "bottom",
-        title: "Notifications",
-        body: "New leads, finished website scans, and low-balance warnings arrive here.",
-      },
-      {
-        anchor: "topbar-agent",
-        placement: "bottom",
-        title: "Active agent",
-        body: "Which agent is currently live. Switch between them here if you run more than one.",
-      },
-      {
-        anchor: "dashboard-stats",
-        placement: "top",
-        title: "Your numbers",
-        body: "Calls answered, calls completed, minutes used and leads captured — for whichever period you choose.",
-      },
-      {
-        anchor: "dashboard-filters",
-        placement: "top",
-        title: "Narrow it down",
-        body: "Filter to one agent or a different date range. Everything above updates to match.",
-      },
-      {
-        anchor: "dashboard-chart",
-        placement: "top",
-        title: "Activity over time",
-        body: "Spot your busiest hours — useful for deciding when a real person should be available for transfers.",
-      },
-      {
-        anchor: "dashboard-recent",
-        placement: "top",
-        title: "Recent calls",
-        body: "Your latest conversations. Open any one for the recording, transcript and summary.",
-      },
+      { placement: "center", title: "Phase 2 — your Command Center", body: "This is the page you'll open most. Let me take you through it piece by piece." },
+      { anchor: "topbar-credit", placement: "bottom", title: "Usage balance", body: "Calls, chats and website scans all draw from here. When it empties your agents stop answering, so it's worth watching." },
+      { anchor: "topbar-notifications", placement: "bottom", title: "Notifications", body: "New leads, finished website scans, and low-balance warnings arrive here." },
+      { anchor: "topbar-agent", placement: "bottom", title: "Active agent", body: "Which agent is currently live. Switch between them here if you run more than one." },
+      { anchor: "dashboard-stats", placement: "top", title: "Your numbers", body: "Calls answered, calls completed, minutes used and leads captured — for whichever period you choose." },
+      { anchor: "dashboard-filters", placement: "top", title: "Narrow it down", body: "Filter to one agent or a different date range. Everything above updates to match." },
+      { anchor: "dashboard-chart", placement: "top", title: "Activity over time", body: "Spot your busiest hours — useful for deciding when a real person should be available for transfers." },
+      { anchor: "dashboard-recent", placement: "top", title: "Recent calls", body: "Your latest conversations. Open any one for the recording, transcript and summary." },
     ],
   },
 
@@ -202,29 +121,10 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Phone Numbers",
     route: "/phone-numbers",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 3 — Phone Numbers",
-        body: "Your agent can't take calls without a number. Here's how to get one.",
-      },
-      {
-        anchor: "numbers-list",
-        placement: "top",
-        title: "Your numbers",
-        body: "Numbers you already own, and which agent answers each one.",
-      },
-      {
-        anchor: "numbers-search",
-        placement: "top",
-        title: "Finding a number",
-        body: "Choose a country and, if you like, an area code. Everything shown is ready to use the moment you buy it.",
-      },
-      {
-        anchor: "numbers-buy",
-        placement: "top",
-        title: "Buying it",
-        body: "The cost comes out of your usage balance. If setup fails for any reason the number is returned and you aren't charged.",
-      },
+      { placement: "center", title: "Phase 3 — Phone Numbers", body: "Your agent can't take calls without a number. Here's how to get one." },
+      { anchor: "numbers-list", placement: "top", title: "Your numbers", body: "Numbers you already own, and which agent answers each one." },
+      { anchor: "numbers-search", placement: "top", title: "Finding a number", body: "Choose a country and, if you like, an area code. Everything shown is ready to use the moment you buy it." },
+      { anchor: "numbers-buy", placement: "top", title: "Buying it", body: "The cost comes out of your usage balance. If setup fails for any reason the number is returned and you aren't charged." },
     ],
   },
 
@@ -234,35 +134,11 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Voice Agent",
     route: "/agent",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 4 — your Voice Agent",
-        body: "Everything about how your agent behaves on a call.",
-      },
-      {
-        anchor: "agent-persona",
-        placement: "bottom",
-        title: "Voice and personality",
-        body: "Pick the voice and tone, and preview it. This is what every caller hears.",
-      },
-      {
-        anchor: "agent-knowledge",
-        placement: "top",
-        title: "What it knows",
-        body: "Connect a knowledge base so it answers from your real business details instead of guessing.",
-      },
-      {
-        anchor: "agent-escalation",
-        placement: "top",
-        title: "Handing over to a person",
-        body: "The hours someone is around, and the number to transfer to.",
-      },
-      {
-        anchor: "agent-call-now",
-        placement: "top",
-        title: "Making calls",
-        body: "When you're ready to call out rather than just receive, this takes you to Call Campaigns. That's where we're going next.",
-      },
+      { placement: "center", title: "Phase 4 — your Voice Agent", body: "Everything about how your agent behaves on a call." },
+      { anchor: "agent-persona", placement: "bottom", title: "Voice and personality", body: "Pick the voice and tone, and preview it. This is what every caller hears." },
+      { anchor: "agent-knowledge", placement: "top", title: "What it knows", body: "Connect a knowledge base so it answers from your real business details instead of guessing." },
+      { anchor: "agent-escalation", placement: "top", title: "Handing over to a person", body: "The hours someone is around, and the number to transfer to." },
+      { anchor: "agent-call-now", placement: "top", title: "Making calls", body: "When you're ready to call out rather than just receive, this takes you to Call Campaigns. That's where we're going next." },
     ],
   },
 
@@ -272,36 +148,11 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Call Now",
     route: "/outreach",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 4a — Call Now",
-        body: "For calling someone straight away.",
-      },
-      {
-        anchor: "campaign-tab-now",
-        placement: "bottom",
-        clickBefore: '[data-tour="campaign-tab-now"]',
-        title: "Call Now",
-        body: "One-off calls that start immediately.",
-      },
-      {
-        anchor: "campaign-agent",
-        placement: "top",
-        title: "Who's calling",
-        body: "Choose the agent and the number it calls from. The agent uses the purpose you saved in Agent Workspace.",
-      },
-      {
-        anchor: "campaign-recipients",
-        placement: "top",
-        title: "Who you're calling",
-        body: "Add one number or paste a list. Each becomes its own call.",
-      },
-      {
-        anchor: "campaign-launch",
-        placement: "top",
-        title: "Go",
-        body: "Calls start straight away and appear in Call Logs as they finish.",
-      },
+      { placement: "center", title: "Phase 4a — Call Now", body: "For calling someone straight away." },
+      { anchor: "campaign-tab-now", placement: "bottom", clickBefore: '[data-tour="campaign-tab-now"]', title: "Call Now", body: "One-off calls that start immediately." },
+      { anchor: "campaign-agent", placement: "top", title: "Who's calling", body: "Choose the agent and the number it calls from. The agent uses the purpose you saved in Agent Workspace." },
+      { anchor: "campaign-recipients", placement: "top", title: "Who you're calling", body: "Add one number or paste a list. Each becomes its own call." },
+      { anchor: "campaign-launch", placement: "top", title: "Go", body: "Calls start straight away and appear in Call Logs as they finish." },
     ],
   },
 
@@ -311,30 +162,10 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Schedule Calls",
     route: "/outreach",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 4b — Scheduled Calls",
-        body: "For calling at a better time than right now.",
-      },
-      {
-        anchor: "campaign-tab-schedule",
-        placement: "bottom",
-        clickBefore: '[data-tour="campaign-tab-schedule"]',
-        title: "Schedule Calls",
-        body: "Same setup, but you choose when.",
-      },
-      {
-        anchor: "campaign-window",
-        placement: "top",
-        title: "Calling window",
-        body: "The days and hours calls may go out. Calls never happen outside this window — useful for respecting business hours in your customers' timezone.",
-      },
-      {
-        anchor: "campaign-schedule-save",
-        placement: "top",
-        title: "Save it",
-        body: "The campaign runs on its own from here. You'll be notified as calls complete.",
-      },
+      { placement: "center", title: "Phase 4b — Scheduled Calls", body: "For calling at a better time than right now." },
+      { anchor: "campaign-tab-schedule", placement: "bottom", clickBefore: '[data-tour="campaign-tab-schedule"]', title: "Schedule Calls", body: "Same setup, but you choose when." },
+      { anchor: "campaign-window", placement: "top", title: "Calling window", body: "The days and hours calls may go out. Calls never happen outside this window — useful for respecting business hours in your customers' timezone." },
+      { anchor: "campaign-schedule-save", placement: "top", title: "Save it", body: "The campaign runs on its own from here. You'll be notified as calls complete." },
     ],
   },
 
@@ -344,29 +175,10 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Call Logs",
     route: "/calls",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 5 — Call Logs",
-        body: "Every call your agent handled.",
-      },
-      {
-        anchor: "calls-stats",
-        placement: "top",
-        title: "At a glance",
-        body: "Totals, completion rate and average length across the period.",
-      },
-      {
-        anchor: "calls-filters",
-        placement: "top",
-        title: "Finding a call",
-        body: "Filter by agent, outcome or date to get to the one you want.",
-      },
-      {
-        anchor: "calls-table",
-        placement: "top",
-        title: "The calls themselves",
-        body: "Open any row for the recording, full transcript, and a summary of what the caller wanted.",
-      },
+      { placement: "center", title: "Phase 5 — Call Logs", body: "Every call your agent handled." },
+      { anchor: "calls-stats", placement: "top", title: "At a glance", body: "Totals, completion rate and average length across the period." },
+      { anchor: "calls-filters", placement: "top", title: "Finding a call", body: "Filter by agent, outcome or date to get to the one you want." },
+      { anchor: "calls-table", placement: "top", title: "The calls themselves", body: "Open any row for the recording, full transcript, and a summary of what the caller wanted." },
     ],
   },
 
@@ -376,40 +188,12 @@ export const TOUR_PHASES: TourPhase[] = [
     label: "Settings",
     route: "/settings",
     steps: [
-      {
-        placement: "center",
-        title: "Phase 6 — Settings",
-        body: "Your business details and everything that supports the agents.",
-      },
-      {
-        anchor: "settings-general",
-        placement: "top",
-        title: "Workspace basics",
-        body: "Business name, timezone and contact number. The timezone drives your calling windows and reports, so it's worth getting right.",
-      },
-      {
-        anchor: "settings-knowledge",
-        placement: "top",
-        title: "6a — Knowledge Bases",
-        body: "Where your agents learn from. Open this to scan your website and choose which pages they should read.",
-      },
-      {
-        anchor: "settings-team",
-        placement: "top",
-        title: "6b — Team",
-        body: "Invite colleagues and set what each of them can do.",
-      },
-      {
-        anchor: "settings-billing",
-        placement: "top",
-        title: "6c — Billing",
-        body: "Top up your balance and see exactly what you've spent, broken down by service.",
-      },
-      {
-        placement: "center",
-        title: "That's the tour",
-        body: "The quickest way to see it all working: buy a number, then call it. Everything else can wait. You can replay this any time from Settings.",
-      },
+      { placement: "center", title: "Phase 6 — Settings", body: "Your business details and everything that supports the agents." },
+      { anchor: "settings-general", placement: "top", title: "Workspace basics", body: "Business name, timezone and contact number. The timezone drives your calling windows and reports, so it's worth getting right." },
+      { anchor: "settings-knowledge", placement: "top", title: "6a — Knowledge Bases", body: "Where your agents learn from. Open this to scan your website and choose which pages they should read." },
+      { anchor: "settings-team", placement: "top", title: "6b — Team", body: "Invite colleagues and set what each of them can do." },
+      { anchor: "settings-billing", placement: "top", title: "6c — Billing", body: "Top up your balance and see exactly what you've spent, broken down by service." },
+      { placement: "center", title: "That's the tour", body: "The quickest way to see it all working: buy a number, then call it. Everything else can wait. You can replay this any time from Settings." },
     ],
   },
 ];
@@ -433,12 +217,7 @@ const FLAT_STEPS: FlatStep[] = TOUR_PHASES.flatMap((phase, phaseIndex) =>
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Rect {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
+interface Rect { top: number; left: number; width: number; height: number }
 const PAD = 8;
 
 function scrollIntoView(el: HTMLElement) {
@@ -457,28 +236,14 @@ function useAnchorRect(anchor: string | undefined, tick: number): Rect | null {
   const [rect, setRect] = useState<Rect | null>(null);
 
   useLayoutEffect(() => {
-    if (!anchor) {
-      setRect(null);
-      return;
-    }
+    if (!anchor) { setRect(null); return; }
     let raf = 0;
     const measure = () => {
       const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
-      if (!el) {
-        setRect(null);
-        return;
-      }
+      if (!el) { setRect(null); return; }
       const r = el.getBoundingClientRect();
-      if (r.width === 0 && r.height === 0) {
-        setRect(null);
-        return;
-      }
-      setRect({
-        top: r.top - PAD,
-        left: r.left - PAD,
-        width: r.width + PAD * 2,
-        height: r.height + PAD * 2,
-      });
+      if (r.width === 0 && r.height === 0) { setRect(null); return; }
+      setRect({ top: r.top - PAD, left: r.left - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 });
     };
 
     const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
@@ -490,10 +255,7 @@ function useAnchorRect(anchor: string | undefined, tick: number): Rect | null {
     }
     measure();
 
-    const onMove = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(measure);
-    };
+    const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener("resize", onMove);
     window.addEventListener("scroll", onMove, true);
     return () => {
@@ -521,18 +283,12 @@ export const ProductTour: React.FC<{
   const step = FLAT_STEPS[index];
   const rect = useAnchorRect(step?.anchor, tick);
 
-  useEffect(() => {
-    if (open) setIndex(startIndex);
-  }, [open, startIndex]);
+  useEffect(() => { if (open) setIndex(startIndex); }, [open, startIndex]);
 
   /* Persist position so a reload mid-tour resumes instead of restarting. */
   useEffect(() => {
     if (!open) return;
-    try {
-      window.localStorage.setItem(PROGRESS_KEY, String(index));
-    } catch {
-      /* private mode */
-    }
+    try { window.localStorage.setItem(PROGRESS_KEY, String(index)); } catch { /* private mode */ }
   }, [index, open]);
 
   /*
@@ -558,23 +314,16 @@ export const ProductTour: React.FC<{
       // 2. Sidebar. On mobile it must be open for nav steps and closed for
       //    everything else, or it covers the content we're describing.
       if (isMobileViewport()) {
-        const sidebarOpen = !!document
-          .querySelector<HTMLElement>('[data-tour="nav-dashboard"]')
-          ?.getBoundingClientRect().width;
+        const sidebarOpen = !!document.querySelector<HTMLElement>(
+          '[data-tour="nav-dashboard"]',
+        )?.getBoundingClientRect().width;
 
         if (step.needsSidebar && !sidebarOpen) {
-          document
-            .querySelector<HTMLElement>('[data-tour="menu-toggle"]')
-            ?.click();
+          document.querySelector<HTMLElement>('[data-tour="menu-toggle"]')?.click();
           await wait(450);
         } else if (!step.needsSidebar && sidebarOpen) {
-          const closeBtn = document.querySelector<HTMLElement>(
-            '[data-tour="menu-close"]',
-          );
-          if (closeBtn) {
-            closeBtn.click();
-            await wait(400);
-          }
+          const closeBtn = document.querySelector<HTMLElement>('[data-tour="menu-close"]');
+          if (closeBtn) { closeBtn.click(); await wait(400); }
         }
       }
       if (cancelled) return;
@@ -592,9 +341,7 @@ export const ProductTour: React.FC<{
     };
 
     void run();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, index]);
 
@@ -620,16 +367,11 @@ export const ProductTour: React.FC<{
    */
   const next = useCallback(() => {
     if (waiting) return;
-    if (index >= FLAT_STEPS.length - 1) {
-      onClose(true, index);
-      return;
-    }
+    if (index >= FLAT_STEPS.length - 1) { onClose(true, index); return; }
     advance(1);
   }, [index, advance, onClose, waiting]);
 
-  const prev = useCallback(() => {
-    if (!waiting) advance(-1);
-  }, [advance, waiting]);
+  const prev = useCallback(() => { if (!waiting) advance(-1); }, [advance, waiting]);
 
   useEffect(() => {
     if (!open) return;
@@ -652,12 +394,7 @@ export const ProductTour: React.FC<{
 
   let cardStyle: React.CSSProperties;
   if (centred) {
-    cardStyle = {
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%,-50%)",
-      width: CARD_W,
-    };
+    cardStyle = { top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: CARD_W };
   } else if (mobile) {
     // Always dock to the bottom on phones. Floating beside a highlighted
     // element on a narrow screen is how the card ends up half off-frame.
@@ -670,28 +407,16 @@ export const ProductTour: React.FC<{
     const r = rect!;
     let left = r.left + r.width + 16;
     if (left + CARD_W > vw - 16) left = Math.max(16, r.left - CARD_W - 16);
-    cardStyle = {
-      top: Math.min(Math.max(16, r.top), vh - 240),
-      left,
-      width: CARD_W,
-    };
+    cardStyle = { top: Math.min(Math.max(16, r.top), vh - 240), left, width: CARD_W };
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[9999]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Product tour"
-    >
+    <div className="fixed inset-0 z-[9999]" role="dialog" aria-modal="true" aria-label="Product tour">
       {rect && !centred ? (
         <div
           className="pointer-events-none absolute rounded-2xl transition-all duration-300"
           style={{
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
+            top: rect.top, left: rect.left, width: rect.width, height: rect.height,
             boxShadow: "0 0 0 9999px rgba(15,23,42,0.74)",
             outline: "2px solid #F59E0B",
             outlineOffset: 2,
@@ -719,11 +444,7 @@ export const ProductTour: React.FC<{
             <span
               key={p.id}
               className={`h-1 flex-1 rounded-full transition-all ${
-                i === step.phaseIndex
-                  ? "bg-amber-500"
-                  : i < step.phaseIndex
-                    ? "bg-amber-300"
-                    : "bg-slate-200"
+                i === step.phaseIndex ? "bg-amber-500" : i < step.phaseIndex ? "bg-amber-300" : "bg-slate-200"
               }`}
             />
           ))}
@@ -769,9 +490,7 @@ export const ProductTour: React.FC<{
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useProductTour(
-  opts: { justOnboarded?: boolean; enabled?: boolean } = {},
-) {
+export function useProductTour(opts: { justOnboarded?: boolean; enabled?: boolean } = {}) {
   const { justOnboarded = false, enabled = true } = opts;
   const [open, setOpen] = useState(false);
   const [startIndex, setStartIndex] = useState(0);
@@ -784,9 +503,7 @@ export function useProductTour(
     try {
       done = window.localStorage.getItem(STORAGE_KEY) === "completed";
       saved = Number(window.localStorage.getItem(PROGRESS_KEY) || 0);
-    } catch {
-      /* private mode */
-    }
+    } catch { /* private mode */ }
     if (done) return;
 
     started.current = true;
@@ -798,17 +515,9 @@ export function useProductTour(
   const close = useCallback((completed: boolean, atIndex: number) => {
     setOpen(false);
     try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        completed ? "completed" : "stopped",
-      );
-      window.localStorage.setItem(
-        PROGRESS_KEY,
-        String(completed ? 0 : atIndex),
-      );
-    } catch {
-      /* ignore */
-    }
+      window.localStorage.setItem(STORAGE_KEY, completed ? "completed" : "stopped");
+      window.localStorage.setItem(PROGRESS_KEY, String(completed ? 0 : atIndex));
+    } catch { /* ignore */ }
   }, []);
 
   /** Wire to "Replay tour" in Settings. */
@@ -816,9 +525,7 @@ export function useProductTour(
     try {
       window.localStorage.removeItem(STORAGE_KEY);
       window.localStorage.removeItem(PROGRESS_KEY);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     setStartIndex(0);
     setOpen(true);
   }, []);
@@ -826,11 +533,7 @@ export function useProductTour(
   /** Resume from wherever it was stopped. */
   const resume = useCallback(() => {
     let saved = 0;
-    try {
-      saved = Number(window.localStorage.getItem(PROGRESS_KEY) || 0);
-    } catch {
-      /* ignore */
-    }
+    try { saved = Number(window.localStorage.getItem(PROGRESS_KEY) || 0); } catch { /* ignore */ }
     setStartIndex(Number.isFinite(saved) ? saved : 0);
     setOpen(true);
   }, []);

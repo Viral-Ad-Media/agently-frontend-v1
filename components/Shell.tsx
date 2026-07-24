@@ -913,16 +913,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 </div>
 
                 <div className="agently-topbar-actions flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
-                  <span
-                    data-tour="topbar-credit"
-                    className="contents-safe inline-flex"
-                  >
+                  <span data-tour="topbar-credit" className="contents-safe inline-flex">
                     <WalletCreditBadge wallet={walletMini} />
                   </span>
-                  <span
-                    data-tour="topbar-notifications"
-                    className="inline-flex"
-                  >
+                  <span data-tour="topbar-notifications" className="inline-flex">
                     <NotificationBell />
                   </span>
 

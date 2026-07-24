@@ -351,8 +351,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         (result as any).sellableCountries ||
         (result as any).supportedCountries ||
         [];
-      if (Array.isArray(sellable) && sellable.length)
-        setCountryOptions(sellable);
+      if (Array.isArray(sellable) && sellable.length) setCountryOptions(sellable);
       setSearchDone(true);
     } catch (error: any) {
       showToast(error?.message || "Number search failed.", false);
@@ -904,10 +903,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
               </div>
             </div>
           ) : (
-            <div
-              className="grid grid-cols-1 gap-4 xl:grid-cols-2"
-              data-tour="numbers-list"
-            >
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" data-tour="numbers-list">
               {numbers.map(renderNumberCard)}
             </div>
           )}
@@ -917,10 +913,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       {tab === "search" && (
         <div className="space-y-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-            <div
-              className="mb-5 flex items-start justify-between gap-4"
-              data-tour="numbers-search"
-            >
+            <div className="mb-5 flex items-start justify-between gap-4" data-tour="numbers-search">
               <div>
                 <h3 className="text-base font-black text-slate-900">
                   Find a number for your business
@@ -990,10 +983,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
 
           {searchDone && (
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-              <div
-                className="mb-5 flex items-center justify-between"
-                data-tour="numbers-buy"
-              >
+              <div className="mb-5 flex items-center justify-between" data-tour="numbers-buy">
                 <h3 className="text-base font-black text-slate-900">
                   {availableNumbers.length
                     ? `${availableNumbers.length} numbers available`
@@ -1031,11 +1021,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                               {phoneNumber}
                             </p>
                           </div>
-                          <span className="text-lg">
-                            {COUNTRY_FLAGS[
-                              number.isoCountry || number.iso_country || country
-                            ] || "🌐"}
-                          </span>
+                          <span className="text-lg">{COUNTRY_FLAGS[number.isoCountry || number.iso_country || country] || "🌐"}</span>
                         </div>
                         {(number.locality || number.region) && (
                           <p className="mb-3 text-xs text-slate-500">

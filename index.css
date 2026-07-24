@@ -2101,9 +2101,7 @@ main {
 }
 
 @media (min-height: 800px) {
-  .ag-onboarding-faq-list {
-    max-height: min(48svh, 460px);
-  }
+  .ag-onboarding-faq-list { max-height: min(48svh, 460px); }
 }
 
 /* Step panels scroll as a whole rather than clipping their own header. */
@@ -2276,7 +2274,9 @@ main {
 }
 
 /* Depth 3+: no tint either — indentation and weight carry it. */
-[class*="rounded-3xl"][class*="border"] [class*="rounded-2xl"] [class*="rounded-xl"][class*="border"]:not(.keep-border) {
+[class*="rounded-3xl"][class*="border"]
+  [class*="rounded-2xl"]
+  [class*="rounded-xl"][class*="border"]:not(.keep-border) {
   border-color: transparent;
   background-color: transparent;
   padding-left: 0;
@@ -2352,7 +2352,6 @@ main {
    controls themselves solves it without taking zoom away.
    ════════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-
   input[type="text"],
   input[type="email"],
   input[type="tel"],
@@ -2391,16 +2390,8 @@ main {
   /* 1. HORIZONTAL OVERFLOW — the most common mobile bug. A single wide child
         makes the whole page pan sideways, which then breaks every fixed
         element on it. */
-  html,
-  body {
-    overflow-x: hidden;
-    max-width: 100vw;
-  }
-
-  #root {
-    overflow-x: hidden;
-    max-width: 100vw;
-  }
+  html, body { overflow-x: hidden; max-width: 100vw; }
+  #root { overflow-x: hidden; max-width: 100vw; }
 
   /* 2. FIXED-WIDTH CHILDREN. Tailwind w-[420px] and friends are fine on
         desktop and overflow a 390px phone. Cap them. */
@@ -2419,69 +2410,33 @@ main {
 
   /* 4. TABLES. A table cannot reflow; it can only scroll. Give it a scroll
         container instead of letting it stretch the page. */
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-    max-width: 100%;
-  }
-
-  table thead,
-  table tbody {
-    display: table;
-    width: 100%;
-  }
+  table { display: block; overflow-x: auto; white-space: nowrap; max-width: 100%; }
+  table thead, table tbody { display: table; width: 100%; }
 
   /* 5. TOUCH TARGETS. 44px is the accessibility floor; several icon buttons
         were 32px. Padding is left alone so layouts don't shift. */
-  button:not([class*="h-"]),
-  a[role="button"]:not([class*="h-"]) {
-    min-height: 44px;
-  }
-
-  input,
-  select,
-  textarea {
-    min-height: 44px;
-  }
+  button:not([class*="h-"]), a[role="button"]:not([class*="h-"]) { min-height: 44px; }
+  input, select, textarea { min-height: 44px; }
 
   /* 6. DIALOGS. A modal taller than the viewport traps its own buttons
         off-screen with no way to reach them. */
-  [role="dialog"]>div {
-    max-height: 92dvh;
-    overflow-y: auto;
-  }
+  [role="dialog"] > div { max-height: 92dvh; overflow-y: auto; }
 
   /* 7. LONG UNBROKEN STRINGS — URLs, IDs, phone numbers, API keys — are a
         frequent cause of horizontal overflow. */
-  p,
-  span,
-  td,
-  div,
-  h1,
-  h2,
-  h3,
-  h4 {
-    overflow-wrap: anywhere;
-  }
+  p, span, td, div, h1, h2, h3, h4 { overflow-wrap: anywhere; }
 
   /* 8. STICKY FOOTERS clear the home indicator on notched devices. */
-  .sticky.bottom-0,
-  [class*="fixed"][class*="bottom-0"] {
+  .sticky.bottom-0, [class*="fixed"][class*="bottom-0"] {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
   /* 9. Oversized display type that was tuned for desktop. */
-  [class*="text-5xl"],
-  [class*="text-6xl"],
-  [class*="text-7xl"] {
+  [class*="text-5xl"], [class*="text-6xl"], [class*="text-7xl"] {
     font-size: clamp(1.6rem, 8vw, 2.2rem) !important;
     line-height: 1.14 !important;
   }
-
-  [class*="text-4xl"] {
-    font-size: clamp(1.4rem, 6.5vw, 1.9rem) !important;
-  }
+  [class*="text-4xl"] { font-size: clamp(1.4rem, 6.5vw, 1.9rem) !important; }
 
   /* 10. Side-by-side flex rows with no wrap allowance. */
   .flex:not([class*="flex-col"]):not([class*="flex-nowrap"]):not([class*="overflow-x"]) {
@@ -2489,23 +2444,11 @@ main {
   }
 
   /* 11. Generous desktop padding eats the screen on a phone. */
-  [class*="p-8"],
-  [class*="p-10"],
-  [class*="p-12"] {
-    padding: 1rem !important;
+  [class*="p-8"], [class*="p-10"], [class*="p-12"] { padding: 1rem !important; }
+  [class*="px-8"], [class*="px-10"], [class*="px-12"] {
+    padding-left: 1rem !important; padding-right: 1rem !important;
   }
-
-  [class*="px-8"],
-  [class*="px-10"],
-  [class*="px-12"] {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
-
-  [class*="gap-8"],
-  [class*="gap-10"] {
-    gap: 1rem !important;
-  }
+  [class*="gap-8"], [class*="gap-10"] { gap: 1rem !important; }
 }
 
 /* Small phones: tighten once more. */
@@ -2517,7 +2460,7 @@ main {
 
 /* The tour card must clear the notch and the home indicator on both edges. */
 @media (max-width: 1023px) {
-  [aria-label="Product tour"]>div:last-child {
+  [aria-label="Product tour"] > div:last-child {
     margin-bottom: env(safe-area-inset-bottom);
     max-width: calc(100vw - 24px);
   }

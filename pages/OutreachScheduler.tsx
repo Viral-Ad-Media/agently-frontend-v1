@@ -1033,24 +1033,24 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setHistoryOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
-          >
-            <i className="fa-solid fa-clock-rotate-left" />
-            History
-          </button>
-          {params.get("agentId") ? (
             <button
               type="button"
-              onClick={() => navigate("/agent")}
+              onClick={() => setHistoryOpen(true)}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
             >
-              <i className="fa-solid fa-chevron-left" />
-              Back to agent
+              <i className="fa-solid fa-clock-rotate-left" />
+              History
             </button>
-          ) : null}
+            {params.get("agentId") ? (
+              <button
+                type="button"
+                onClick={() => navigate("/agent")}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+              >
+                <i className="fa-solid fa-chevron-left" />
+                Back to agent
+              </button>
+            ) : null}
         </div>
       </header>
 
@@ -1076,11 +1076,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               <button
                 key={option.value}
                 type="button"
-                data-tour={
-                  option.value === "call-now"
-                    ? "campaign-tab-now"
-                    : "campaign-tab-schedule"
-                }
+                data-tour={option.value === "call-now" ? "campaign-tab-now" : "campaign-tab-schedule"}
                 onClick={() => updateForm("mode", option.value)}
                 aria-pressed={active}
                 className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all sm:flex-none sm:px-6 ${
@@ -1089,9 +1085,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <i
-                  className={`fa-solid ${option.value === "call-now" ? "fa-phone" : "fa-calendar-days"}`}
-                />
+                <i className={`fa-solid ${option.value === "call-now" ? "fa-phone" : "fa-calendar-days"}`} />
                 {option.label}
               </button>
             );
