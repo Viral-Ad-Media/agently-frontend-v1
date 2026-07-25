@@ -116,30 +116,59 @@ export function isCreditError(err: any): boolean {
   return /usage wallet balance|add credit before/i.test(msg);
 }
 
+/**
+ * Options for `handle`.
+ *
+ * `alwaysModal: true` means "render this error as a modal even if it is not a
+ * credit block" — for flows where a toast is the wrong surface (a scrolled
+ * settings page, a long scrape list) and the caller has no toast fallback.
+ */
+export interface CreditHandleOptions {
+  alwaysModal?: boolean;
+  /** Overrides the modal heading for non-credit errors. */
+  title?: string;
+  /** Overrides the CTA label. */
+  ctaLabel?: string;
+  /** Overrides the CTA target. */
+  topUpPath?: string;
+}
+
 export function useCreditGuard() {
   const [block, setBlock] = useState<CreditBlock | null>(null);
 
-  const handle = useCallback((err: any): boolean => {
-    if (!isCreditError(err)) return false;
-    const d = err?.details || err?.error?.details || {};
-    setBlock({
-      title: d.title || "Add credit to continue",
-      message:
-        err?.message ||
-        err?.error?.message ||
-        "You need usage credit before running this.",
-      ctaLabel: d.ctaLabel || "Add credit",
-      topUpPath: d.topUpPath || "#/billing",
-      requiredUsd:
-        typeof d.minimumUsd === "number"
-          ? d.minimumUsd
-          : typeof d.requiredUsd === "number"
-            ? d.requiredUsd
-            : null,
-      balanceUsd: typeof d.balanceUsd === "number" ? d.balanceUsd : null,
-    });
-    return true;
-  }, []);
+  const handle = useCallback(
+    (err: any, options: CreditHandleOptions = {}): boolean => {
+      const isCredit = isCreditError(err);
+      if (!isCredit && !options.alwaysModal) return false;
+
+      const d = err?.details || err?.error?.details || {};
+      const fallbackTitle = isCredit
+        ? "Add credit to continue"
+        : "That didn't go through";
+      const fallbackCta = isCredit ? "Add credit" : "Close";
+
+      setBlock({
+        title: options.title || d.title || fallbackTitle,
+        message:
+          err?.message ||
+          err?.error?.message ||
+          (isCredit
+            ? "You need usage credit before running this."
+            : "Something went wrong. Try again in a moment."),
+        ctaLabel: options.ctaLabel || d.ctaLabel || fallbackCta,
+        topUpPath: options.topUpPath || d.topUpPath || "#/billing",
+        requiredUsd:
+          typeof d.minimumUsd === "number"
+            ? d.minimumUsd
+            : typeof d.requiredUsd === "number"
+              ? d.requiredUsd
+              : null,
+        balanceUsd: typeof d.balanceUsd === "number" ? d.balanceUsd : null,
+      });
+      return true;
+    },
+    [],
+  );
 
   const close = useCallback(() => setBlock(null), []);
 

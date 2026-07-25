@@ -4,6 +4,8 @@
  */
 
 import { getSessionToken } from './session';
+import { apiBaseUrl } from './api';
+import { humanizeApiError } from '../lib/apiErrors';
 
 /**
  * NOTE ON THE TYPES BELOW
@@ -14,9 +16,18 @@ import { getSessionToken } from './session';
  * though `tsc` itself was happy. Naming the shapes removes the ambiguity.
  */
 
-const API_BASE_URL = String(
-  (import.meta as any)?.env?.VITE_API_BASE_URL || '',
-).replace(/\/$/, '');
+/*
+ * Reuses api.ts's resolved base rather than reading the env var again.
+ *
+ * This file previously did `(import.meta as any)?.env?.VITE_API_BASE_URL`.
+ * Vite replaces the LITERAL string `import.meta.env.VITE_API_BASE_URL` at
+ * build time; the optional-chained form is not that literal, so it was never
+ * substituted and evaluated to undefined in production. The base became '' and
+ * every request went to the frontend domain, where Vercel's static host
+ * answers a POST with 405 - which is exactly the error you saw on
+ * /api/knowledge-scrape/discover and .../monitoring.
+ */
+const API_BASE_URL = apiBaseUrl;
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE_URL}/api/knowledge-scrape${path}`, {
@@ -29,7 +40,10 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err: any = new Error(body?.error?.message || 'Request failed.');
+    const err: any = new Error(
+      body?.error?.message ||
+        humanizeApiError({ status: res.status, code: body?.error?.code }),
+    );
     err.status = res.status;
     err.code = body?.error?.code;
     err.details = body?.error?.details;

@@ -39,7 +39,7 @@ const MonitoringToggle: React.FC<Props> = ({
     if (!enabled) return;
     knowledgeScrapeApi
       .listChanges(knowledgeBaseId)
-      .then((r) => setChanges(r.changes))
+      .then((r) => setChanges(Array.isArray(r?.changes) ? r.changes : []))
       .catch(() => undefined);
   }, [enabled, knowledgeBaseId]);
 
