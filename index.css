@@ -2550,3 +2550,40 @@ textarea,
 .agently-dropdown * {
   flex-wrap: initial;
 }
+
+/* ─── BOTTOM-BAR KILL SWITCH ──────────────────────────────────────────────
+   The "ISSUE 2" fix further up scoped `.agently-safe-footer` padding so that
+   empty positioning wrappers stopped being painted as a bar — but that fix
+   lives inside `@media (max-width: 768px)`, so it never applied on desktop.
+   The same empty-wrapper pattern therefore still renders a full-width strip
+   across the bottom of every page at 1024px and above, and `<main>` scrolls
+   its content underneath it.
+
+   These rules apply at EVERY breakpoint. `:empty` matches only elements with
+   no children and no text at all, so no real toolbar, footer, modal, menu or
+   nav can ever be caught by them — only the hollow wrappers that have no
+   business occupying layout space in the first place.
+   ------------------------------------------------------------------------ */
+
+[class*="fixed"][class*="bottom-0"]:empty,
+[class*="sticky"][class*="bottom-0"]:empty,
+[class*="fixed"][class*="inset-x-0"]:empty,
+[class*="absolute"][class*="bottom-0"]:empty {
+  display: none !important;
+}
+
+/* Anything injected as a bare sibling of the React root. The app renders every
+   overlay through a portal that always has children, so an empty top-level
+   node is never ours. */
+body>div:empty:not(#root) {
+  display: none !important;
+}
+
+/* The app column owns the full viewport height. If a stray element ever does
+   claim space below it again, this keeps the scroll area itself honest so
+   pages can always use the whole screen. */
+.agently-app-shell,
+.agently-app-column {
+  height: 100dvh;
+  min-height: 0;
+}
