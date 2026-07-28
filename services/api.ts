@@ -15,6 +15,7 @@ import {
   WorkspaceSettings,
   WorkspaceBootstrap,
 } from '../types';
+import { humanizeApiError } from '../lib/apiErrors';
 import { getSessionToken } from './session';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -47,6 +48,9 @@ const resolveDefaultApiBaseUrl = () => {
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
+
+/** Shared so other clients cannot resolve a different base and 405 silently. */
+export const apiBaseUrl = API_BASE_URL;
 
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
@@ -150,7 +154,10 @@ const request = async <T>(path: string, options: {
       errorPayload = null;
     }
 
-    const message = errorPayload?.error?.message || `Request failed with status ${response.status}`;
+    // Explanatory fallback instead of a bare status code. See lib/apiErrors.ts.
+    const message =
+      errorPayload?.error?.message ||
+      humanizeApiError({ status: response.status, code: errorPayload?.error?.code });
     if (auth && response.status === 401) notifyAuthExpired(message);
 
     throw new ApiError(

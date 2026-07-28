@@ -23,7 +23,7 @@ import {
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
-import { ProductTour, useProductTour } from "./lib/productTour";
+import { PageTour, usePageTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -322,24 +322,23 @@ const App: React.FC = () => {
   const handleGenerateFaqs = async (website: string) => {
     return api.generateOnboardingFaqs(website);
   };
-
-  const [justOnboarded, setJustOnboarded] = useState(false);
-  const tour = useProductTour({
-    justOnboarded,
-    enabled: !!org?.profile?.onboarded,
-  });
-  // ISSUE 2 — per-page walkthroughs. Fires the first time each page is opened,
-  // after the one-time overview has been seen or skipped.
+  /*
+   * Per-page tours. Each page introduces itself once, the first time it is
+   * opened, and never again. Replaces the single 45-step journey that
+   * reappeared on every dashboard visit.
+   */
+  const pageTour = usePageTour(
+    typeof window !== "undefined"
+      ? window.location.hash.replace(/^#/, "").split("?")[0] || "/"
+      : "/",
+  );
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
     agent: AgentConfig,
   ) => {
     await api.completeOnboarding(profile, agent);
-
-    // Marks the next dashboard render as "first ever". useProductTour reads
-    // this to start the walkthrough at the moment you described.
-    setJustOnboarded(true);
+    // first dashboard render after onboarding triggers the dashboard page tour
 
     // Move the user out of onboarding immediately after the API confirms
     // completion. The follow-up bootstrap refresh will load the full saved
@@ -628,6 +627,19 @@ const App: React.FC = () => {
     return (
       <MainLayout org={org} user={user} onLogout={() => void handleLogout()}>
         {children}
+        {/*
+          Mounted HERE, not inside a single route. It was previously rendered
+          inside the Dashboard element, which meant Phone Numbers, Voice Agent,
+          Call Logs and every other page could never show their tour — the
+          component simply was not on the page. ProtectedRoute wraps every
+          authenticated page, so one mount covers all of them.
+        */}
+        <PageTour
+          page={pageTour.page || ""}
+          steps={pageTour.steps}
+          open={pageTour.open}
+          onClose={pageTour.close}
+        />
       </MainLayout>
     );
   };
@@ -782,26 +794,6 @@ const App: React.FC = () => {
               org && dashboard ? (
                 <ProtectedRoute>
                   <Dashboard org={org} dashboard={dashboard} />
-                  {/*
-                    The tour drives itself across every page, so it is mounted
-                    once here rather than per-route. It receives navigate() and
-                    the current path and moves itself between phases.
-                  */}
-                  <ProductTour
-                    open={tour.open}
-                    startIndex={tour.startIndex}
-                    onClose={tour.close}
-                    navigate={(path) => {
-                      window.location.hash = `#${path}`;
-                    }}
-                    currentPath={
-                      typeof window !== "undefined"
-                        ? window.location.hash
-                            .replace(/^#/, "")
-                            .split("?")[0] || "/"
-                        : "/"
-                    }
-                  />
                 </ProtectedRoute>
               ) : (
                 <Navigate to="/login" />
