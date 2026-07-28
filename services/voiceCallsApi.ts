@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from '../utils/runtimeUrls';
 import { getSessionToken } from './session';
 
 export type VoiceProvider = 'openai' | 'elevenlabs';
@@ -236,15 +237,7 @@ const normalizeAgentVoiceConfig = (payload: unknown): AgentVoiceConfig => {
   };
 };
 
-const resolveDefaultApiBaseUrl = () => {
-  if (typeof window === 'undefined') return '';
-  const host = window.location.hostname;
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-  if (!import.meta.env.DEV || !isLocalHost) return '';
-  return import.meta.env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
-};
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
+const API_BASE_URL = resolveApiBaseUrl();
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 const NETWORK_OFFLINE_MESSAGE = 'You are currently not connected to the internet. Please connect to the internet and try again.';

@@ -45,6 +45,7 @@ import { api } from "../services/api";
 import AppModal from "../components/AppModal";
 import PageSelector from "../components/PageSelector";
 import MonitoringToggle from "../components/MonitoringToggle";
+import SettingsTabs from "../components/SettingsTabs";
 
 interface KnowledgeBasesProps {
   org: Organization;
@@ -307,21 +308,27 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-black text-slate-900">Knowledge Bases</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            What your agents know. Choose the pages worth learning from — you're
-            charged per page read, so fewer, better pages usually wins.
+      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
+            Settings
           </p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+            Knowledge Bases
+          </h2>
         </div>
         <button
+          type="button"
           onClick={() => setCreateOpen(true)}
-          className="rounded-2xl bg-slate-900 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 sm:h-10 sm:w-10 sm:rounded-xl"
+          aria-label="New knowledge base"
+          title="New knowledge base"
         >
-          + New knowledge base
+          <i className="fa-sharp fa-solid fa-plus text-sm" aria-hidden="true" />
         </button>
-      </div>
+      </header>
+
+      <SettingsTabs active="knowledge" />
 
       {bases.length === 0 ? (
         <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-16 text-center">

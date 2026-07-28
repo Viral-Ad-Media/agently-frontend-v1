@@ -8,10 +8,12 @@ import {
 import {
   AgentConfig,
   BusinessProfile,
+  BusinessSettingsProfile,
   ChatMessage,
   ChatbotConfig,
   Lead,
   WorkspaceBootstrap,
+  WorkspaceSettings,
 } from "./types";
 import { api, ApiError } from "./services/api";
 import {
@@ -575,29 +577,92 @@ const App: React.FC = () => {
   const handleSaveSettings = async (settings: {
     timezone: string;
     phoneNumber: string;
-  }) => {
+    account?: { name?: string; email?: string };
+    businessProfile?: {
+      name?: string;
+      industry?: string;
+      website?: string;
+      location?: string;
+    };
+    businessProfiles?: BusinessSettingsProfile[];
+  }): Promise<WorkspaceSettings> => {
     const saved = await api.updateSettings(settings);
     setWorkspace((currentWorkspace) => {
       if (!currentWorkspace) return currentWorkspace;
+
+      const savedBusinessProfile =
+        saved.businessProfile || settings.businessProfile || {};
+      const savedProfiles =
+        saved.businessProfiles || settings.businessProfiles || [];
+      const savedProfileByKey = new Map(
+        savedProfiles.map((profile) => [
+          `${profile.sourceType}:${profile.sourceId}`,
+          profile,
+        ]),
+      );
+
+      const updatedKnowledgeBases = (currentWorkspace.knowledgeBases || []).map(
+        (base) => {
+          const savedBase = savedProfileByKey.get(`knowledgeBase:${base.id}`);
+          if (!savedBase) return base;
+          return {
+            ...base,
+            businessName: savedBase.name || base.businessName,
+            industry: savedBase.industry ?? base.industry,
+            primaryUrl: savedBase.website ?? base.primaryUrl,
+            metadata: {
+              ...(base.metadata || {}),
+              location: savedBase.location || "",
+              businessProfile: {
+                ...((base.metadata || {}) as Record<string, any>)
+                  .businessProfile,
+                location: savedBase.location || "",
+              },
+            },
+          };
+        },
+      );
+
       return {
         ...currentWorkspace,
+        user: saved.account
+          ? { ...currentWorkspace.user, ...saved.account }
+          : currentWorkspace.user,
         organization: {
           ...currentWorkspace.organization,
           settings: {
             ...currentWorkspace.organization.settings,
-            ...saved,
+            timezone:
+              saved.timezone || currentWorkspace.organization.settings.timezone,
+            phoneNumber:
+              saved.phoneNumber ??
+              currentWorkspace.organization.settings.phoneNumber,
+            twilio:
+              saved.twilio || currentWorkspace.organization.settings.twilio,
           },
           profile: {
             ...currentWorkspace.organization.profile,
+            ...savedBusinessProfile,
             timezone:
               saved.timezone || currentWorkspace.organization.profile.timezone,
           },
           phoneNumber:
             saved.phoneNumber ?? currentWorkspace.organization.phoneNumber,
+          businessProfiles: savedProfiles,
         },
+        knowledgeBases: updatedKnowledgeBases,
+        businessProfiles: savedProfiles,
       };
     });
-    await refreshWorkspace();
+
+    return saved;
+  };
+
+  const handleChangePassword = async (payload: {
+    currentPassword: string;
+    newPassword: string;
+  }) => {
+    await api.changePassword(payload);
   };
 
   const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -1001,7 +1066,14 @@ const App: React.FC = () => {
             element={
               org ? (
                 <ProtectedRoute>
-                  <Settings org={org} onSave={handleSaveSettings} />
+                  <Settings
+                    org={org}
+                    user={user}
+                    knowledgeBases={knowledgeBases}
+                    onSave={handleSaveSettings}
+                    onRequestPasswordReset={api.requestPasswordReset}
+                    onChangePassword={handleChangePassword}
+                  />
                 </ProtectedRoute>
               ) : (
                 <Navigate to="/login" />

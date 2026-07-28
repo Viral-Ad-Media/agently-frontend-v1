@@ -442,6 +442,19 @@ export interface KnowledgeBase {
   updatedAt?: string | null;
 }
 
+
+export interface BusinessSettingsProfile {
+  id: string;
+  sourceType: 'organization' | 'knowledgeBase';
+  sourceId: string;
+  label?: string;
+  name: string;
+  industry?: string;
+  website?: string;
+  location?: string;
+  isPrimary?: boolean;
+}
+
 export interface BusinessProfile {
   name: string;
   industry: string;
@@ -459,6 +472,9 @@ export interface WorkspaceSettings {
   timezone: string;
   phoneNumber: string;
   twilio: TwilioSettings;
+  account?: User | null;
+  businessProfile?: BusinessProfile;
+  businessProfiles?: BusinessSettingsProfile[];
 }
 
 export interface Organization {
@@ -474,6 +490,7 @@ export interface Organization {
   settings: WorkspaceSettings;
   members: User[];
   invoices: Invoice[];
+  businessProfiles?: BusinessSettingsProfile[];
 }
 
 export interface DashboardData {
@@ -516,4 +533,5 @@ export interface WorkspaceBootstrap {
   dashboard: DashboardData;
   agentStats?: AgentStats[];
   knowledgeBases?: KnowledgeBase[];
+  businessProfiles?: BusinessSettingsProfile[];
 }

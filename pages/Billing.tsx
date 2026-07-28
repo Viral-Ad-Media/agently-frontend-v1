@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Invoice, Organization } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
+import SettingsTabs from "../components/SettingsTabs";
 
 interface BillingProps {
   org: Organization;
@@ -369,40 +370,47 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
 
   return (
     <div className="space-y-6 pb-12 text-[#0F172A]">
-      <section className="overflow-hidden rounded-[2rem] bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#F59E0B]">
-              Prepaid usage credit
-            </p>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-[#0F172A] sm:text-4xl">
-              Billing & usage
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#64748B]">
-              Agently currently runs on usage credit. Every paid service is
-              deducted from the wallet immediately and the navbar shows the
-              remaining balance.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadBilling()}
-            className="h-11 rounded-xl border border-slate-200 px-4 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
-          >
-            Refresh
-          </button>
+      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F59E0B]">
+            Settings
+          </p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-[#0F172A] sm:text-3xl">
+            Billing & usage
+          </h2>
+          <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-[#64748B] sm:block">
+            Agently currently runs on usage credit. Every paid service is
+            deducted from the wallet immediately and the navbar shows the
+            remaining balance.
+          </p>
         </div>
-        {error && (
-          <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-            {success}
-          </p>
-        )}
-      </section>
+        <button
+          type="button"
+          onClick={() => void loadBilling()}
+          disabled={loading}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
+          aria-label="Refresh billing"
+          title="Refresh"
+        >
+          <i
+            className={`fa-sharp fa-solid ${loading ? "fa-spinner fa-spin" : "fa-rotate-right"} text-sm`}
+            aria-hidden="true"
+          />
+        </button>
+      </header>
+
+      <SettingsTabs active="billing" />
+
+      {error && (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          {success}
+        </p>
+      )}
 
       <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">

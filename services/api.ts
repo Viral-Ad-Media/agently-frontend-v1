@@ -1,6 +1,7 @@
 import {
   AgentConfig,
   BusinessProfile,
+  BusinessSettingsProfile,
   ChatMessage,
   ChatbotConfig,
   DashboardData,
@@ -17,6 +18,7 @@ import {
 } from '../types';
 import { humanizeApiError } from '../lib/apiErrors';
 import { getSessionToken } from './session';
+import { resolveApiBaseUrl } from '../utils/runtimeUrls';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -39,15 +41,7 @@ export class ApiError extends Error {
   }
 }
 
-const resolveDefaultApiBaseUrl = () => {
-  if (typeof window === 'undefined') return '';
-  const host = window.location.hostname;
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-  if (!import.meta.env.DEV || !isLocalHost) return '';
-  return import.meta.env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
-};
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
+const API_BASE_URL = resolveApiBaseUrl();
 
 /** Shared so other clients cannot resolve a different base and 405 silently. */
 export const apiBaseUrl = API_BASE_URL;
@@ -887,6 +881,17 @@ export const api = {
   async updateSettings(settings: {
     timezone?: string;
     phoneNumber?: string;
+    account?: {
+      name?: string;
+      email?: string;
+    };
+    businessProfile?: {
+      name?: string;
+      industry?: string;
+      website?: string;
+      location?: string;
+    };
+    businessProfiles?: BusinessSettingsProfile[];
     twilio?: {
       accountSid?: string;
       authToken?: string;
@@ -894,9 +899,16 @@ export const api = {
       clearCredentials?: boolean;
     };
   }) {
-    return request<WorkspaceSettings>('/api/settings', {
+    return request<WorkspaceSettings & { account?: User; businessProfile?: BusinessProfile; businessProfiles?: BusinessSettingsProfile[] }>('/api/settings', {
       method: 'PATCH',
       body: settings,
+    });
+  },
+
+  async changePassword(payload: { currentPassword: string; newPassword: string }) {
+    return request<{ success: boolean; message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: payload,
     });
   },
 

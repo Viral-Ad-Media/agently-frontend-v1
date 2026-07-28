@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../utils/runtimeUrls";
 export type BlogTemplateKey = "product_update" | "editorial" | "guide";
 export type BlogStatus = "draft" | "published" | "archived";
 export type BlogFontFamily = "default" | "sans" | "serif" | "display" | "mono";
@@ -63,18 +64,7 @@ export type BlogPost = {
   createdBy?: string;
 };
 
-const resolveApiBaseUrl = () => {
-  if (typeof window === "undefined") return "";
-  const host = window.location.hostname;
-  const local =
-    host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0";
-  if (!import.meta.env.DEV || !local) return "";
-  return import.meta.env.VITE_API_PROXY_TARGET || "http://localhost:4000";
-};
-
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || resolveApiBaseUrl()
-).replace(/\/$/, "");
+const API_BASE_URL = resolveApiBaseUrl();
 
 async function publicRequest<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });

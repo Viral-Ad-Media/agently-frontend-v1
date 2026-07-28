@@ -1,4 +1,5 @@
 import { getSessionToken } from '../services/session';
+import { resolveApiBaseUrl } from '../utils/runtimeUrls';
 import type {
   LeadActivity,
   LeadCrmDetail,
@@ -11,15 +12,7 @@ import type {
 
 type QueryValue = string | number | boolean | null | undefined;
 
-const resolveDefaultApiBaseUrl = () => {
-  if (typeof window === 'undefined') return '';
-  const host = window.location.hostname;
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-  if (!import.meta.env.DEV || !isLocalHost) return '';
-  return import.meta.env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
-};
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()).replace(/\/$/, '');
+const API_BASE_URL = resolveApiBaseUrl();
 const API_BASE = `${API_BASE_URL}/api/leads-crm`;
 
 function toQuery(params: Record<string, QueryValue> = {}) {

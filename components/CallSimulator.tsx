@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentConfig, CallOutcome, Lead, Organization } from "../types";
 import { createPortal } from "react-dom";
+import { resolveApiBaseUrl } from "../utils/runtimeUrls";
 
 interface CallSimulatorProps {
   agent: AgentConfig;
@@ -91,10 +92,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
 
     // Verify the Twilio-native voice test endpoint before connecting the simulator
     try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-        /\/$/,
-        "",
-      );
+      const apiBase = resolveApiBaseUrl();
       const token =
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||
@@ -174,10 +172,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
       timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
 
       try {
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-          /\/$/,
-          "",
-        );
+        const apiBase = resolveApiBaseUrl();
         const token =
           localStorage.getItem("agently.auth.token") ||
           sessionStorage.getItem("agently.auth.token") ||

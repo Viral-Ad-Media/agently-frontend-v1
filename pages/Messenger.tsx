@@ -10,6 +10,7 @@ import {
 } from "../types";
 import { api } from "../services/api";
 import AppModal from "../components/AppModal";
+import { resolveApiBaseUrl, resolveChatbotWidgetBaseUrl } from "../utils/runtimeUrls";
 
 interface MessengerProps {
   org: Organization;
@@ -176,13 +177,24 @@ const ChatbotAvatar: React.FC<{
   textClassName = "text-[11px]",
 }) => {
   const image = getChatbotAvatarImage(avatarLabel);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [image]);
+
   return (
     <span
       className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-700 ring-1 ring-slate-200 ${className}`}
       aria-hidden="true"
     >
-      {image ? (
-        <img src={image} alt="" className="h-full w-full object-cover" />
+      {image && !imageFailed ? (
+        <img
+          src={image}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <span className={`font-semibold leading-none ${textClassName}`}>
           {getAvatarInitial(avatarLabel, fallbackName)}
@@ -376,17 +388,25 @@ const Messenger: React.FC<MessengerProps> = ({
   const buildEmbedScript = (
     chatbot: ChatbotConfig & { chatVoice?: string; chatLanguages?: string[] },
   ) => {
-    const backendUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(
-      /\/$/,
-      "",
-    );
-    const positionStyle =
-      chatbot.position === "left" ? "left:20px" : "right:20px";
-    // FIX: embed langs and voice as query params so widget persists language selection
+    const backendUrl = resolveChatbotWidgetBaseUrl();
+    const widgetId = `agently-widget-${chatbot.id}`;
+    const position = chatbot.position === "left" ? "left" : "right";
+    const side = position === "left" ? "left:16px;right:auto;" : "right:16px;left:auto;";
+    const mobileSide = position === "left"
+      ? "left:12px!important;right:12px!important;"
+      : "right:12px!important;left:12px!important;";
     const langs = (chatbot.chatLanguages || ["en"]).join(",");
     const voice = chatbot.chatVoice || "alloy";
-    const widgetSrc = `${backendUrl}/chatbot-widget/${chatbot.id}?langs=${langs}&voice=${encodeURIComponent(voice)}`;
-    return `<!-- Agently Chat Widget -->\n<iframe\n  id="agently-widget-${chatbot.id}"\n  src="${widgetSrc}"\n  style="position:fixed;bottom:20px;${positionStyle};width:420px;height:800px;max-width:90vw;max-height:90vh;border:none;background:transparent;z-index:2147483646;overflow:hidden;outline:none;display:block;visibility:visible;pointer-events:auto;"\n  scrolling="no"\n  frameborder="0"\n  allow="microphone"\n  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-storage-access-by-user-activation"\n  referrerpolicy="no-referrer-when-downgrade"\n  loading="eager"\n  onload="console.info('Agently widget iframe loaded')"\n  onerror="this.style.display='none'; console.error('Agently widget iframe failed to load')"\n  title="Chat widget"\n></iframe>`;
+    const widgetSrc = `${backendUrl}/chatbot-widget/${chatbot.id}?langs=${encodeURIComponent(langs)}&voice=${encodeURIComponent(voice)}`;
+
+    return `<!-- Agently Chat Widget for: ${chatbot.name || "My Chatbot"} -->
+<style>
+  #${widgetId}{position:fixed;bottom:16px;${side}width:72px;height:72px;border:0;background:transparent;z-index:2147483646;overflow:visible;outline:none;display:block;border-radius:999px;transition:width .24s ease,height .24s ease,border-radius .24s ease,top .24s ease,bottom .24s ease,right .24s ease,left .24s ease;}
+  #${widgetId}[data-agently-open="true"]{width:min(390px,calc(100vw - 32px));height:min(640px,calc(100dvh - 32px));border-radius:22px;overflow:hidden;box-shadow:0 18px 54px rgba(15,23,42,.22);}
+  @media (max-width:640px){#${widgetId}[data-agently-open="true"]{top:12px!important;bottom:12px!important;${mobileSide}width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;border-radius:22px!important;}}
+</style>
+<iframe id="${widgetId}" src="${widgetSrc}" scrolling="no" frameborder="0" allow="microphone *; camera *; autoplay *; clipboard-write *" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-storage-access-by-user-activation" referrerpolicy="no-referrer-when-downgrade" loading="eager" title="Chat widget"></iframe>
+<script>(function(){var el=document.getElementById("${widgetId}");if(!el)return;var origin;try{origin=new URL("${widgetSrc}").origin;}catch(e){origin="*";}window.addEventListener("message",function(ev){if(origin!=="*"&&ev.origin!==origin)return;var d=ev.data;if(!d||d.channel!=="agently-widget"||d.widgetId!=="${chatbot.id}")return;if(d.type==="open")el.setAttribute("data-agently-open","true");if(d.type==="close")el.removeAttribute("data-agently-open");if(window.matchMedia&&window.matchMedia("(max-width:640px)").matches){document.documentElement.style.overflow=d.type==="open"?"hidden":"";document.body.style.overflow=d.type==="open"?"hidden":"";}},false);})();</script>`;
   };
 
   const saveCustomization = async () => {
@@ -402,7 +422,7 @@ const Messenger: React.FC<MessengerProps> = ({
         );
         patch({ faqs: savedFaqs.manualFaqs || [] });
       }
-      await api.updateChatbot(activeChatbot.id, {
+      const updatedChatbot = await api.updateChatbot(activeChatbot.id, {
         name: draft.name,
         voiceAgentId: draft.voiceAgentId,
         knowledgeBaseId,
@@ -423,6 +443,11 @@ const Messenger: React.FC<MessengerProps> = ({
         embedScript: freshEmbedScript,
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
+      } as any);
+      patch({
+        avatarLabel: updatedChatbot.avatarLabel,
+        embedScript: updatedChatbot.embedScript,
+        widgetScriptUrl: updatedChatbot.widgetScriptUrl,
       } as any);
       if (knowledgeBaseId && onAssignKnowledgeBase) {
         await onAssignKnowledgeBase(knowledgeBaseId, activeChatbot.id);
@@ -571,10 +596,7 @@ const Messenger: React.FC<MessengerProps> = ({
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-        /\/$/,
-        "",
-      );
+      const apiBase = resolveApiBaseUrl();
       const token =
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||
@@ -600,10 +622,7 @@ const Messenger: React.FC<MessengerProps> = ({
     }
     setPreviewingVoice(voiceId);
     try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-        /\/$/,
-        "",
-      );
+      const apiBase = resolveApiBaseUrl();
       const token =
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||

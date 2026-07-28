@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../utils/runtimeUrls";
 import type { BlogPost, BlogStatus, BlogTemplateKey, BlogBlock } from "./blogApi";
 
 export type SuperAdminMetrics = {
@@ -40,15 +41,7 @@ export type BlogPostInput = {
 
 const TOKEN_KEY = "agently_super_admin_session";
 
-const resolveApiBaseUrl = () => {
-  if (typeof window === "undefined") return "";
-  const host = window.location.hostname;
-  const local = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0";
-  if (!import.meta.env.DEV || !local) return "";
-  return import.meta.env.VITE_API_PROXY_TARGET || "http://localhost:4000";
-};
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || resolveApiBaseUrl()).replace(/\/$/, "");
+const API_BASE_URL = resolveApiBaseUrl();
 
 export const getAdminToken = () => {
   if (typeof window === "undefined") return "";

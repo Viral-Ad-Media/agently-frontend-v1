@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { Organization, User, UserRole } from "../types";
 import AppModal from "../components/AppModal";
+import SettingsTabs from "../components/SettingsTabs";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 
 interface TeamProps {
@@ -170,45 +170,60 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Link
-            to="/settings"
-            className="mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-amber-700"
-          >
-            <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
+      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
             Settings
-          </Link>
-          <h2 className="text-xl font-black text-slate-900">Team Management</h2>
-          <p className="mt-0.5 text-xs text-slate-400">
+          </p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+            Team
+          </h2>
+          <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-slate-500 sm:block">
             Manage workspace access and permissions.
           </p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:w-auto sm:flex sm:flex-wrap">
+        <div className="flex shrink-0 items-start justify-end gap-2">
           <button
             type="button"
             onClick={loadMembers}
             disabled={loading}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300 disabled:opacity-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-500 transition hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
+            aria-label="Refresh team members"
+            title="Refresh"
           >
-            {loading ? "Refreshing…" : "Refresh"}
+            <i
+              className={`fa-sharp fa-solid ${loading ? "fa-spinner fa-spin" : "fa-rotate-right"} text-sm`}
+              aria-hidden="true"
+            />
           </button>
           <button
             type="button"
             onClick={() => setShowPerms(true)}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-300"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 transition hover:border-amber-300 hover:text-amber-700 sm:h-10 sm:w-10 sm:rounded-xl"
+            aria-label="View permissions"
+            title="Permissions"
           >
-            Permissions
+            <i
+              className="fa-sharp fa-solid fa-shield-halved text-sm"
+              aria-hidden="true"
+            />
           </button>
           <button
             type="button"
             onClick={() => setShowInvite(true)}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 sm:h-10 sm:w-10 sm:rounded-xl"
+            aria-label="Invite member"
+            title="Invite member"
           >
-            Invite Member
+            <i
+              className="fa-sharp fa-solid fa-user-plus text-sm"
+              aria-hidden="true"
+            />
           </button>
         </div>
-      </div>
+      </header>
+
+      <SettingsTabs active="team" />
 
       {(error || success) && (
         <div
