@@ -73,6 +73,7 @@ const SUPPORTED_LANGUAGES = [
 
 const CHATBOT_AVATAR_PREFIX = "agently-avatar:";
 const CHATBOT_AVATAR_UPLOAD_PREFIX = "agently-upload:";
+const CHATBOT_AVATAR_URL_PREFIX = "agently-upload-url:";
 
 const CHATBOT_PROFILE_AVATARS = [
   { id: "ava-garden", label: "Ava", image: "/chatbot-avatars/ava-garden.jpg" },
@@ -97,8 +98,14 @@ const getChatbotAvatarOption = (avatarLabel?: string) => {
 };
 
 const getUploadedChatbotAvatarImage = (avatarLabel?: string) => {
-  if (!avatarLabel?.startsWith(CHATBOT_AVATAR_UPLOAD_PREFIX)) return "";
-  return avatarLabel.slice(CHATBOT_AVATAR_UPLOAD_PREFIX.length);
+  if (!avatarLabel) return "";
+  if (avatarLabel.startsWith(CHATBOT_AVATAR_URL_PREFIX)) {
+    return avatarLabel.slice(CHATBOT_AVATAR_URL_PREFIX.length);
+  }
+  if (avatarLabel.startsWith(CHATBOT_AVATAR_UPLOAD_PREFIX)) {
+    return avatarLabel.slice(CHATBOT_AVATAR_UPLOAD_PREFIX.length);
+  }
+  return "";
 };
 
 const getChatbotAvatarImage = (avatarLabel?: string) => {

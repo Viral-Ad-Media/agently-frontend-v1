@@ -147,7 +147,7 @@ const PageSelector: React.FC<Props> = ({
   const loadPages = useCallback(async (id: string) => {
     const result: ListPagesResponse = await knowledgeScrapeApi.listPages(id);
     if (!mountedRef.current) return;
-    setPages(result.pages);
+    setPages(Array.isArray(result?.pages) ? result.pages : []);
     setSelected(
       new Set(
         result.pages
@@ -183,9 +183,9 @@ const PageSelector: React.FC<Props> = ({
       );
     } catch (err: any) {
       setPhase("idle");
-      if (!credit.handle(err)) {
-        onToast?.(err?.message || "We could not read that website.", false);
-      }
+      // alwaysModal: an insufficient-credit warning in a top-of-page alert is
+      // easy to miss on a long page. Everything from this path is a modal now.
+      credit.handle(err, { alwaysModal: true });
     } finally {
       setBusy(null);
     }
@@ -233,12 +233,10 @@ const PageSelector: React.FC<Props> = ({
       onToast?.(result.message);
       startPolling(result.job.id);
     } catch (err: any) {
-      if (credit.handle(err)) {
-        // handled as a modal
-      } else if (err?.code === "JOB_ALREADY_RUNNING") {
-        startPolling(err.details?.jobId);
+      if (err?.code === "JOB_ALREADY_RUNNING" && err?.details?.jobId) {
+        startPolling(err.details.jobId);
       } else {
-        onToast?.(err?.message || "Could not start the scan.", false);
+        credit.handle(err, { alwaysModal: true });
       }
     } finally {
       setBusy(null);
@@ -257,7 +255,9 @@ const PageSelector: React.FC<Props> = ({
         const status: JobStatusResponse =
           await knowledgeScrapeApi.getJob(jobId);
         const fresh: ScrapeJob = status.job;
-        const freshPages: DiscoveredPage[] = status.pages;
+        const freshPages: DiscoveredPage[] = Array.isArray(status?.pages)
+          ? status.pages
+          : [];
         if (!mountedRef.current) return;
 
         setJob(fresh);
@@ -332,7 +332,7 @@ const PageSelector: React.FC<Props> = ({
       setJob(null);
       onToast?.(result.message);
     } catch (err: any) {
-      onToast?.(err?.message || "Could not stop the scan.", false);
+      credit.handle(err, { alwaysModal: true });
     } finally {
       setBusy(null);
       setStopModal({ open: false, warning: "" });
@@ -352,7 +352,7 @@ const PageSelector: React.FC<Props> = ({
         setJob({ ...job, status: "paused" });
       }
     } catch (err: any) {
-      onToast?.(err?.message || "Could not update the scan.", false);
+      credit.handle(err, { alwaysModal: true });
     } finally {
       setBusy(null);
     }

@@ -801,9 +801,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="relative h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.06),transparent_28%)]" />
-      <div className="relative flex min-h-screen">
+      <div className="relative flex h-full min-h-0 overflow-hidden">
         <div
           className={`fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
             mobileNavOpen
@@ -875,8 +875,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex-1 md:ml-[16.25rem] md:min-w-0">
-          <div className="flex h-screen min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-1 flex-col md:ml-[16.25rem] md:min-w-0">
+          <div className="flex h-full min-h-0 w-full flex-col">
             <header className="agently-app-topbar sticky top-0 z-[24] flex-shrink-0 overflow-visible border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_rgba(15,23,42,0.025)]">
               <div className="agently-app-topbar-inner flex min-h-[68px] w-full flex-col gap-2 overflow-visible px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 xl:px-8">
                 <div className="flex min-w-0 items-center gap-3">
@@ -913,10 +913,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 </div>
 
                 <div className="agently-topbar-actions flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
-                  <span data-tour="topbar-credit" className="contents-safe inline-flex">
+                  <span
+                    data-tour="topbar-credit"
+                    className="contents-safe inline-flex"
+                  >
                     <WalletCreditBadge wallet={walletMini} />
                   </span>
-                  <span data-tour="topbar-notifications" className="inline-flex">
+                  <span
+                    data-tour="topbar-notifications"
+                    className="inline-flex"
+                  >
                     <NotificationBell />
                   </span>
 
@@ -945,7 +951,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </header>
             <LowCreditTicker wallet={walletMini} />
 
-            <main className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-4 pb-8 pt-4 sm:px-5 md:pb-10 md:pt-5 lg:px-6 xl:px-8">
+            {/*
+              The pale strip that used to sit across the bottom of every page
+              was this element's own bottom padding (pb-8 / md:pb-10) painting
+              the #F1F5F9 shell background below the last card, clipping the
+              final table row. Padding is now 0 and the only bottom inset is
+              the device safe area, so content scrolls flush to the viewport
+              edge on every route.
+            */}
+            <main
+              className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-4 pb-0 pt-4 sm:px-5 md:pt-5 lg:px-6 xl:px-8"
+              style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+            >
               {user.role === "Viewer" &&
               [
                 "/agent",

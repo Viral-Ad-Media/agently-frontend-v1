@@ -2336,8 +2336,11 @@ textarea,
   background-color: rgba(15, 23, 42, 0.3);
 }
 
-/* A pane shorter than its max height should not scroll at all. */
-[class*="overflow-y-auto"]:not([class*="h-full"]) {
+/* Only explicitly opted-in scroll panes receive a viewport-based max height.
+   Do not target every `overflow-y-auto` element: the app shell <main> uses that
+   utility for page scrolling, and a global max-height leaves a false footer-like
+   strip at the bottom while clipping the page content. */
+.agently-scroll:not([class*="h-full"]) {
   overflow-y: auto;
   max-height: min(var(--agently-pane-max, 32rem), 70vh);
 }
