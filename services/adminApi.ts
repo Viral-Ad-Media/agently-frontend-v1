@@ -39,6 +39,78 @@ export type BlogPostInput = {
   seoDescription?: string;
 };
 
+
+/* ── Platform assistant (Agently's own in-app support agent) ──────────────── */
+
+export type PlatformAssistantFaq = {
+  id: string;
+  question: string;
+  answer: string;
+  is_published: boolean;
+  display_order: number | null;
+  updated_at: string | null;
+};
+
+export type PlatformAssistantSource = {
+  id: string;
+  url: string;
+  title: string;
+  status: string;
+  updated_at: string | null;
+};
+
+export type PlatformAssistantViolation = {
+  id: string;
+  question: string;
+  matched_terms: string[];
+  created_at: string;
+};
+
+export type PlatformSupportRequest = {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  subject: string;
+  body: string;
+  status: "open" | "acknowledged" | "resolved";
+  emailed_at: string | null;
+  created_at: string;
+};
+
+export type PlatformAssistantSnapshot = {
+  chatbot: {
+    id: string;
+    name: string;
+    headerTitle: string;
+    welcomeMessage: string;
+    placeholder: string;
+    accentColor: string;
+    position: string;
+    customPrompt: string;
+    suggestedPrompts: string[];
+    supportEmail: string;
+    confidentialityMode: string;
+    isActive: boolean;
+    knowledgeBaseId: string;
+  };
+  organization: { id: string; name: string; dailySpendCapUsd: number };
+  spend: { capUsd: number; spentUsd: number; degraded: boolean };
+  faqs: PlatformAssistantFaq[];
+  sources: PlatformAssistantSource[];
+  violations: PlatformAssistantViolation[];
+  supportRequests: PlatformSupportRequest[];
+};
+
+export type TourPageRow = {
+  pageKey: string;
+  label: string;
+  version: number;
+  isEnabled: boolean;
+  updatedAt: string | null;
+  completedCount: number;
+  skippedCount: number;
+};
+
 const TOKEN_KEY = "agently_super_admin_session";
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -184,7 +256,98 @@ export const adminApi = {
       { method: "POST", body: JSON.stringify({ amountUsd, note }) },
     );
   },
+
+  /* ── Platform assistant ─────────────────────────────────────────────── */
+
+  async platformAssistant() {
+    return request<PlatformAssistantSnapshot>("/api/super-admin/platform");
+  },
+
+  async updatePlatformAssistant(patch: Record<string, unknown>) {
+    return request<{ success: boolean; warning: string | null }>(
+      "/api/super-admin/platform/chatbot",
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+  },
+
+  async updatePlatformSettings(dailySpendCapUsd: number) {
+    return request<{ success: boolean }>("/api/super-admin/platform/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ dailySpendCapUsd }),
+    });
+  },
+
+  async createPlatformFaq(payload: { question: string; answer: string }) {
+    return request<{ success: boolean }>("/api/super-admin/platform/faqs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async importPlatformFaqs(text: string) {
+    return request<{ success: boolean; imported: number }>(
+      "/api/super-admin/platform/faqs/import",
+      { method: "POST", body: JSON.stringify({ text }) },
+    );
+  },
+
+  async updatePlatformFaq(id: string, patch: Record<string, unknown>) {
+    return request<{ success: boolean }>(
+      `/api/super-admin/platform/faqs/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+  },
+
+  async deletePlatformFaq(id: string) {
+    return request<{ success: boolean }>(
+      `/api/super-admin/platform/faqs/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  async addPlatformSource(url: string, title?: string) {
+    return request<{ success: boolean }>("/api/super-admin/platform/sources", {
+      method: "POST",
+      body: JSON.stringify({ url, title }),
+    });
+  },
+
+  async deletePlatformSource(id: string) {
+    return request<{ success: boolean }>(
+      `/api/super-admin/platform/sources/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  async updatePlatformSupportRequest(id: string, status: string) {
+    return request<{ success: boolean }>(
+      `/api/super-admin/platform/support-requests/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify({ status }) },
+    );
+  },
+
+  /* ── Product tour ───────────────────────────────────────────────────── */
+
+  async tourPages() {
+    return request<{ pages: TourPageRow[] }>("/api/super-admin/tour");
+  },
+
+  async retriggerTourPage(pageKey: string) {
+    return request<{ success: boolean; version: number }>(
+      `/api/super-admin/tour/${encodeURIComponent(pageKey)}/retrigger`,
+      { method: "POST" },
+    );
+  },
+
+  async updateTourPage(pageKey: string, patch: Record<string, unknown>) {
+    return request<{ success: boolean }>(
+      `/api/super-admin/tour/${encodeURIComponent(pageKey)}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+  },
 };
+
+
 
 async function compressImage(file: File): Promise<string> {
   if (!file.type.match(/^image\/(jpeg|png|webp)$/)) throw new Error("Choose a JPG, PNG, or WebP image.");

@@ -8,12 +8,10 @@ import {
 import {
   AgentConfig,
   BusinessProfile,
-  BusinessSettingsProfile,
   ChatMessage,
   ChatbotConfig,
   Lead,
   WorkspaceBootstrap,
-  WorkspaceSettings,
 } from "./types";
 import { api, ApiError } from "./services/api";
 import {
@@ -329,11 +327,14 @@ const App: React.FC = () => {
    * opened, and never again. Replaces the single 45-step journey that
    * reappeared on every dashboard visit.
    */
-  const pageTour = usePageTour(
-    typeof window !== "undefined"
-      ? window.location.hash.replace(/^#/, "").split("?")[0] || "/"
-      : "/",
-  );
+  /*
+   * usePageTour now tracks the HashRouter location itself. It previously
+   * received window.location.hash read during THIS component's render, but App
+   * sits outside <Router> and does not re-render on navigation — so the hook
+   * kept whichever route was current when App last rendered. That is why tours
+   * fired on the wrong page, or never fired at all after the first navigation.
+   */
+  const pageTour = usePageTour();
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
@@ -584,45 +585,12 @@ const App: React.FC = () => {
       website?: string;
       location?: string;
     };
-    businessProfiles?: BusinessSettingsProfile[];
-  }): Promise<WorkspaceSettings> => {
+  }) => {
     const saved = await api.updateSettings(settings);
     setWorkspace((currentWorkspace) => {
       if (!currentWorkspace) return currentWorkspace;
-
       const savedBusinessProfile =
         saved.businessProfile || settings.businessProfile || {};
-      const savedProfiles =
-        saved.businessProfiles || settings.businessProfiles || [];
-      const savedProfileByKey = new Map(
-        savedProfiles.map((profile) => [
-          `${profile.sourceType}:${profile.sourceId}`,
-          profile,
-        ]),
-      );
-
-      const updatedKnowledgeBases = (currentWorkspace.knowledgeBases || []).map(
-        (base) => {
-          const savedBase = savedProfileByKey.get(`knowledgeBase:${base.id}`);
-          if (!savedBase) return base;
-          return {
-            ...base,
-            businessName: savedBase.name || base.businessName,
-            industry: savedBase.industry ?? base.industry,
-            primaryUrl: savedBase.website ?? base.primaryUrl,
-            metadata: {
-              ...(base.metadata || {}),
-              location: savedBase.location || "",
-              businessProfile: {
-                ...((base.metadata || {}) as Record<string, any>)
-                  .businessProfile,
-                location: savedBase.location || "",
-              },
-            },
-          };
-        },
-      );
-
       return {
         ...currentWorkspace,
         user: saved.account
@@ -648,14 +616,9 @@ const App: React.FC = () => {
           },
           phoneNumber:
             saved.phoneNumber ?? currentWorkspace.organization.phoneNumber,
-          businessProfiles: savedProfiles,
         },
-        knowledgeBases: updatedKnowledgeBases,
-        businessProfiles: savedProfiles,
       };
     });
-
-    return saved;
   };
 
   const handleChangePassword = async (payload: {
@@ -1069,7 +1032,6 @@ const App: React.FC = () => {
                   <Settings
                     org={org}
                     user={user}
-                    knowledgeBases={knowledgeBases}
                     onSave={handleSaveSettings}
                     onRequestPasswordReset={api.requestPasswordReset}
                     onChangePassword={handleChangePassword}

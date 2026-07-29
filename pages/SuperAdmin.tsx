@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import BlogContent from "../components/BlogContent";
+import PlatformAssistantAdmin from "../components/admin/PlatformAssistantAdmin";
+import TourAdmin from "../components/admin/TourAdmin";
 import {
   adminApi,
   getAdminToken,
@@ -15,7 +17,7 @@ import type {
   BlogTemplateKey,
 } from "../services/blogApi";
 
-type AdminTab = "overview" | "users" | "blog";
+type AdminTab = "overview" | "users" | "blog" | "assistant" | "tour";
 type BlogWorkspaceTab = "build" | "automation";
 
 const createId = () =>
@@ -1822,7 +1824,7 @@ const SuperAdmin: React.FC = () => {
             Owner workspace
           </p>
           <nav className="mt-3 space-y-1">
-            {(["overview", "users", "blog"] as AdminTab[]).map((item) => (
+            {(["overview", "users", "blog", "assistant", "tour"] as AdminTab[]).map((item) => (
               <button
                 key={item}
                 type="button"
@@ -1833,7 +1835,11 @@ const SuperAdmin: React.FC = () => {
                   ? "Overview"
                   : item === "users"
                     ? "Users & credit"
-                    : "Blog publishing"}
+                    : item === "blog"
+                      ? "Blog publishing"
+                      : item === "assistant"
+                        ? "Agently assistant"
+                        : "Product tour"}
               </button>
             ))}
           </nav>
@@ -1860,7 +1866,13 @@ const SuperAdmin: React.FC = () => {
                   Super admin
                 </p>
                 <h1 className="mt-1 text-2xl font-semibold capitalize tracking-[-0.045em]">
-                  {tab === "blog" ? "Blog publishing" : tab}
+                  {tab === "blog"
+                    ? "Blog publishing"
+                    : tab === "assistant"
+                      ? "Agently assistant"
+                      : tab === "tour"
+                        ? "Product tour"
+                        : tab}
                 </h1>
               </div>
               <div className="flex items-center gap-2">
@@ -1872,6 +1884,8 @@ const SuperAdmin: React.FC = () => {
                   <option value="overview">Overview</option>
                   <option value="users">Users & credit</option>
                   <option value="blog">Blog publishing</option>
+                  <option value="assistant">Agently assistant</option>
+                  <option value="tour">Product tour</option>
                 </select>
                 <Link
                   to="/"
@@ -2122,6 +2136,9 @@ const SuperAdmin: React.FC = () => {
                 </div>
               </div>
             ) : null}
+
+            {tab === "assistant" ? <PlatformAssistantAdmin /> : null}
+            {tab === "tour" ? <TourAdmin /> : null}
 
             {tab === "blog" ? (
               <div className="space-y-4">

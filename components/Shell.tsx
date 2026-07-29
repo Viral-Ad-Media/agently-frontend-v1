@@ -4,6 +4,7 @@ import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
 import { voiceCallsApi } from "../services/voiceCallsApi";
 import { api } from "../services/api";
+import PlatformAssistant from "./PlatformAssistant";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -1011,6 +1012,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </div>
       </div>
+
+      {/*
+        Floating Agently support assistant. Mounted in MainLayout only: it is
+        an in-product help channel for signed-in tenants, and deliberately does
+        not appear on the public marketing pages.
+      */}
+      <PlatformAssistant />
     </div>
   );
 };
