@@ -927,7 +927,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     <NotificationBell />
                   </span>
 
-                  <div className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 text-[12px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:px-3.5">
+                  <div
+                    data-tour="topbar-agent"
+                    className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 text-[12px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:px-3.5"
+                  >
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
                     <span className="min-w-0 truncate">
                       {activeVoiceAgent.name}
@@ -937,10 +940,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     </span>
                   </div>
 
+                  {/*
+                    The workspace chip names the knowledge base the agents
+                    speak from, so it now opens Knowledge Bases rather than
+                    Settings — the page where that name is actually managed.
+                  */}
                   <Link
-                    to="/settings"
+                    to="/knowledge-bases"
+                    data-tour="topbar-workspace"
                     className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl bg-[#F59E0B] px-3.5 text-[12px] font-normal leading-none text-white shadow-[0_10px_22px_rgba(245,158,11,0.18)] transition hover:bg-[#D97706] sm:max-w-[16rem] sm:px-4"
-                    title={org.profile.name || user.name}
+                    title={`${org.profile.name || user.name} — open knowledge bases`}
                   >
                     <span className="min-w-0 truncate">
                       {org.profile.name || user.name}

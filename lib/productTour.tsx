@@ -837,15 +837,27 @@ export const PageTour: React.FC<{
     if (open) setIndex(0);
   }, [open, page]);
 
-  /* Lock background scrolling so the highlight cannot drift under the user. */
+  /*
+   * Lock background scrolling so the highlight cannot drift under the user.
+   *
+   * FIXED: this used to guard on `open` alone. If a page's steps array was
+   * ever empty, or every step was filtered out by the viewport rules, the
+   * component rendered null — invisible — while this effect had already set
+   * body overflow to hidden. Nothing was on screen to advance or dismiss, so
+   * `open` never flipped back and the cleanup never ran: an invisible page
+   * lock with no way out except a reload.
+   *
+   * Guarding on `step` as well means the lock only exists while something is
+   * actually drawn.
+   */
   useEffect(() => {
-    if (!open) return;
+    if (!open || !step) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [open]);
+  }, [open, step]);
 
   /* ── Locate, act, scroll, measure ─────────────────────────────────────── */
   useEffect(() => {

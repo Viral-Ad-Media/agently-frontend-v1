@@ -99,6 +99,7 @@ const KB_INDUSTRIES = [
 
 const emptyForm = { name: "", website: "", industry: "", description: "" };
 
+
 /* ══════════════════════════════════════════════════════════════════════════
  * AttachmentList — ITEM 17
  * ══════════════════════════════════════════════════════════════════════════
@@ -293,12 +294,16 @@ const SourceList: React.FC<{
               }
               className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900"
             >
-              {selected.length === sources.length ? "Clear all" : "Select all"}
+              {selected.length === sources.length
+                ? "Clear all"
+                : "Select all"}
             </button>
             {suspect.length > 0 ? (
               <button
                 type="button"
-                onClick={() => setSelected(suspect.map((source) => source.id))}
+                onClick={() =>
+                  setSelected(suspect.map((source) => source.id))
+                }
                 className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-800"
               >
                 Select {suspect.length} likely junk

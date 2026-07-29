@@ -4,14 +4,8 @@ import {
   getAvailableTimezones,
   resolveOrgTimezone,
 } from "@/utils/timezones";
-import type {
-  BusinessSettingsProfile,
-  KnowledgeBase,
-  User,
-  WorkspaceSettings,
-} from "../types";
+import type { BusinessProfile, User, WorkspaceSettings } from "../types";
 import SettingsTabs from "../components/SettingsTabs";
-import { api } from "../services/api";
 
 interface SettingsPayload {
   timezone: string;
@@ -20,19 +14,24 @@ interface SettingsPayload {
     name: string;
     email: string;
   };
-  businessProfile?: {
-    name: string;
-    industry: string;
-    website: string;
-    location: string;
-  };
-  businessProfiles: BusinessSettingsProfile[];
+  businessProfile: Pick<BusinessProfile, "name" | "industry" | "website" | "location">;
 }
 
 interface SettingsProps {
   org: any;
   user: User | null;
-  knowledgeBases?: KnowledgeBase[];
+  /*
+   * Returns the saved settings rather than void.
+   *
+   * App.tsx's handleSaveSettings already had the saved record in hand —
+   * api.updateSettings returns it — and was throwing it away. Handing it back
+   * lets this page use the server's canonical values instead of assuming its
+   * optimistic local copy is correct.
+   *
+   * The two files must agree: Promise<T> is NOT assignable to Promise<void>,
+   * so if you revert this line you must also drop the `return saved;` at the
+   * end of handleSaveSettings in App.tsx.
+   */
   onSave: (settings: SettingsPayload) => Promise<WorkspaceSettings>;
   onRequestPasswordReset: (email: string) => Promise<unknown>;
   onChangePassword: (payload: {
@@ -43,191 +42,31 @@ interface SettingsProps {
 
 const cleanEmail = (value: string) => value.trim().toLowerCase();
 const cleanText = (value: string) => value.replace(/\s+/g, " ").trim();
-const cleanWebsite = (value: string) => value.trim();
-
-const profileKey = (profile: BusinessSettingsProfile) =>
-  `${profile.sourceType}:${profile.sourceId}`;
-
-const locationFromMetadata = (metadata: unknown) => {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
-    return "";
-  const record = metadata as Record<string, any>;
-  const direct = record.location;
-  const nested =
-    record.businessProfile?.location || record.business_profile?.location;
-  return typeof direct === "string"
-    ? direct
-    : typeof nested === "string"
-      ? nested
-      : "";
-};
-
-const normalizeBusinessSettingsProfile = (
-  profile: Partial<BusinessSettingsProfile>,
-  index = 0,
-): BusinessSettingsProfile | null => {
-  const sourceType =
-    profile.sourceType === "knowledgeBase"
-      ? "knowledgeBase"
-      : profile.sourceType === "organization"
-        ? "organization"
-        : null;
-  const sourceId =
-    typeof profile.sourceId === "string" && profile.sourceId
-      ? profile.sourceId
-      : typeof profile.id === "string"
-        ? profile.id.replace(/^knowledgeBase:|^organization:/, "")
-        : "";
-  if (!sourceType || !sourceId) return null;
-
-  return {
-    id: `${sourceType}:${sourceId}`,
-    sourceType,
-    sourceId,
-    label:
-      typeof profile.label === "string" && profile.label
-        ? profile.label
-        : sourceType === "knowledgeBase"
-          ? `Business knowledge base ${index + 1}`
-          : "Workspace business",
-    name: typeof profile.name === "string" ? profile.name : "",
-    industry: typeof profile.industry === "string" ? profile.industry : "",
-    website: typeof profile.website === "string" ? profile.website : "",
-    location: typeof profile.location === "string" ? profile.location : "",
-    isPrimary: profile.isPrimary === true,
-  };
-};
-
-const preferKnowledgeBaseBusinesses = (profiles: BusinessSettingsProfile[]) => {
-  const seen = new Set<string>();
-  const deduped = profiles.filter((profile) => {
-    const key = profileKey(profile);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const knowledgeBaseProfiles = deduped.filter(
-    (profile) => profile.sourceType === "knowledgeBase",
-  );
-  return knowledgeBaseProfiles.length ? knowledgeBaseProfiles : deduped;
-};
-
-const buildBusinessProfiles = (
-  org: any,
-  knowledgeBases: KnowledgeBase[] = [],
-  serverProfiles: BusinessSettingsProfile[] = [],
-): BusinessSettingsProfile[] => {
-  const normalizedServerProfiles = serverProfiles
-    .map((profile, index) => normalizeBusinessSettingsProfile(profile, index))
-    .filter(Boolean) as BusinessSettingsProfile[];
-  if (normalizedServerProfiles.length) {
-    return preferKnowledgeBaseBusinesses(normalizedServerProfiles);
-  }
-
-  const kbProfiles = knowledgeBases
-    .map((base, index) =>
-      normalizeBusinessSettingsProfile(
-        {
-          id: `knowledgeBase:${base.id}`,
-          sourceType: "knowledgeBase",
-          sourceId: base.id,
-          label: base.isPrimary
-            ? "Primary knowledge base"
-            : `Business knowledge base ${index + 1}`,
-          name: base.businessName || base.name || "",
-          industry: base.industry || "",
-          website: base.primaryUrl || "",
-          location: locationFromMetadata(base.metadata),
-          isPrimary: base.isPrimary === true,
-        },
-        index,
-      ),
-    )
-    .filter(Boolean) as BusinessSettingsProfile[];
-
-  if (kbProfiles.length) return preferKnowledgeBaseBusinesses(kbProfiles);
-
-  const orgProfile = normalizeBusinessSettingsProfile({
-    id: `organization:${org?.id || "workspace"}`,
-    sourceType: "organization",
-    sourceId: org?.id || "workspace",
-    label: "Workspace business",
-    name: org?.profile?.name || "",
-    industry: org?.profile?.industry || "",
-    website: org?.profile?.website || "",
-    location: org?.profile?.location || "",
-    isPrimary: true,
-  });
-
-  return orgProfile ? [orgProfile] : [];
-};
-
-const normalizeBusinessProfile = (
-  profile: BusinessSettingsProfile,
-): BusinessSettingsProfile => ({
-  ...profile,
-  name: cleanText(profile.name),
-  industry: cleanText(profile.industry || ""),
-  website: cleanWebsite(profile.website || ""),
-  location: cleanText(profile.location || ""),
-});
-
-const comparableProfiles = (profiles: BusinessSettingsProfile[]) =>
-  profiles.map((profile) => ({
-    sourceType: profile.sourceType,
-    sourceId: profile.sourceId,
-    name: cleanText(profile.name),
-    industry: cleanText(profile.industry || ""),
-    website: cleanWebsite(profile.website || ""),
-    location: cleanText(profile.location || ""),
-  }));
 
 const Settings: React.FC<SettingsProps> = ({
   org,
   user,
-  knowledgeBases = [],
   onSave,
   onRequestPasswordReset,
   onChangePassword,
 }) => {
-  const [remoteSettings, setRemoteSettings] =
-    useState<WorkspaceSettings | null>(null);
-
-  const initialTimezone = remoteSettings?.timezone || resolveOrgTimezone(org);
-  const initialPhone =
-    remoteSettings?.phoneNumber ||
-    org?.settings?.phoneNumber ||
-    org?.phoneNumber ||
-    "";
-  const initialAccountName = remoteSettings?.account?.name || user?.name || "";
-  const initialAccountEmail =
-    remoteSettings?.account?.email || user?.email || "";
-  const initialBusinessProfiles = useMemo(
-    () =>
-      buildBusinessProfiles(
-        org,
-        knowledgeBases,
-        remoteSettings?.businessProfiles || [],
-      ),
-    [
-      org?.id,
-      org?.profile?.name,
-      org?.profile?.industry,
-      org?.profile?.website,
-      org?.profile?.location,
-      knowledgeBases,
-      remoteSettings?.businessProfiles,
-    ],
-  );
+  const initialTimezone = resolveOrgTimezone(org);
+  const initialPhone = org?.settings?.phoneNumber || org?.phoneNumber || "";
+  const initialAccountName = user?.name || "";
+  const initialAccountEmail = user?.email || "";
+  const initialBusinessName = org?.profile?.name || "";
+  const initialIndustry = org?.profile?.industry || "";
+  const initialWebsite = org?.profile?.website || "";
+  const initialLocation = org?.profile?.location || "";
 
   const [timezone, setTimezone] = useState(initialTimezone);
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [accountName, setAccountName] = useState(initialAccountName);
   const [accountEmail, setAccountEmail] = useState(initialAccountEmail);
-  const [businessProfiles, setBusinessProfiles] = useState<
-    BusinessSettingsProfile[]
-  >(initialBusinessProfiles);
-  const [activeBusinessIndex, setActiveBusinessIndex] = useState(0);
+  const [businessName, setBusinessName] = useState(initialBusinessName);
+  const [industry, setIndustry] = useState(initialIndustry);
+  const [website, setWebsite] = useState(initialWebsite);
+  const [location, setLocation] = useState(initialLocation);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -250,51 +89,26 @@ const Settings: React.FC<SettingsProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
-    api
-      .getSettings()
-      .then((settings) => {
-        if (!mounted) return;
-        setRemoteSettings(settings);
-      })
-      .catch((error) => {
-        // Settings can still render from bootstrap data. The direct settings fetch
-        // only makes the knowledge-base business pager authoritative when the
-        // bootstrap payload did not include all knowledge bases.
-        console.warn("[settings] could not load live business profiles", error);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (isEditing) return;
     setTimezone(initialTimezone);
     setPhoneNumber(initialPhone);
     setAccountName(initialAccountName);
     setAccountEmail(initialAccountEmail);
-    setBusinessProfiles(initialBusinessProfiles);
-    setActiveBusinessIndex((index) =>
-      Math.min(index, Math.max(0, initialBusinessProfiles.length - 1)),
-    );
+    setBusinessName(initialBusinessName);
+    setIndustry(initialIndustry);
+    setWebsite(initialWebsite);
+    setLocation(initialLocation);
   }, [
     isEditing,
     initialTimezone,
     initialPhone,
     initialAccountName,
     initialAccountEmail,
-    initialBusinessProfiles,
+    initialBusinessName,
+    initialIndustry,
+    initialWebsite,
+    initialLocation,
   ]);
-
-  const activeBusiness =
-    businessProfiles[activeBusinessIndex] || businessProfiles[0];
-  const activeBusinessNumber = businessProfiles.length
-    ? activeBusinessIndex + 1
-    : 0;
-  const totalBusinesses = businessProfiles.length;
 
   const hasUnsavedChanges = useMemo(
     () =>
@@ -302,110 +116,65 @@ const Settings: React.FC<SettingsProps> = ({
       phoneNumber !== initialPhone ||
       accountName !== initialAccountName ||
       cleanEmail(accountEmail) !== cleanEmail(initialAccountEmail) ||
-      JSON.stringify(comparableProfiles(businessProfiles)) !==
-        JSON.stringify(comparableProfiles(initialBusinessProfiles)),
+      businessName !== initialBusinessName ||
+      industry !== initialIndustry ||
+      website !== initialWebsite ||
+      location !== initialLocation,
     [
       timezone,
       phoneNumber,
       accountName,
       accountEmail,
-      businessProfiles,
+      businessName,
+      industry,
+      website,
+      location,
       initialTimezone,
       initialPhone,
       initialAccountName,
       initialAccountEmail,
-      initialBusinessProfiles,
+      initialBusinessName,
+      initialIndustry,
+      initialWebsite,
+      initialLocation,
     ],
   );
-
-  const updateActiveBusiness = (
-    field: keyof Pick<
-      BusinessSettingsProfile,
-      "name" | "industry" | "website" | "location"
-    >,
-    value: string,
-  ) => {
-    setBusinessProfiles((profiles) =>
-      profiles.map((profile, index) =>
-        index === activeBusinessIndex
-          ? { ...profile, [field]: value }
-          : profile,
-      ),
-    );
-  };
-
-  const selectBusinessIndex = (nextIndex: number) => {
-    setActiveBusinessIndex(
-      Math.min(
-        Math.max(nextIndex, 0),
-        Math.max(0, businessProfiles.length - 1),
-      ),
-    );
-    setMessage(null);
-  };
 
   const saveSettings = async () => {
     const nextAccountName = cleanText(accountName);
     const nextEmail = cleanEmail(accountEmail);
-    const cleanedProfiles = businessProfiles.map(normalizeBusinessProfile);
-    const workspaceProfile = cleanedProfiles.find(
-      (profile) => profile.sourceType === "organization",
-    );
+    const nextBusinessName = cleanText(businessName);
 
     if (!nextAccountName) {
       setMessage({ type: "error", text: "Your name is required." });
       return;
     }
     if (!nextEmail || !/^\S+@\S+\.\S+$/.test(nextEmail)) {
-      setMessage({
-        type: "error",
-        text: "Enter a valid account email address.",
-      });
+      setMessage({ type: "error", text: "Enter a valid account email address." });
       return;
     }
-
-    const incompleteProfile = cleanedProfiles.find((profile) => !profile.name);
-    if (incompleteProfile) {
-      setMessage({
-        type: "error",
-        text: `Business name is required for ${incompleteProfile.label || "this business"}.`,
-      });
+    if (!nextBusinessName) {
+      setMessage({ type: "error", text: "Business name is required." });
       return;
     }
 
     setSaving(true);
     setMessage(null);
     try {
-      const saved = await onSave({
+      await onSave({
         timezone,
         phoneNumber,
         account: {
           name: nextAccountName,
           email: nextEmail,
         },
-        ...(workspaceProfile
-          ? {
-              businessProfile: {
-                name: workspaceProfile.name,
-                industry: workspaceProfile.industry || "",
-                website: workspaceProfile.website || "",
-                location: workspaceProfile.location || "",
-              },
-            }
-          : {}),
-        businessProfiles: cleanedProfiles,
+        businessProfile: {
+          name: nextBusinessName,
+          industry: cleanText(industry),
+          website: website.trim(),
+          location: cleanText(location),
+        },
       });
-      const nextBusinessProfiles = buildBusinessProfiles(
-        org,
-        knowledgeBases,
-        saved?.businessProfiles?.length
-          ? saved.businessProfiles
-          : cleanedProfiles,
-      );
-      setRemoteSettings(saved || null);
-      setAccountName(nextAccountName);
-      setAccountEmail(nextEmail);
-      setBusinessProfiles(nextBusinessProfiles);
       setIsEditing(false);
       setMessage({
         type: "success",
@@ -429,8 +198,10 @@ const Settings: React.FC<SettingsProps> = ({
     setPhoneNumber(initialPhone);
     setAccountName(initialAccountName);
     setAccountEmail(initialAccountEmail);
-    setBusinessProfiles(initialBusinessProfiles);
-    setActiveBusinessIndex(0);
+    setBusinessName(initialBusinessName);
+    setIndustry(initialIndustry);
+    setWebsite(initialWebsite);
+    setLocation(initialLocation);
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -442,10 +213,7 @@ const Settings: React.FC<SettingsProps> = ({
   const sendResetLink = async () => {
     const targetEmail = cleanEmail(accountEmail || initialAccountEmail);
     if (!targetEmail) {
-      setPasswordMessage({
-        type: "error",
-        text: "Save an account email first.",
-      });
+      setPasswordMessage({ type: "error", text: "Save an account email first." });
       return;
     }
     setResetSending(true);
@@ -478,10 +246,7 @@ const Settings: React.FC<SettingsProps> = ({
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage({
-        type: "error",
-        text: "New passwords do not match.",
-      });
+      setPasswordMessage({ type: "error", text: "New passwords do not match." });
       return;
     }
 
@@ -492,15 +257,14 @@ const Settings: React.FC<SettingsProps> = ({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordMessage({
-        type: "success",
-        text: "Password updated successfully.",
-      });
+      setPasswordMessage({ type: "success", text: "Password updated successfully." });
     } catch (error) {
       setPasswordMessage({
         type: "error",
         text:
-          error instanceof Error ? error.message : "Could not change password.",
+          error instanceof Error
+            ? error.message
+            : "Could not change password.",
       });
     } finally {
       setPasswordSaving(false);
@@ -514,14 +278,13 @@ const Settings: React.FC<SettingsProps> = ({
       : "border-slate-300 bg-white text-slate-900 focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
   }`;
   const selectClass = `${fieldClass} appearance-none`;
-  const labelClass =
-    "text-[10px] font-black uppercase tracking-widest text-slate-400";
+  const labelClass = "text-[10px] font-black uppercase tracking-widest text-slate-400";
   const sectionClass = "border-b border-slate-200/80 py-6 last:border-b-0";
 
   return (
     <div className="w-full max-w-none pb-8">
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
-        <div className="min-w-0 flex-1">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
             Settings
           </p>
@@ -530,20 +293,15 @@ const Settings: React.FC<SettingsProps> = ({
           </h2>
         </div>
 
-        <div className="flex shrink-0 items-start justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 min-[420px]:flex-row min-[420px]:items-center lg:justify-end">
           {isEditing && (
             <button
               type="button"
               onClick={discardChanges}
               disabled={saving || passwordSaving}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-500 transition hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
-              aria-label="Cancel profile edits"
-              title="Cancel"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <i
-                className="fa-sharp fa-solid fa-xmark text-sm"
-                aria-hidden="true"
-              />
+              Cancel
             </button>
           )}
           <button
@@ -554,29 +312,19 @@ const Settings: React.FC<SettingsProps> = ({
               setPasswordMessage(null);
             }}
             disabled={saving || passwordSaving}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300 bg-white/80 text-slate-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
-            aria-label={
-              isEditing ? "Lock profile fields" : "Edit profile fields"
-            }
-            title={isEditing ? "Lock" : "Edit"}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={isEditing ? "Lock profile fields" : "Edit profile fields"}
           >
-            <i
-              className={`fa-sharp fa-solid ${isEditing ? "fa-lock" : "fa-pen"} text-sm`}
-              aria-hidden="true"
-            />
+            <i className={`fa-sharp fa-solid ${isEditing ? "fa-lock" : "fa-pen"}`} />
+            {isEditing ? "Lock" : "Edit"}
           </button>
           <button
             type="button"
             onClick={() => void saveSettings()}
             disabled={!isEditing || !hasUnsavedChanges || saving}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40 sm:h-10 sm:w-10 sm:rounded-xl"
-            aria-label="Save profile changes"
-            title={saving ? "Saving" : "Save"}
+            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <i
-              className={`fa-sharp fa-solid ${saving ? "fa-spinner fa-spin" : "fa-floppy-disk"} text-sm`}
-              aria-hidden="true"
-            />
+            {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
       </header>
@@ -587,16 +335,14 @@ const Settings: React.FC<SettingsProps> = ({
         <section className={sectionClass} data-tour="settings-general">
           <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="text-base font-black text-slate-900">
-                Customer Account
-              </h3>
+              <h3 className="text-base font-black text-slate-900">Customer Account</h3>
               <p className="mt-1 text-xs font-medium text-slate-500">
                 Name and registered email for the customer account.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="block">
               <span className={labelClass}>Customer name</span>
               <input
@@ -623,115 +369,69 @@ const Settings: React.FC<SettingsProps> = ({
         </section>
 
         <section className={sectionClass}>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-base font-black text-slate-900">
-                Business Profile
-              </h3>
-              <p className="mt-1 text-xs font-medium text-slate-500">
-                Business details used across the workspace.
-              </p>
-            </div>
-
-            {businessProfiles.length > 1 && (
-              <div className="flex items-center gap-2 self-start sm:self-auto sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => selectBusinessIndex(activeBusinessIndex - 1)}
-                  disabled={activeBusinessIndex <= 0 || saving}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-600 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
-                  aria-label="Previous business profile"
-                >
-                  <i className="fa-sharp fa-solid fa-chevron-left" />
-                </button>
-                <span className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">
-                  {activeBusinessNumber} of {totalBusinesses}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => selectBusinessIndex(activeBusinessIndex + 1)}
-                  disabled={
-                    activeBusinessIndex >= businessProfiles.length - 1 || saving
-                  }
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-xs text-slate-600 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-35"
-                  aria-label="Next business profile"
-                >
-                  <i className="fa-sharp fa-solid fa-chevron-right" />
-                </button>
-              </div>
-            )}
+          <div className="mb-5">
+            <h3 className="text-base font-black text-slate-900">Business Profile</h3>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              Business details used across the workspace.
+            </p>
           </div>
 
-          {activeBusiness && (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={labelClass}>Business name</span>
-                  <input
-                    value={activeBusiness.name}
-                    onChange={(event) =>
-                      updateActiveBusiness("name", event.target.value)
-                    }
-                    placeholder="Business name"
-                    disabled={disabled}
-                    className={fieldClass}
-                  />
-                </label>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className={labelClass}>Business name</span>
+              <input
+                value={businessName}
+                onChange={(event) => setBusinessName(event.target.value)}
+                placeholder="Business name"
+                disabled={disabled}
+                className={fieldClass}
+              />
+            </label>
 
-                <label className="block">
-                  <span className={labelClass}>Industry</span>
-                  <input
-                    value={activeBusiness.industry || ""}
-                    onChange={(event) =>
-                      updateActiveBusiness("industry", event.target.value)
-                    }
-                    placeholder="Healthcare, real estate, ecommerce..."
-                    disabled={disabled}
-                    className={fieldClass}
-                  />
-                </label>
+            <label className="block">
+              <span className={labelClass}>Industry</span>
+              <input
+                value={industry}
+                onChange={(event) => setIndustry(event.target.value)}
+                placeholder="Healthcare, real estate, ecommerce..."
+                disabled={disabled}
+                className={fieldClass}
+              />
+            </label>
 
-                <label className="block">
-                  <span className={labelClass}>Website</span>
-                  <input
-                    value={activeBusiness.website || ""}
-                    onChange={(event) =>
-                      updateActiveBusiness("website", event.target.value)
-                    }
-                    placeholder="https://example.com"
-                    disabled={disabled}
-                    className={fieldClass}
-                  />
-                </label>
+            <label className="block">
+              <span className={labelClass}>Website</span>
+              <input
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+                placeholder="https://example.com"
+                disabled={disabled}
+                className={fieldClass}
+              />
+            </label>
 
-                <label className="block">
-                  <span className={labelClass}>Location</span>
-                  <input
-                    value={activeBusiness.location || ""}
-                    onChange={(event) =>
-                      updateActiveBusiness("location", event.target.value)
-                    }
-                    placeholder="City, country"
-                    disabled={disabled}
-                    className={fieldClass}
-                  />
-                </label>
-              </div>
-            </>
-          )}
+            <label className="block">
+              <span className={labelClass}>Location</span>
+              <input
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+                placeholder="City, country"
+                disabled={disabled}
+                className={fieldClass}
+              />
+            </label>
+          </div>
         </section>
 
         <section className={sectionClass}>
           <div className="mb-5">
-            <h3 className="text-base font-black text-slate-900">
-              Workspace Preferences
-            </h3>
+            <h3 className="text-base font-black text-slate-900">Workspace Preferences</h3>
             <p className="mt-1 text-xs font-medium text-slate-500">
               Default phone number and timezone for the organization.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="block">
               <span className={labelClass}>Default timezone</span>
               <select
@@ -764,12 +464,9 @@ const Settings: React.FC<SettingsProps> = ({
         <section className={sectionClass}>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-base font-black text-slate-900">
-                Password Access
-              </h3>
+              <h3 className="text-base font-black text-slate-900">Password Access</h3>
               <p className="mt-1 text-xs font-medium text-slate-500">
-                Change the password in edit mode, or send a reset link to the
-                registered email.
+                Change the password in edit mode, or send a reset link to the registered email.
               </p>
             </div>
             <button
@@ -822,13 +519,7 @@ const Settings: React.FC<SettingsProps> = ({
             <button
               type="button"
               onClick={() => void changePassword()}
-              disabled={
-                !isEditing ||
-                passwordSaving ||
-                (!currentPassword && !!user?.email) ||
-                !newPassword ||
-                !confirmPassword
-              }
+              disabled={!isEditing || passwordSaving || (!currentPassword && !!user?.email) || !newPassword || !confirmPassword}
               className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {passwordSaving ? "Updating..." : "Apply Password Change"}

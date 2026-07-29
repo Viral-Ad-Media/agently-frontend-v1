@@ -1,707 +1,616 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { adminApi, type PlatformAssistantSnapshot } from '../../services/adminApi';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  platformAssistantApi,
+  type AssistantConfig,
+  type AssistantMessage,
+} from '../services/platformAssistantApi';
 
 /**
- * agently/components/admin/PlatformAssistantAdmin.tsx   <-- NEW FILE
+ * agently/components/PlatformAssistant.tsx   <-- NEW FILE
  *
- * Super-admin control panel for Agently's own in-app assistant.
+ * The floating Agently assistant, mounted inside the authenticated dashboard.
  *
- * Four jobs, in the order they matter:
- *   1. Teach it   — FAQs and knowledge sources.
- *   2. Shape it   — persona, greeting, prompts, appearance.
- *   3. Watch it   — support escalations raised by tenants.
- *   4. Audit it   — confidentiality filter hits.
+ * DESIGN INTENT
+ * The launcher is the one place this component spends any boldness: the
+ * Agently mark on a deep navy disc, lifted on a soft shadow, with a slow
+ * four-second breath that says "live" without ever pulling the eye away from
+ * the work. Everything else — the panel, the bubbles, the escalation form —
+ * stays in the existing dashboard vocabulary (#0F172A / #F59E0B, rounded-2xl,
+ * slate borders) so it reads as part of the product rather than a bolted-on
+ * chat vendor.
  *
- * Confidentiality mode itself is intentionally read-only here: there is no
- * legitimate reason to disable vendor secrecy on a customer-facing assistant,
- * and a switch that can leak the stack with one mis-click should not exist.
+ * BEHAVIOUR
+ * - Draggable anywhere on screen; position persists across sessions.
+ * - Dismissible to a slim edge tab, so it can be got out of the way without
+ *   being lost. There is deliberately no permanent dismissal: this is the
+ *   support channel, and a support channel that can be turned off forever is
+ *   a support ticket waiting to happen.
+ * - Respects prefers-reduced-motion: the breath and shimmer stop entirely.
  */
 
-type Section = 'knowledge' | 'behaviour' | 'support' | 'audit';
+const POSITION_KEY = 'agently.assistant.position';
+const HIDDEN_KEY = 'agently.assistant.hidden';
 
-const SECTIONS: Array<{ key: Section; label: string }> = [
-  { key: 'knowledge', label: 'Knowledge & FAQs' },
-  { key: 'behaviour', label: 'Persona & appearance' },
-  { key: 'support', label: 'Escalations' },
-  { key: 'audit', label: 'Confidentiality log' },
-];
+const LAUNCHER_SIZE = 60;
+const EDGE_PADDING = 16;
+const DRAG_THRESHOLD_PX = 4; // below this a pointer-up is a click, not a drag
 
-const card =
-  'rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]';
-const label = 'text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500';
-const input =
-  'mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3.5 text-sm outline-none focus:border-[#F59E0B]';
-const textarea =
-  'mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#F59E0B]';
-const primaryBtn =
-  'h-11 rounded-xl bg-[#0F172A] px-5 text-sm font-bold text-white transition disabled:opacity-40';
-const ghostBtn =
-  'h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:border-slate-300';
+type Point = { x: number; y: number };
 
-const PlatformAssistantAdmin: React.FC = () => {
-  const [snapshot, setSnapshot] = useState<PlatformAssistantSnapshot | null>(
-    null,
-  );
-  const [section, setSection] = useState<Section>('knowledge');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [saving, setSaving] = useState(false);
+const clampToViewport = (point: Point): Point => {
+  if (typeof window === 'undefined') return point;
+  return {
+    x: Math.min(
+      Math.max(point.x, EDGE_PADDING),
+      window.innerWidth - LAUNCHER_SIZE - EDGE_PADDING,
+    ),
+    y: Math.min(
+      Math.max(point.y, EDGE_PADDING),
+      window.innerHeight - LAUNCHER_SIZE - EDGE_PADDING,
+    ),
+  };
+};
 
-  // Persona draft
-  const [form, setForm] = useState({
-    name: '',
-    headerTitle: '',
-    welcomeMessage: '',
-    placeholder: '',
-    accentColor: '#F59E0B',
-    supportEmail: '',
-    customPrompt: '',
-    suggestedPrompts: ['', '', '', ''],
-    isActive: true,
-  });
-  const [spendCap, setSpendCap] = useState('25');
+const defaultPosition = (): Point => {
+  if (typeof window === 'undefined') return { x: 24, y: 24 };
+  return {
+    x: window.innerWidth - LAUNCHER_SIZE - 24,
+    y: window.innerHeight - LAUNCHER_SIZE - 24,
+  };
+};
 
-  // Composers
-  const [faqQuestion, setFaqQuestion] = useState('');
-  const [faqAnswer, setFaqAnswer] = useState('');
-  const [bulkText, setBulkText] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
+const readStoredPosition = (): Point | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(POSITION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Point;
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') {
+      return null;
+    }
+    return clampToViewport(parsed);
+  } catch {
+    return null;
+  }
+};
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await adminApi.platformAssistant();
-      setSnapshot(data);
-      setForm({
-        name: data.chatbot.name,
-        headerTitle: data.chatbot.headerTitle,
-        welcomeMessage: data.chatbot.welcomeMessage,
-        placeholder: data.chatbot.placeholder,
-        accentColor: data.chatbot.accentColor,
-        supportEmail: data.chatbot.supportEmail,
-        customPrompt: data.chatbot.customPrompt,
-        suggestedPrompts: [0, 1, 2, 3].map(
-          (index) => data.chatbot.suggestedPrompts[index] || '',
-        ),
-        isActive: data.chatbot.isActive,
+/** Renders assistant text: paragraphs, bullets, **bold** and [links](url). */
+const RichText: React.FC<{ text: string }> = ({ text }) => {
+  const blocks = text.split(/\n{2,}/).filter(Boolean);
+
+  const inline = (value: string, keyPrefix: string): React.ReactNode[] =>
+    value
+      .split(/(\*\*[^*]+\*\*|\[[^\]]+\]\((?:https?:\/\/|\/)[^)]+\))/g)
+      .filter(Boolean)
+      .map((part, index) => {
+        const key = `${keyPrefix}-${index}`;
+        const bold = /^\*\*([^*]+)\*\*$/.exec(part);
+        if (bold) return <strong key={key}>{bold[1]}</strong>;
+
+        const link = /^\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)]+)\)$/.exec(part);
+        if (link) {
+          return (
+            <a
+              key={key}
+              href={link[2]}
+              target={link[2].startsWith('http') ? '_blank' : undefined}
+              rel="noreferrer"
+              className="font-semibold text-[#B45309] underline underline-offset-2"
+            >
+              {link[1]}
+            </a>
+          );
+        }
+        return <React.Fragment key={key}>{part}</React.Fragment>;
       });
-      setSpendCap(String(data.organization.dailySpendCapUsd));
-    } catch (err) {
-      setError(
-        (err as Error).message ||
-          'Could not load the assistant. Has the platform migration been run?',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const flash = (message: string) => {
-    setNotice(message);
-    window.setTimeout(() => setNotice(''), 4000);
-  };
-
-  const run = async (task: () => Promise<string>) => {
-    setSaving(true);
-    setError('');
-    try {
-      flash(await task());
-      await load();
-    } catch (err) {
-      setError((err as Error).message || 'That did not save.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className={card}>
-        <p className="text-sm text-slate-500">Loading the assistant…</p>
-      </div>
-    );
-  }
-
-  if (!snapshot) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700">
-        {error || 'No platform assistant found.'}
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="ml-3 font-bold underline"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  const spendPct = snapshot.spend.capUsd
-    ? Math.min(100, (snapshot.spend.spentUsd / snapshot.spend.capUsd) * 100)
-    : 0;
 
   return (
-    <div className="space-y-5">
-      {/* ── Status strip ───────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className={card}>
-          <p className={label}>Status</p>
-          <p className="mt-2 flex items-center gap-2 text-lg font-semibold">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                form.isActive ? 'bg-emerald-500' : 'bg-slate-300'
-              }`}
-            />
-            {form.isActive ? 'Live for tenants' : 'Switched off'}
-          </p>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() =>
-              void run(async () => {
-                await adminApi.updatePlatformAssistant({
-                  isActive: !form.isActive,
-                });
-                return form.isActive
-                  ? 'Assistant switched off.'
-                  : 'Assistant is live.';
-              })
-            }
-            className="mt-3 text-xs font-bold text-[#B45309] underline"
-          >
-            {form.isActive ? 'Switch off' : 'Switch on'}
-          </button>
-        </div>
+    <>
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n');
+        const isList = lines.every((line) => /^\s*[-*\d]+[.)]?\s+/.test(line));
 
-        <div className={card}>
-          <p className={label}>Today's spend</p>
-          <p className="mt-2 text-lg font-semibold">
-            ${snapshot.spend.spentUsd.toFixed(2)}
-            <span className="text-sm font-normal text-slate-400">
-              {' '}
-              / ${snapshot.spend.capUsd.toFixed(2)}
-            </span>
-          </p>
-          <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full ${
-                snapshot.spend.degraded ? 'bg-red-500' : 'bg-[#F59E0B]'
-              }`}
-              style={{ width: `${spendPct}%` }}
-            />
-          </div>
-          {snapshot.spend.degraded ? (
-            <p className="mt-2 text-[11px] font-semibold text-red-600">
-              Cap reached — answering from FAQs only.
-            </p>
-          ) : null}
-        </div>
-
-        <div className={card}>
-          <p className={label}>Confidentiality filter</p>
-          <p className="mt-2 text-lg font-semibold">
-            {snapshot.violations.length} blocked
-          </p>
-          <p className="mt-1.5 text-[11px] text-slate-500">
-            Answers stopped before reaching a tenant. Locked on and not editable.
-          </p>
-        </div>
-      </div>
-
-      {notice ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {notice}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      {/* ── Section switcher ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        {SECTIONS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setSection(item.key)}
-            className={`h-10 rounded-xl px-4 text-xs font-bold transition ${
-              section === item.key
-                ? 'bg-[#0F172A] text-white'
-                : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Knowledge ──────────────────────────────────────────────────── */}
-      {section === 'knowledge' ? (
-        <div className="space-y-5">
-          <div className={card}>
-            <p className="text-sm font-semibold">Add an FAQ</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Hand-written answers outrank scraped content and are what the
-              assistant falls back to when the daily cap is reached.
-            </p>
-            <input
-              value={faqQuestion}
-              onChange={(event) => setFaqQuestion(event.target.value)}
-              placeholder="How do I assign a number to an agent?"
-              className={input}
-            />
-            <textarea
-              value={faqAnswer}
-              onChange={(event) => setFaqAnswer(event.target.value)}
-              rows={4}
-              placeholder="Open Phone Numbers, find the number, then choose Assign to agent…"
-              className={textarea}
-            />
-            <button
-              type="button"
-              disabled={saving || !faqQuestion.trim() || !faqAnswer.trim()}
-              onClick={() =>
-                void run(async () => {
-                  await adminApi.createPlatformFaq({
-                    question: faqQuestion,
-                    answer: faqAnswer,
-                  });
-                  setFaqQuestion('');
-                  setFaqAnswer('');
-                  return 'FAQ added.';
-                })
-              }
-              className={`${primaryBtn} mt-3`}
+        if (isList) {
+          return (
+            <ul
+              key={blockIndex}
+              className="my-1.5 list-disc space-y-1 pl-4 marker:text-[#F59E0B]"
             >
-              Add FAQ
-            </button>
-          </div>
-
-          <div className={card}>
-            <p className="text-sm font-semibold">Bulk import</p>
-            <p className="mt-1 text-xs text-slate-500">
-              One per line as <code>question, answer</code>. Only the first comma
-              splits the line, so answers can contain commas.
-            </p>
-            <textarea
-              value={bulkText}
-              onChange={(event) => setBulkText(event.target.value)}
-              rows={6}
-              placeholder={
-                'How do I add credit?, Open Billing and choose Add credit.\nWhere are my call logs?, Call Logs in the left sidebar.'
-              }
-              className={`${textarea} font-mono text-xs`}
-            />
-            <button
-              type="button"
-              disabled={saving || !bulkText.trim()}
-              onClick={() =>
-                void run(async () => {
-                  const result = await adminApi.importPlatformFaqs(bulkText);
-                  setBulkText('');
-                  return `Imported ${result.imported} FAQs.`;
-                })
-              }
-              className={`${primaryBtn} mt-3`}
-            >
-              Import
-            </button>
-          </div>
-
-          <div className={card}>
-            <p className="text-sm font-semibold">Knowledge sources</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Public Agently pages only. Never add internal documentation — the
-              assistant quotes what it is given.
-            </p>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input
-                value={sourceUrl}
-                onChange={(event) => setSourceUrl(event.target.value)}
-                placeholder="https://www.agentlycall.com/features"
-                className={`${input} mt-0 flex-1`}
-              />
-              <button
-                type="button"
-                disabled={saving || !sourceUrl.trim()}
-                onClick={() =>
-                  void run(async () => {
-                    await adminApi.addPlatformSource(sourceUrl.trim());
-                    setSourceUrl('');
-                    return 'Source queued for indexing.';
-                  })
-                }
-                className={primaryBtn}
-              >
-                Add source
-              </button>
-            </div>
-
-            {snapshot.sources.length ? (
-              <ul className="mt-4 divide-y divide-slate-100">
-                {snapshot.sources.map((source) => (
-                  <li
-                    key={source.id}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {source.title || source.url}
-                      </p>
-                      <p className="truncate text-[11px] text-slate-400">
-                        {source.url} · {source.status}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void run(async () => {
-                          await adminApi.deletePlatformSource(source.id);
-                          return 'Source removed.';
-                        })
-                      }
-                      className="shrink-0 text-xs font-bold text-red-500"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-4 text-xs text-slate-400">No sources yet.</p>
-            )}
-          </div>
-
-          <div className={card}>
-            <p className="text-sm font-semibold">
-              FAQs in the knowledge base ({snapshot.faqs.length})
-            </p>
-            {snapshot.faqs.length ? (
-              <ul className="mt-3 divide-y divide-slate-100">
-                {snapshot.faqs.map((faq) => (
-                  <li key={faq.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{faq.question}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                          {faq.answer}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void run(async () => {
-                              await adminApi.updatePlatformFaq(faq.id, {
-                                isPublished: !faq.is_published,
-                              });
-                              return faq.is_published
-                                ? 'FAQ unpublished.'
-                                : 'FAQ published.';
-                            })
-                          }
-                          className="text-[11px] font-bold text-slate-500"
-                        >
-                          {faq.is_published ? 'Unpublish' : 'Publish'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void run(async () => {
-                              await adminApi.deletePlatformFaq(faq.id);
-                              return 'FAQ deleted.';
-                            })
-                          }
-                          className="text-[11px] font-bold text-red-500"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-xs text-slate-400">No FAQs yet.</p>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Behaviour ──────────────────────────────────────────────────── */}
-      {section === 'behaviour' ? (
-        <div className="space-y-5">
-          <div className={card}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={label}>Assistant name</span>
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm({ ...form, name: event.target.value })
-                  }
-                  className={input}
-                />
-              </label>
-              <label className="block">
-                <span className={label}>Panel header</span>
-                <input
-                  value={form.headerTitle}
-                  onChange={(event) =>
-                    setForm({ ...form, headerTitle: event.target.value })
-                  }
-                  className={input}
-                />
-              </label>
-            </div>
-
-            <label className="mt-4 block">
-              <span className={label}>Opening message</span>
-              <textarea
-                value={form.welcomeMessage}
-                onChange={(event) =>
-                  setForm({ ...form, welcomeMessage: event.target.value })
-                }
-                rows={2}
-                className={textarea}
-              />
-            </label>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={label}>Input placeholder</span>
-                <input
-                  value={form.placeholder}
-                  onChange={(event) =>
-                    setForm({ ...form, placeholder: event.target.value })
-                  }
-                  className={input}
-                />
-              </label>
-              <label className="block">
-                <span className={label}>Support email</span>
-                <input
-                  value={form.supportEmail}
-                  onChange={(event) =>
-                    setForm({ ...form, supportEmail: event.target.value })
-                  }
-                  className={input}
-                />
-              </label>
-            </div>
-
-            <div className="mt-4">
-              <span className={label}>Suggested questions (up to four)</span>
-              <div className="mt-1.5 space-y-2">
-                {form.suggestedPrompts.map((prompt, index) => (
-                  <input
-                    key={index}
-                    value={prompt}
-                    onChange={(event) => {
-                      const next = [...form.suggestedPrompts];
-                      next[index] = event.target.value;
-                      setForm({ ...form, suggestedPrompts: next });
-                    }}
-                    placeholder={`Suggestion ${index + 1}`}
-                    className={`${input} mt-0`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <label className="mt-4 block">
-              <span className={label}>Behaviour instructions</span>
-              <p className="mt-1 text-xs text-slate-500">
-                How it should help. The confidentiality rules are appended
-                automatically and always win — do not restate them here, and do
-                not name any vendor, or every answer echoing that name gets
-                blocked.
-              </p>
-              <textarea
-                value={form.customPrompt}
-                onChange={(event) =>
-                  setForm({ ...form, customPrompt: event.target.value })
-                }
-                rows={8}
-                className={textarea}
-              />
-            </label>
-
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() =>
-                void run(async () => {
-                  const result = await adminApi.updatePlatformAssistant({
-                    name: form.name,
-                    headerTitle: form.headerTitle,
-                    welcomeMessage: form.welcomeMessage,
-                    placeholder: form.placeholder,
-                    accentColor: form.accentColor,
-                    supportEmail: form.supportEmail,
-                    customPrompt: form.customPrompt,
-                    suggestedPrompts: form.suggestedPrompts.filter((p) =>
-                      p.trim(),
-                    ),
-                  });
-                  return result.warning || 'Assistant updated.';
-                })
-              }
-              className={`${primaryBtn} mt-5`}
-            >
-              Save changes
-            </button>
-          </div>
-
-          <div className={card}>
-            <p className="text-sm font-semibold">Daily spend cap</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Tenants are never charged for the assistant, so this cost lands on
-              Agently. Past the cap it answers from FAQs only rather than going
-              offline.
-            </p>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={spendCap}
-                onChange={(event) => setSpendCap(event.target.value)}
-                className={`${input} mt-0 sm:max-w-[180px]`}
-              />
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() =>
-                  void run(async () => {
-                    await adminApi.updatePlatformSettings(Number(spendCap));
-                    return 'Spend cap updated.';
-                  })
-                }
-                className={ghostBtn}
-              >
-                Update cap
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Escalations ────────────────────────────────────────────────── */}
-      {section === 'support' ? (
-        <div className={card}>
-          <p className="text-sm font-semibold">
-            Support requests ({snapshot.supportRequests.length})
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Raised by tenants through the assistant. Logged here even when the
-            email fails to send, so nothing is lost.
-          </p>
-          {snapshot.supportRequests.length ? (
-            <ul className="mt-4 divide-y divide-slate-100">
-              {snapshot.supportRequests.map((request) => (
-                <li key={request.id} className="py-3.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        request.status === 'resolved'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : request.status === 'acknowledged'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {request.status}
-                    </span>
-                    <span className="text-sm font-medium">
-                      {request.contact_name || 'Agently customer'}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {request.contact_email}
-                    </span>
-                    {!request.emailed_at ? (
-                      <span className="text-[10px] font-bold text-red-500">
-                        EMAIL NOT SENT
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-slate-600">
-                    {request.body}
-                  </p>
-                  <div className="mt-2 flex gap-3">
-                    {(['acknowledged', 'resolved'] as const).map((status) =>
-                      request.status === status ? null : (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() =>
-                            void run(async () => {
-                              await adminApi.updatePlatformSupportRequest(
-                                request.id,
-                                status,
-                              );
-                              return `Marked ${status}.`;
-                            })
-                          }
-                          className="text-[11px] font-bold text-slate-500 underline"
-                        >
-                          Mark {status}
-                        </button>
-                      ),
-                    )}
-                  </div>
+              {lines.map((line, lineIndex) => (
+                <li key={lineIndex}>
+                  {inline(
+                    line.replace(/^\s*[-*\d]+[.)]?\s+/, ''),
+                    `${blockIndex}-${lineIndex}`,
+                  )}
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="mt-4 text-xs text-slate-400">
-              Nothing escalated yet.
-            </p>
-          )}
-        </div>
-      ) : null}
+          );
+        }
 
-      {/* ── Audit ──────────────────────────────────────────────────────── */}
-      {section === 'audit' ? (
-        <div className={card}>
-          <p className="text-sm font-semibold">Blocked answers</p>
-          <p className="mt-1 text-xs text-slate-500">
-            The assistant was about to name something confidential and the reply
-            was replaced. Each entry is a gap in the knowledge base or the
-            instructions worth closing.
+        return (
+          <p key={blockIndex} className="my-1.5 first:mt-0 last:mb-0">
+            {inline(block, String(blockIndex))}
           </p>
-          {snapshot.violations.length ? (
-            <ul className="mt-4 divide-y divide-slate-100">
-              {snapshot.violations.map((violation) => (
-                <li key={violation.id} className="py-3">
-                  <p className="text-sm font-medium">{violation.question}</p>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Matched:{' '}
-                    <span className="font-mono text-red-600">
-                      {(violation.matched_terms || []).join(', ')}
-                    </span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-xs text-slate-400">
-              Nothing blocked. The filter is running on every answer.
-            </p>
-          )}
-        </div>
-      ) : null}
-    </div>
+        );
+      })}
+    </>
   );
 };
 
-export default PlatformAssistantAdmin;
+const PlatformAssistant: React.FC = () => {
+  const [config, setConfig] = useState<AssistantConfig | null>(null);
+  const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem(HIDDEN_KEY) === '1',
+  );
+  const [position, setPosition] = useState<Point>(defaultPosition);
+  const [dragging, setDragging] = useState(false);
+
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [escalating, setEscalating] = useState(false);
+  const [escalationNote, setEscalationNote] = useState('');
+  const [banner, setBanner] = useState('');
+
+  const dragState = useRef<{ dx: number; dy: number; moved: number } | null>(
+    null,
+  );
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /* ── Load config ────────────────────────────────────────────────────── */
+  useEffect(() => {
+    let cancelled = false;
+    platformAssistantApi
+      .config()
+      .then((result) => {
+        if (cancelled || !result?.enabled) return;
+        setConfig(result);
+        setMessages([{ role: 'assistant', text: result.welcomeMessage }]);
+      })
+      .catch(() => {
+        // Assistant unavailable: stay silent and unmounted. A support widget
+        // announcing its own outage is noise the user cannot act on.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ── Restore + keep position inside the viewport on resize ──────────── */
+  useEffect(() => {
+    const stored = readStoredPosition();
+    if (stored) setPosition(stored);
+
+    const onResize = () => setPosition((current) => clampToViewport(current));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  /* ── Drag ───────────────────────────────────────────────────────────── */
+  const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (open) return;
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    dragState.current = {
+      dx: event.clientX - position.x,
+      dy: event.clientY - position.y,
+      moved: 0,
+    };
+    setDragging(true);
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const state = dragState.current;
+    if (!state) return;
+    const next = clampToViewport({
+      x: event.clientX - state.dx,
+      y: event.clientY - state.dy,
+    });
+    state.moved += Math.abs(next.x - position.x) + Math.abs(next.y - position.y);
+    setPosition(next);
+  };
+
+  const onPointerUp = () => {
+    const state = dragState.current;
+    dragState.current = null;
+    setDragging(false);
+    if (!state) return;
+
+    try {
+      window.localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+    } catch {
+      /* storage disabled — position simply resets next session */
+    }
+
+    // A drag should never also open the panel.
+    if (state.moved <= DRAG_THRESHOLD_PX) setOpen(true);
+  };
+
+  /* ── Hide / restore ─────────────────────────────────────────────────── */
+  const setHiddenPersisted = useCallback((value: boolean) => {
+    setHidden(value);
+    try {
+      window.localStorage.setItem(HIDDEN_KEY, value ? '1' : '0');
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  /* ── Scroll to newest ───────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!open) return;
+    const node = scrollRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [messages, open, sending]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  /* ── Send ───────────────────────────────────────────────────────────── */
+  const send = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text || sending) return;
+
+      const history = messages;
+      setMessages((current) => [...current, { role: 'user', text }]);
+      setInput('');
+      setSending(true);
+
+      try {
+        const result = await platformAssistantApi.chat(text, history);
+        setMessages((current) => [
+          ...current,
+          { role: 'assistant', text: result.response },
+        ]);
+      } catch {
+        setMessages((current) => [
+          ...current,
+          {
+            role: 'assistant',
+            text: `I couldn't reach the assistant just then. Try again in a moment — or email ${
+              config?.supportEmail || 'agentlycallsupport@gmail.com'
+            } and the team will pick it up.`,
+          },
+        ]);
+      } finally {
+        setSending(false);
+      }
+    },
+    [config?.supportEmail, messages, sending],
+  );
+
+  const submitEscalation = useCallback(async () => {
+    const body = escalationNote.trim();
+    if (!body) return;
+    try {
+      const result = await platformAssistantApi.escalate({
+        body,
+        history: messages,
+      });
+      setBanner(result.message);
+      setEscalationNote('');
+      setEscalating(false);
+    } catch {
+      setBanner(
+        `Couldn't log that. Email ${
+          config?.supportEmail || 'agentlycallsupport@gmail.com'
+        } directly and the team will help.`,
+      );
+    }
+  }, [config?.supportEmail, escalationNote, messages]);
+
+  if (!config) return null;
+
+  /* ── Hidden: slim edge tab ──────────────────────────────────────────── */
+  if (hidden) {
+    return (
+      <button
+        type="button"
+        onClick={() => setHiddenPersisted(false)}
+        aria-label="Show the Agently assistant"
+        className="fixed right-0 top-1/2 z-[70] -translate-y-1/2 rounded-l-xl border border-r-0 border-[#0F172A]/12 bg-[#0F172A] py-4 pl-2.5 pr-2 shadow-[0_8px_28px_rgba(15,23,42,0.24)] transition hover:pl-3"
+      >
+        <img
+          src="/agently-mark.png"
+          alt=""
+          className="h-5 w-5 object-contain opacity-90"
+        />
+      </button>
+    );
+  }
+
+  const panelRight = position.x > (window.innerWidth || 1200) / 2;
+
+  return (
+    <>
+      {/*
+        Scoped keyframes. The launcher breathes once every 4s and a highlight
+        sweeps across the disc on the same cycle — enough to read as live,
+        slow enough to ignore. Both stop dead under prefers-reduced-motion.
+      */}
+      <style>{`
+        @keyframes agently-breathe {
+          0%, 72%, 100% { transform: translateY(0) scale(1); }
+          78%           { transform: translateY(-7px) scale(1.045); }
+          84%           { transform: translateY(0) scale(0.985); }
+          89%           { transform: translateY(-2.5px) scale(1.008); }
+          94%           { transform: translateY(0) scale(1); }
+        }
+        @keyframes agently-sheen {
+          0%, 70%  { transform: translateX(-135%) rotate(18deg); opacity: 0; }
+          76%      { opacity: 0.5; }
+          88%      { transform: translateX(135%) rotate(18deg); opacity: 0; }
+          100%     { transform: translateX(135%) rotate(18deg); opacity: 0; }
+        }
+        @keyframes agently-halo {
+          0%, 72%, 100% { opacity: 0.28; transform: scale(1); }
+          80%           { opacity: 0;    transform: scale(1.55); }
+        }
+        @keyframes agently-panel-in {
+          from { opacity: 0; transform: translateY(10px) scale(0.985); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        .agently-breathe { animation: agently-breathe 4s ease-in-out infinite; }
+        .agently-sheen   { animation: agently-sheen   4s ease-in-out infinite; }
+        .agently-halo    { animation: agently-halo    4s ease-in-out infinite; }
+        .agently-panel   { animation: agently-panel-in 180ms cubic-bezier(0.16,1,0.3,1) both; }
+        @media (prefers-reduced-motion: reduce) {
+          .agently-breathe, .agently-sheen, .agently-halo, .agently-panel {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
+      {/* ── Launcher ───────────────────────────────────────────────────── */}
+      {!open ? (
+        <div
+          className="fixed z-[70]"
+          style={{ left: position.x, top: position.y }}
+        >
+          {/* Expanding halo, behind the disc — the "live" signal. */}
+          <span
+            aria-hidden
+            className={`pointer-events-none absolute inset-0 rounded-full bg-[#F59E0B]/45 ${
+              dragging ? '' : 'agently-halo'
+            }`}
+          />
+
+          <button
+            type="button"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            aria-label={`Open ${config.name}`}
+            style={{ width: LAUNCHER_SIZE, height: LAUNCHER_SIZE }}
+            className={`group relative flex touch-none items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#0F172A] shadow-[0_14px_38px_rgba(15,23,42,0.34)] outline-none transition-shadow duration-200 hover:shadow-[0_18px_46px_rgba(15,23,42,0.42)] focus-visible:ring-4 focus-visible:ring-[#F59E0B]/45 ${
+              dragging ? 'cursor-grabbing scale-105' : 'cursor-grab agently-breathe'
+            }`}
+          >
+            <img
+              src="/agently-mark.png"
+              alt=""
+              draggable={false}
+              className="pointer-events-none h-7 w-7 select-none object-contain"
+            />
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/55 to-transparent ${
+                dragging ? '' : 'agently-sheen'
+              }`}
+            />
+            {/* Live dot */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#0F172A] bg-[#34D399]"
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHiddenPersisted(true)}
+            aria-label="Hide the assistant"
+            className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] leading-none text-slate-400 opacity-0 shadow-sm transition hover:text-slate-700 focus-visible:opacity-100 group-hover:opacity-100 md:opacity-0 md:hover:opacity-100"
+            style={{ opacity: dragging ? 0 : undefined }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
+      {/* ── Panel ──────────────────────────────────────────────────────── */}
+      {open ? (
+        <div
+          className={`agently-panel fixed bottom-4 z-[71] flex w-[calc(100vw-2rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] sm:bottom-6 ${
+            panelRight ? 'right-4 sm:right-6' : 'left-4 sm:left-6'
+          }`}
+          style={{ height: 'min(560px, calc(100vh - 6rem))' }}
+          role="dialog"
+          aria-label={config.headerTitle}
+        >
+          <header className="flex items-center gap-3 border-b border-slate-200 bg-[#0F172A] px-4 py-3.5">
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10">
+              <img
+                src="/agently-mark.png"
+                alt=""
+                className="h-4.5 w-[18px] object-contain"
+              />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white">
+                {config.headerTitle}
+              </p>
+              <p className="flex items-center gap-1.5 text-[11px] text-white/55">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />
+                Here to help — ask as much as you like
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close assistant"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg leading-none text-white/60 transition hover:bg-white/10 hover:text-white"
+            >
+              ×
+            </button>
+          </header>
+
+          <div
+            ref={scrollRef}
+            className="flex-1 space-y-3 overflow-y-auto bg-[#F8FAFC] px-4 py-4"
+          >
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${
+                  message.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                <div
+                  className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+                    message.role === 'user'
+                      ? 'rounded-br-md bg-[#0F172A] text-white'
+                      : 'rounded-bl-md border border-slate-200 bg-white text-slate-700'
+                  }`}
+                >
+                  {message.role === 'assistant' ? (
+                    <RichText text={message.text} />
+                  ) : (
+                    message.text
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {sending ? (
+              <div className="flex justify-start">
+                <div className="flex gap-1 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3.5 py-3">
+                  {[0, 1, 2].map((dot) => (
+                    <span
+                      key={dot}
+                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300"
+                      style={{ animationDelay: `${dot * 120}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {messages.length <= 1 && config.suggestedPrompts.length ? (
+              <div className="space-y-2 pt-1">
+                {config.suggestedPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => void send(prompt)}
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-[13px] font-medium text-slate-600 transition hover:border-[#F59E0B] hover:text-[#0F172A]"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {banner ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12px] text-emerald-800">
+                {banner}
+              </div>
+            ) : null}
+          </div>
+
+          {escalating ? (
+            <div className="border-t border-slate-200 bg-white px-4 py-3.5">
+              <p className="text-[12px] font-semibold text-slate-700">
+                Send this to the Agently team
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                They'll reply to your account email. Goes to{' '}
+                {config.supportEmail}.
+              </p>
+              <textarea
+                value={escalationNote}
+                onChange={(event) => setEscalationNote(event.target.value)}
+                rows={3}
+                placeholder="What's happening? Include anything you've already tried."
+                className="mt-2.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#F59E0B]"
+              />
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEscalating(false)}
+                  className="h-9 flex-1 rounded-xl border border-slate-200 text-[12px] font-bold text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!escalationNote.trim()}
+                  onClick={() => void submitEscalation()}
+                  className="h-9 flex-1 rounded-xl bg-[#0F172A] text-[12px] font-bold text-white disabled:opacity-40"
+                >
+                  Send to support
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border-t border-slate-200 bg-white px-3 py-3">
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void send(input);
+                    }
+                  }}
+                  rows={1}
+                  placeholder={config.placeholder}
+                  className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] outline-none transition focus:border-[#F59E0B]"
+                />
+                <button
+                  type="button"
+                  disabled={!input.trim() || sending}
+                  onClick={() => void send(input)}
+                  aria-label="Send message"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F59E0B] text-white transition disabled:opacity-35"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M22 2 11 13" />
+                    <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEscalating(true)}
+                className="mt-2 text-[11px] font-semibold text-slate-400 transition hover:text-[#0F172A]"
+              >
+                Still stuck? Send this to the Agently team
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+export default PlatformAssistant;
