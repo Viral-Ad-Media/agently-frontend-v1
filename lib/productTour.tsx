@@ -722,8 +722,21 @@ export function usePageTour(explicitPathname?: string) {
     }
     if (startedThisSession.current.has(route)) return;
 
-    // A page missing from tour_pages is disabled — do not run it.
-    if (pages.length && !pages.some((page) => page.pageKey === route)) return;
+    /*
+     * A page missing from tour_pages is disabled — do not run it.
+     *
+     * FIXED: this previously read `if (pages.length && !pages.some(...))`.
+     * The `pages.length` guard was there to avoid suppressing tours while the
+     * list was still loading, but it fails OPEN: disable every page in the
+     * super admin dashboard and `pages` comes back empty, the condition
+     * short-circuits to false, and every tour runs anyway — the exact opposite
+     * of what the switch says it does.
+     *
+     * Load-time is already handled by the `loaded` flag above, so the length
+     * check was never doing the job it was added for. An empty list now
+     * correctly means "no tours".
+     */
+    if (!pages.some((page) => page.pageKey === route)) return;
 
     const completed = progress[route] ?? 0;
     if (completed >= versionFor(route)) return;

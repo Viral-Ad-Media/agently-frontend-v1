@@ -39,6 +39,7 @@ import {
   AgentConfig,
   ChatbotConfig,
   KnowledgeBase,
+  KnowledgeSource,
   Organization,
 } from "../types";
 import { api } from "../services/api";
@@ -98,6 +99,275 @@ const KB_INDUSTRIES = [
 
 const emptyForm = { name: "", website: "", industry: "", description: "" };
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * AttachmentList — ITEM 17
+ * ══════════════════════════════════════════════════════════════════════════
+ * Attached agents are the answer to "who speaks from this knowledge base".
+ * They get the space. Everything else is one collapsed control.
+ */
+/**
+ * ITEM 16 — the description column carries a machine-generated topic dump:
+ *   "... Main page topics: A; B; C; Hero Theme - Page Not Found; ..."
+ * The page list below states that properly, so the run-on tail is stripped
+ * here rather than in the database — the raw value stays intact for anything
+ * else that reads it, and a tenant's own hand-written description survives.
+ */
+function cleanKbDescription(value?: string): string {
+  return String(value || "")
+    .replace(/\s*Main page topics:[\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const AttachmentList: React.FC<{
+  kind: string;
+  items: Array<{ id: string; name: string }>;
+  linkedIds: string[];
+  busyPrefix: string;
+  busy: string | null;
+  emptyLink: string;
+  emptyLabel: string;
+  onAttach: (id: string) => void;
+}> = ({
+  kind,
+  items,
+  linkedIds,
+  busyPrefix,
+  busy,
+  emptyLink,
+  emptyLabel,
+  onAttach,
+}) => {
+  const [picking, setPicking] = useState(false);
+  const linked = items.filter((item) => linkedIds.includes(item.id));
+  const available = items.filter((item) => !linkedIds.includes(item.id));
+
+  if (items.length === 0) {
+    return (
+      <p className="text-xs text-slate-400">
+        No {kind}s yet.{" "}
+        <Link to={emptyLink} className="font-bold text-amber-600">
+          {emptyLabel}
+        </Link>
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {linked.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2.5 text-xs text-slate-400">
+          Nothing attached. This knowledge base is not being used by any {kind}{" "}
+          yet.
+        </p>
+      ) : (
+        linked.map((item) => (
+          <div
+            key={item.id}
+            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <span className="min-w-0 truncate">{item.name}</span>
+          </div>
+        ))
+      )}
+
+      {available.length > 0 ? (
+        picking ? (
+          <div className="rounded-xl border border-slate-200 p-1.5">
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {available.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={busy === `${busyPrefix}-${item.id}`}
+                  onClick={() => {
+                    onAttach(item.id);
+                    setPicking(false);
+                  }}
+                  className="w-full truncate rounded-lg px-2.5 py-1.5 text-left text-xs font-bold text-slate-600 transition hover:bg-amber-50 hover:text-amber-700 disabled:opacity-40"
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPicking(false)}
+              className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-amber-300 hover:text-amber-700"
+          >
+            + Attach a {kind}
+          </button>
+        )
+      ) : null}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SourceList — ITEM 16
+ * ══════════════════════════════════════════════════════════════════════════
+ * The knowledge base description was rendering as a run-on sentence:
+ *
+ *   "Website knowledge scraped from x.com. Main page topics: Ecomm Theme -
+ *    Home Page; Blood Sugar Ultra – Natural Support for Healthy Glucose Leve;
+ *    ...; Hero Theme - Page Not Found; Hero Theme - Page Not Found; ..."
+ *
+ * Three things wrong with that. It is unreadable; the titles are truncated
+ * mid-word by whatever generated it; and it surfaces junk pages ("Page Not
+ * Found", duplicates) with no way to act on them. Read-only prose about your
+ * data is the least useful form it can take.
+ *
+ * The same information is now the source rows themselves — collapsible,
+ * selectable, with bulk removal. The generated topic list is stripped from the
+ * description, since the list below says it properly.
+ */
+const SOURCE_JUNK = /(page not found|404|untitled|^all$)/i;
+
+const SourceList: React.FC<{
+  sources: KnowledgeSource[];
+  busy: string | null;
+  onRemove: (ids: string[]) => void;
+}> = ({ sources, busy, onRemove }) => {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const toggle = (id: string) =>
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+
+  const suspect = sources.filter((source) =>
+    SOURCE_JUNK.test(source.title || ""),
+  );
+
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-2xl border border-slate-200">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+            Pages in this knowledge base
+          </span>
+          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+            {sources.length}
+          </span>
+          {suspect.length > 0 && !open ? (
+            <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              {suspect.length} may be junk
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-xs text-slate-400">
+          {open ? "Hide" : "Show"}
+        </span>
+      </button>
+
+      {open ? (
+        <div className="border-t border-slate-200">
+          <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(
+                  selected.length === sources.length
+                    ? []
+                    : sources.map((source) => source.id),
+                )
+              }
+              className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900"
+            >
+              {selected.length === sources.length ? "Clear all" : "Select all"}
+            </button>
+            {suspect.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSelected(suspect.map((source) => source.id))}
+                className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-800"
+              >
+                Select {suspect.length} likely junk
+              </button>
+            ) : null}
+            <span className="flex-1" />
+            {selected.length > 0 ? (
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => {
+                  onRemove(selected);
+                  setSelected([]);
+                }}
+                className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-40"
+              >
+                Remove {selected.length}
+              </button>
+            ) : null}
+          </div>
+
+          <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+            {sources.map((source) => {
+              const isSuspect = SOURCE_JUNK.test(source.title || "");
+              return (
+                <li
+                  key={source.id}
+                  className="flex items-start gap-3 px-4 py-2.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(source.id)}
+                    onChange={() => toggle(source.id)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`truncate text-xs font-bold ${
+                        isSuspect ? "text-amber-700" : "text-slate-700"
+                      }`}
+                      title={source.title || source.url}
+                    >
+                      {source.title || source.url}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-slate-400">
+                      {source.url}
+                      {source.chunkCount
+                        ? ` · ${source.chunkCount} passages`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy)}
+                    onClick={() => onRemove([source.id])}
+                    className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-300 transition hover:text-rose-600 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   org,
   initialKnowledgeBases = [],
@@ -151,6 +421,43 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
       setLoaded(true);
     }
   }, [showToast]);
+
+  /**
+   * ITEM 16 — bulk page removal.
+   *
+   * Deletes run sequentially rather than via Promise.all: each one cascades to
+   * the source's knowledge chunks server-side, and firing twenty concurrent
+   * cascades at Supabase is how you get partial failures that leave orphaned
+   * chunks still being retrieved into agent prompts.
+   */
+  const removeSources = useCallback(
+    async (knowledgeBaseId: string, sourceIds: string[]) => {
+      if (!sourceIds.length) return;
+      setBusy(`sources-${knowledgeBaseId}`);
+      let removed = 0;
+      try {
+        for (const sourceId of sourceIds) {
+          await api.deleteKnowledgeSource(knowledgeBaseId, sourceId);
+          removed += 1;
+        }
+        showToast(
+          `Removed ${removed} page${removed === 1 ? "" : "s"} from this knowledge base.`,
+        );
+      } catch (error) {
+        showToast(
+          removed
+            ? `Removed ${removed}, then hit an error. Try the rest again.`
+            : "Could not remove those pages.",
+          false,
+        );
+      } finally {
+        setBusy(null);
+        await loadAll();
+        onChanged?.();
+      }
+    },
+    [loadAll, onChanged, showToast],
+  );
 
   useEffect(() => {
     if (!initialKnowledgeBases.length) void loadAll();
@@ -308,23 +615,24 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
       )}
 
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
-        <div className="min-w-0 flex-1">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
             Settings
           </p>
           <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
             Knowledge Bases
           </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+            What your agents know. Choose the pages worth learning from — you're
+            charged per page read, so fewer, better pages usually wins.
+          </p>
         </div>
         <button
-          type="button"
           onClick={() => setCreateOpen(true)}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 sm:h-10 sm:w-10 sm:rounded-xl"
-          aria-label="New knowledge base"
-          title="New knowledge base"
+          className="rounded-2xl bg-slate-900 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
         >
-          <i className="fa-sharp fa-solid fa-plus text-sm" aria-hidden="true" />
+          + New knowledge base
         </button>
       </header>
 
@@ -396,9 +704,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                       <h3 className="text-base font-black text-slate-900">
                         {active.name}
                       </h3>
-                      {(active as any).description && (
+                      {cleanKbDescription((active as any).description) && (
                         <p className="mt-1 text-xs text-slate-500">
-                          {(active as any).description}
+                          {cleanKbDescription((active as any).description)}
                         </p>
                       )}
                     </div>
@@ -410,94 +718,67 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                     </button>
                   </div>
 
-                  {/* Assignment */}
+                  {/*
+                    ITEM 17 — this used to render EVERY voice agent and EVERY
+                    chatbot in the workspace as a button, with a tick on the
+                    ones attached. With six agents and six chatbots that is a
+                    wall of near-identical "My Chatbot ✓" rows, and it answers
+                    the wrong question: what you want to know when looking at a
+                    knowledge base is which agents speak from it, not an
+                    inventory of everything in the account.
+
+                    Attached agents are now the content. Attaching another is a
+                    deliberate, collapsed action — available, but not competing
+                    with the thing you came to read.
+                  */}
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div>
                       <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Voice agents
                       </p>
-                      {agents.length === 0 ? (
-                        <p className="text-xs text-slate-400">
-                          No agents yet.{" "}
-                          <Link
-                            to="/agent-settings"
-                            className="font-bold text-amber-600"
-                          >
-                            Create one
-                          </Link>
-                        </p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {agents.map((agent) => {
-                            const linked = (
-                              (active as any).linkedVoiceAgentIds || []
-                            ).includes(agent.id);
-                            return (
-                              <button
-                                key={agent.id}
-                                disabled={
-                                  linked || busy === `agent-${agent.id}`
-                                }
-                                onClick={() =>
-                                  void assignAgent(agent, active.id)
-                                }
-                                className={`w-full rounded-xl border px-3 py-2 text-left text-xs font-bold transition-all ${
-                                  linked
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-200 hover:border-amber-300"
-                                }`}
-                              >
-                                {agent.name} {linked && "✓"}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <AttachmentList
+                        kind="voice agent"
+                        items={agents.map((a) => ({ id: a.id, name: a.name }))}
+                        linkedIds={(active as any).linkedVoiceAgentIds || []}
+                        busyPrefix="agent"
+                        busy={busy}
+                        emptyLink="/agent"
+                        emptyLabel="Create one"
+                        onAttach={(id) => {
+                          const agent = agents.find((a) => a.id === id);
+                          if (agent) void assignAgent(agent, active.id);
+                        }}
+                      />
                     </div>
 
                     <div>
                       <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Chatbots
                       </p>
-                      {chatbots.length === 0 ? (
-                        <p className="text-xs text-slate-400">
-                          No chatbots yet.{" "}
-                          <Link
-                            to="/messenger"
-                            className="font-bold text-amber-600"
-                          >
-                            Create one
-                          </Link>
-                        </p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {chatbots.map((bot) => {
-                            const linked = (
-                              (active as any).linkedChatbotIds || []
-                            ).includes(bot.id);
-                            return (
-                              <button
-                                key={bot.id}
-                                disabled={
-                                  linked || busy === `chatbot-${bot.id}`
-                                }
-                                onClick={() =>
-                                  void assignChatbot(bot, active.id)
-                                }
-                                className={`w-full rounded-xl border px-3 py-2 text-left text-xs font-bold transition-all ${
-                                  linked
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-200 hover:border-amber-300"
-                                }`}
-                              >
-                                {bot.name} {linked && "✓"}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <AttachmentList
+                        kind="chatbot"
+                        items={chatbots.map((c) => ({
+                          id: c.id,
+                          name: (c as any).name || "Chatbot",
+                        }))}
+                        linkedIds={(active as any).linkedChatbotIds || []}
+                        busyPrefix="chatbot"
+                        busy={busy}
+                        emptyLink="/messenger"
+                        emptyLabel="Create one"
+                        onAttach={(id) => {
+                          const bot = chatbots.find((c) => c.id === id);
+                          if (bot) void assignChatbot(bot, active.id);
+                        }}
+                      />
                     </div>
                   </div>
+
+                  <SourceList
+                    sources={(active as any).sources || []}
+                    busy={busy}
+                    onRemove={(ids) => void removeSources(active.id, ids)}
+                  />
                 </div>
 
                 {/*

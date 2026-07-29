@@ -23,7 +23,11 @@ import {
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
-import { PageTour, usePageTour } from "./lib/productTour";
+// ─────────────────────────────────────────────────────────────────────────
+// PRODUCT TOUR REMOVED — 3 blocks in this file, all marked "PRODUCT TOUR
+// REMOVED". Uncomment all three to restore. See TOUR-REMOVAL.txt.
+// ─────────────────────────────────────────────────────────────────────────
+// import { PageTour, usePageTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -334,7 +338,10 @@ const App: React.FC = () => {
    * kept whichever route was current when App last rendered. That is why tours
    * fired on the wrong page, or never fired at all after the first navigation.
    */
-  const pageTour = usePageTour();
+  // PRODUCT TOUR REMOVED — this call is what issued GET /api/tour/state and
+  // ran a 300ms route poll on every page. Disabling the render alone did not
+  // stop either of those.
+  // const pageTour = usePageTour();
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
@@ -619,6 +626,12 @@ const App: React.FC = () => {
         },
       };
     });
+
+    // Settings.tsx types onSave as returning the saved settings. This function
+    // updated local state and then returned nothing, so its inferred type was
+    // Promise<void>. api.updateSettings already gives us the saved record —
+    // handing it back costs nothing and is strictly more useful than void.
+    return saved;
   };
 
   const handleChangePassword = async (payload: {
@@ -662,12 +675,14 @@ const App: React.FC = () => {
           component simply was not on the page. ProtectedRoute wraps every
           authenticated page, so one mount covers all of them.
         */}
+        {/* PRODUCT TOUR REMOVED
         <PageTour
           page={pageTour.page || ""}
           steps={pageTour.steps}
           open={pageTour.open}
           onClose={pageTour.close}
         />
+        */}
       </MainLayout>
     );
   };
