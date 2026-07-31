@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Invoice, Organization } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 import SettingsTabs from "../components/SettingsTabs";
@@ -200,6 +200,9 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
   const [usageRange, setUsageRange] = useState<UsageRange>("all");
+  const mountedRef = useRef(true);
+  const billingRequestInFlight = useRef(false);
+  const billingRequestIdRef = useRef(0);
 
   const wallet = billing.wallet || {};
   const balance = Number(wallet.balanceUsd ?? 0);
@@ -211,9 +214,15 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     1,
   );
 
-  const loadBilling = async () => {
-    setLoading(true);
-    setError("");
+  const loadBilling = useCallback(async (options?: { silent?: boolean }) => {
+    if (billingRequestInFlight.current) return;
+    billingRequestInFlight.current = true;
+    const requestId = ++billingRequestIdRef.current;
+    const silent = Boolean(options?.silent);
+    if (mountedRef.current && !silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = (await api.getBillingSummary()) as BillingMetrics;
       if (response?.organizationId && response.organizationId !== org.id) {
@@ -221,6 +230,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
           "Billing summary returned a different organization. Please log out and log back in before continuing.",
         );
       }
+      if (!mountedRef.current || requestId !== billingRequestIdRef.current) return;
       setBilling(response);
       const nextBalance = Number(response?.wallet?.balanceUsd);
       if (Number.isFinite(nextBalance)) {
@@ -235,29 +245,51 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         );
       }
     } catch (err) {
-      setError(cleanError(err, "Unable to load billing details."));
+      if (mountedRef.current && requestId === billingRequestIdRef.current) {
+        setError(cleanError(err, "Unable to load billing details."));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === billingRequestIdRef.current) {
+        billingRequestInFlight.current = false;
+      }
+      if (
+        mountedRef.current &&
+        requestId === billingRequestIdRef.current &&
+        !silent
+      ) {
+        setLoading(false);
+      }
     }
-  };
+  }, [org.id]);
 
   useEffect(() => {
+    mountedRef.current = true;
     void loadBilling();
-    const timer = window.setInterval(() => void loadBilling(), 5000);
+    const refreshInBackground = () => {
+      if (document.visibilityState === "visible") {
+        void loadBilling({ silent: true });
+      }
+    };
+    const timer = window.setInterval(refreshInBackground, 30000);
     const refreshHandler = (event: Event) => {
       const detail =
         (event as CustomEvent<{ organizationId?: string; source?: string }>)
           .detail || {};
       if (detail.organizationId && detail.organizationId !== org.id) return;
       if (detail.source === "billing-summary") return;
-      void loadBilling();
+      void loadBilling({ silent: true });
     };
     window.addEventListener("agently:wallet-refresh", refreshHandler);
+    document.addEventListener("visibilitychange", refreshInBackground);
     return () => {
+      mountedRef.current = false;
+      billingRequestIdRef.current += 1;
+      billingRequestInFlight.current = false;
       window.clearInterval(timer);
       window.removeEventListener("agently:wallet-refresh", refreshHandler);
+      document.removeEventListener("visibilitychange", refreshInBackground);
     };
-  }, [org.id]);
+  }, [loadBilling, org.id]);
 
   useEffect(() => {
     setTopUpAmount(String(minimumRecharge));
@@ -372,10 +404,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     <div className="space-y-6 pb-12 text-[#0F172A]">
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F59E0B]">
-            Settings
-          </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-[#0F172A] sm:text-3xl">
+          <h2 className="text-2xl font-black tracking-tight text-[#0F172A] sm:text-3xl">
             Billing & usage
           </h2>
           <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-[#64748B] sm:block">

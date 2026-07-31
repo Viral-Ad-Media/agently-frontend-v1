@@ -2078,11 +2078,15 @@ main {
 
   .agently-app-topbar-inner,
   .agently-topbar-actions {
-    max-width: 100vw;
+    max-width: 100%;
   }
 
   .agently-topbar-actions>* {
     min-width: 0;
+  }
+
+  .agently-topbar-actions {
+    margin-inline: auto;
   }
 }
 
@@ -2235,7 +2239,7 @@ main {
   }
 
   .agently-mobile-metric-card {
-    min-height: 74px;
+    min-height: 62px;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -2552,4 +2556,24 @@ textarea,
 [role="listbox"] *,
 .agently-dropdown * {
   flex-wrap: initial;
+}
+/* Knowledge Base mobile layout: two bounded assignment columns at every
+   phone width, including the global <=380px grid fallback above. */
+.agently-kb-page,
+.agently-kb-page > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agently-kb-agent-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 639px) {
+  .agently-kb-page button,
+  .agently-kb-page input,
+  .agently-kb-page select,
+  .agently-kb-page textarea {
+    min-width: 0;
+  }
 }

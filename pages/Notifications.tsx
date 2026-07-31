@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState, useTransition } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../components/AppModal";
 import { voiceCallsApi } from "../services/voiceCallsApi";
@@ -52,11 +58,6 @@ const truncateText = (value: string, maxLength = 220) => {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
 };
-
-const yieldToBrowser = () =>
-  new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 0);
-  });
 
 const getString = (value: unknown, fallback = "") =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -200,47 +201,61 @@ const Notifications: React.FC = () => {
   );
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [, startTransition] = useTransition();
+  const mountedRef = useRef(true);
+  const loadRequestRef = useRef(0);
+  const toastTimerRef = useRef<number | null>(null);
 
-  const showToast = (
-    message: string,
-    tone: "success" | "error" = "success",
-  ) => {
-    setToast({ message, tone });
-    window.setTimeout(() => setToast(null), 3500);
-  };
+  const showToast = useCallback(
+    (message: string, tone: "success" | "error" = "success") => {
+      if (!mountedRef.current) return;
+      setToast({ message, tone });
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => {
+        if (mountedRef.current) setToast(null);
+        toastTimerRef.current = null;
+      }, 3500);
+    },
+    [],
+  );
 
-  const loadNotifications = async () => {
-    setLoading(true);
+  const loadNotifications = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    if (mountedRef.current) setLoading(true);
     try {
-      await yieldToBrowser();
       const [listPayload, countPayload] = await Promise.all([
         voiceCallsApi.notifications.getNotifications({ limit: 100 }),
         voiceCallsApi.notifications.getUnreadNotificationCount(),
       ]);
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       const next = getNotificationArray(listPayload);
-      startTransition(() => {
-        setNotifications(next);
-        setUnreadCount(
-          getUnreadCount(countPayload) ||
-            next.filter((item) => !item.isRead).length,
-        );
-        setSelectedIds(new Set());
-      });
+      setNotifications(next);
+      setUnreadCount(
+        getUnreadCount(countPayload) ||
+          next.filter((item) => !item.isRead).length,
+      );
+      setSelectedIds(new Set());
     } catch (error) {
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       showToast(
         getFriendlyError(error, "Could not load notifications."),
         "error",
       );
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestId === loadRequestRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadNotifications(), 0);
-    return () => window.clearTimeout(timer);
-  }, []);
+    mountedRef.current = true;
+    void loadNotifications();
+    return () => {
+      mountedRef.current = false;
+      loadRequestRef.current += 1;
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, [loadNotifications]);
 
   useEffect(() => {
     setPage(1);
@@ -446,28 +461,28 @@ const Notifications: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-4">
+          <p className="truncate text-[8px] font-black uppercase tracking-[0.14em] text-slate-400 sm:text-[10px] sm:tracking-[0.2em]">
             Total alerts
           </p>
-          <p className="mt-2 text-3xl font-black text-slate-900">
+          <p className="mt-1 text-xl font-black leading-none text-slate-900 sm:mt-2 sm:text-2xl">
             {notifications.length}
           </p>
         </div>
-        <div className="rounded-[1.75rem] border border-amber-100 bg-amber-50 p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">
+        <div className="min-w-0 rounded-xl border border-amber-100 bg-amber-50 p-3 shadow-sm sm:rounded-2xl sm:p-4">
+          <p className="truncate text-[8px] font-black uppercase tracking-[0.14em] text-amber-700 sm:text-[10px] sm:tracking-[0.2em]">
             Unread
           </p>
-          <p className="mt-2 text-3xl font-black text-amber-700">
+          <p className="mt-1 text-xl font-black leading-none text-amber-700 sm:mt-2 sm:text-2xl">
             {unreadCount}
           </p>
         </div>
-        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-4">
+          <p className="truncate text-[8px] font-black uppercase tracking-[0.14em] text-slate-400 sm:text-[10px] sm:tracking-[0.2em]">
             Latest
           </p>
-          <p className="mt-2 text-sm font-bold text-slate-700">
+          <p className="mt-1 truncate text-[10px] font-bold leading-tight text-slate-700 sm:mt-2 sm:text-sm">
             {notifications[0]
               ? formatDate(notifications[0].createdAt)
               : "No alerts yet"}

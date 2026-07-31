@@ -33,7 +33,7 @@
  * acts on it.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AgentConfig,
@@ -155,17 +155,16 @@ const AttachmentList: React.FC<{
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       {linked.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2.5 text-xs text-slate-400">
-          Nothing attached. This knowledge base is not being used by any {kind}{" "}
-          yet.
+        <p className="rounded-xl border border-dashed border-slate-200 px-2.5 py-2.5 text-[11px] leading-4 text-slate-400 sm:px-3 sm:text-xs">
+          No {kind} attached.
         </p>
       ) : (
         linked.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+            className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] font-bold text-emerald-700 sm:px-3 sm:text-xs"
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
             <span className="min-w-0 truncate">{item.name}</span>
@@ -204,9 +203,10 @@ const AttachmentList: React.FC<{
           <button
             type="button"
             onClick={() => setPicking(true)}
-            className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-amber-300 hover:text-amber-700"
+            className="w-full rounded-xl border border-dashed border-slate-300 px-2 py-2 text-[11px] font-bold text-slate-500 transition hover:border-amber-300 hover:text-amber-700 sm:px-3 sm:text-xs"
           >
-            + Attach a {kind}
+            <span className="sm:hidden">+ Attach</span>
+            <span className="hidden sm:inline">+ Attach a {kind}</span>
           </button>
         )
       ) : null}
@@ -256,21 +256,21 @@ const SourceList: React.FC<{
   if (sources.length === 0) return null;
 
   return (
-    <div className="mt-5 rounded-2xl border border-slate-200">
+    <div className="mt-5 min-w-0 overflow-hidden rounded-2xl border border-slate-200">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-3 text-left sm:gap-3 sm:px-4"
       >
-        <span className="min-w-0">
-          <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 sm:text-xs sm:tracking-widest">
             Pages in this knowledge base
           </span>
-          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
             {sources.length}
           </span>
           {suspect.length > 0 && !open ? (
-            <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
               {suspect.length} may be junk
             </span>
           ) : null}
@@ -282,7 +282,7 @@ const SourceList: React.FC<{
 
       {open ? (
         <div className="border-t border-slate-200">
-          <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
             <button
               type="button"
               onClick={() =>
@@ -331,7 +331,7 @@ const SourceList: React.FC<{
               return (
                 <li
                   key={source.id}
-                  className="flex items-start gap-3 px-4 py-2.5"
+                  className="flex min-w-0 items-start gap-2 px-3 py-2.5 sm:gap-3 sm:px-4"
                 >
                   <input
                     type="checkbox"
@@ -359,7 +359,7 @@ const SourceList: React.FC<{
                     type="button"
                     disabled={Boolean(busy)}
                     onClick={() => onRemove([source.id])}
-                    className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-300 transition hover:text-rose-600 disabled:opacity-40"
+                    className="shrink-0 text-[9px] font-black uppercase tracking-wider text-slate-300 transition hover:text-rose-600 disabled:opacity-40 sm:text-[10px] sm:tracking-widest"
                   >
                     Remove
                   </button>
@@ -391,6 +391,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBase | null>(null);
   const [deleteCheck, setDeleteCheck] = useState<DeleteCheck | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const toastTimerRef = useRef<number | null>(null);
 
   const agents = useMemo<AgentConfig[]>(
     () => org.voiceAgents || [],
@@ -403,8 +404,19 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
 
   const showToast = useCallback((text: string, ok = true) => {
     setToast({ ok, text });
-    window.setTimeout(() => setToast(null), 4500);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 4500);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
 
   // ── Loading ───────────────────────────────────────────────────────────────
   //
@@ -607,7 +619,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="agently-kb-page min-w-0 space-y-4 overflow-x-hidden pb-8 sm:space-y-5">
       {toast && (
         <div
           className={`rounded-2xl border p-4 text-sm font-bold ${
@@ -620,24 +632,22 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
       )}
 
-      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
-            Settings
-          </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+      <header className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-4 sm:gap-3 sm:pb-5">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-xl font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
             Knowledge Bases
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+          <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-slate-500 sm:block">
             What your agents know. Choose the pages worth learning from — you're
             charged per page read, so fewer, better pages usually wins.
           </p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="rounded-2xl bg-slate-900 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
+          className="inline-flex h-10 max-w-[44%] shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-slate-900 px-3 text-[10px] font-black uppercase tracking-wider text-white hover:bg-amber-600 sm:h-auto sm:max-w-none sm:rounded-2xl sm:px-5 sm:py-2.5 sm:tracking-widest"
         >
-          + New knowledge base
+          <span className="sm:hidden">+ New KB</span>
+          <span className="hidden sm:inline">+ New knowledge base</span>
         </button>
       </header>
 
@@ -665,7 +675,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         // chatbot and voice-agent cards - with the detail underneath using the
         // full width. It was a narrow left column wasting most of the row.
         <div className="space-y-5">
-          <div className="agently-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
             {bases.map((kb) => {
               const isActive = kb.id === activeId;
               const pending = (kb as any).pendingChangeCount || 0;
@@ -673,7 +683,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                 <button
                   key={kb.id}
                   onClick={() => setActiveId(kb.id)}
-                  className={`w-[15rem] shrink-0 rounded-2xl border p-4 text-left transition-all ${
+                  className={`min-w-0 rounded-2xl border p-3 text-left transition-all sm:p-4 ${
                     isActive
                       ? "border-amber-400 bg-amber-50 shadow-sm ring-2 ring-amber-200"
                       : "border-slate-200 bg-white hover:border-amber-300"
@@ -703,9 +713,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
           <section className="space-y-4">
             {active ? (
               <>
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <h3 className="text-base font-black text-slate-900">
                         {active.name}
                       </h3>
@@ -736,8 +746,8 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                     deliberate, collapsed action — available, but not competing
                     with the thing you came to read.
                   */}
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div>
+                  <div className="agently-kb-agent-columns mt-5 grid min-w-0 grid-cols-2 gap-2 sm:gap-4">
+                    <div className="min-w-0">
                       <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Voice agents
                       </p>
@@ -756,7 +766,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                       />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Chatbots
                       </p>

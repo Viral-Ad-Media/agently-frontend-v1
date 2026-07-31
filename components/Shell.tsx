@@ -152,7 +152,7 @@ const WalletCreditBadge: React.FC<{
   return (
     <Link
       to="/billing"
-      className={`group inline-flex h-10 items-center justify-between gap-3 rounded-xl border px-3 text-[12px] font-normal leading-none transition hover:-translate-y-0.5 hover:shadow-sm sm:h-10 sm:px-3.5 ${tone} ${compact ? "w-full" : "min-w-[8.75rem]"}`}
+      className={`group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-normal leading-none transition hover:-translate-y-0.5 hover:shadow-sm sm:justify-between sm:gap-3 sm:px-3.5 sm:text-[12px] ${tone} ${compact ? "w-full lg:w-auto lg:min-w-[8.75rem]" : "w-full sm:w-auto sm:min-w-[8.75rem]"}`}
       title="Usage credit balance"
     >
       <span className="inline-flex min-w-0 items-center gap-2">
@@ -160,7 +160,6 @@ const WalletCreditBadge: React.FC<{
           <i className="fa-solid fa-wallet text-[11px]" />
         </span>
         <span className="hidden truncate md:inline">Usage credit</span>
-        <span className="truncate md:hidden">Credit</span>
       </span>
       <span className="shrink-0 tabular-nums">
         {hasWallet ? formatWalletMoney(Number(balance || 0)) : "—"}
@@ -195,81 +194,74 @@ const LowCreditTicker: React.FC<{ wallet: WalletMini | null }> = ({
   );
 };
 
-const getPageMeta = (pathname: string, org: Organization) => {
-  const pageMap: Record<
-    string,
-    { eyebrow: string; title: string; description: string }
-  > = {
+const getPageMeta = (pathname: string) => {
+  const pageMap: Record<string, { title: string; description: string }> = {
     "/dashboard": {
-      eyebrow: "Operations Overview",
       title: "Command Center",
       description: "Track calls, leads, and efficiency from one place.",
     },
     "/agent": {
-      eyebrow: "Voice Operations",
       title: "Voice Agent Studio",
       description:
         "Manage every inbound and outbound voice agent, their numbers, and their knowledge base.",
     },
     "/phone-numbers": {
-      eyebrow: "Number Management",
       title: "Phone Numbers",
       description:
         "Search, connect, and manage business numbers for your voice agents.",
     },
     "/features": {
-      eyebrow: "Product Surface",
       title: "Platform Features",
       description:
         "Review the full Agently feature set without leaving the workspace shell.",
     },
     "/messenger": {
-      eyebrow: "Digital Concierge",
       title: "Chatbot Agent Studio",
       description:
         "Customize every chatbot, sync knowledge, and control how your website assistant behaves.",
     },
     "/calls": {
-      eyebrow: "Conversation Records",
       title: "Call Intelligence",
       description:
         "Review transcripts, outcomes, and downloadable reports across every conversation.",
     },
+    "/notifications": {
+      title: "Notifications",
+      description: "Review alerts, follow-ups, and unanswered questions.",
+    },
     "/outreach": {
-      eyebrow: "Outbound Calls",
       title: "Call Campaigns",
       description:
         "Create call-now, scheduled, and lead-backed campaigns for your agents.",
     },
     "/leads": {
-      eyebrow: "Pipeline Health",
       title: "Lead Workspace",
       description:
         "Sort, update, and export the leads your agents capture around the clock.",
     },
     "/team": {
-      eyebrow: "Workspace Access",
       title: "Team Control",
       description:
         "Invite teammates, manage roles, and keep the right people looped into every workflow.",
     },
     "/billing": {
-      eyebrow: "Revenue Ops",
       title: "Billing & Usage",
       description:
         "Stay ahead of plan usage, invoices, and upgrade timing without leaving the dashboard.",
     },
     "/settings": {
-      eyebrow: "Workspace Setup",
       title: "Settings",
       description:
         "Control organization details, routing preferences, team access, billing, and business-number settings.",
+    },
+    "/knowledge-bases": {
+      title: "Knowledge Bases",
+      description: "Manage the information your agents can use.",
     },
   };
 
   return (
     pageMap[pathname] || {
-      eyebrow: "Workspace",
       title: "Workspace",
       description: "Manage your AI agent workspace from a single place.",
     }
@@ -355,34 +347,16 @@ const SidebarLink: React.FC<{
   onNavigate?: () => void;
 }> = memo(({ to, icon, label, description, tourId, onNavigate }) => {
   const location = useLocation();
-  const navigate = useNavigate();
   const isActive = location.pathname === to;
-
-  const handleNavigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.button !== 0
-    )
-      return;
-    event.preventDefault();
-    onNavigate?.();
-    if (isActive) return;
-    window.setTimeout(() => {
-      navigate(to);
-    }, 0);
-  };
 
   const isImageIcon = icon.startsWith("/");
 
   return (
-    <a
-      href={`#${to}`}
+    <Link
+      to={to}
       title={description}
       data-tour={tourId}
-      onClick={handleNavigate}
+      onClick={onNavigate}
       className={`group relative flex h-10 items-center gap-3 px-7 text-[13px] font-normal tracking-[0.001em] transition-all duration-200 ${
         isActive
           ? "bg-[#1E293B] text-[#CBD5E1] before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-[#F59E0B]"
@@ -403,7 +377,7 @@ const SidebarLink: React.FC<{
         )}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-    </a>
+    </Link>
   );
 });
 SidebarLink.displayName = "SidebarLink";
@@ -726,6 +700,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     readWalletCache(org.id),
   );
   const walletRequestInFlight = useRef(false);
+  const contentViewportRef = useRef<HTMLElement | null>(null);
 
   const refreshWalletMini = async () => {
     if (walletRequestInFlight.current) return;
@@ -793,13 +768,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   useEffect(() => {
     setMobileNavOpen(false);
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement !== document.body
+    ) {
+      activeElement.blur();
+    }
+    const frame = window.requestAnimationFrame(() => {
+      contentViewportRef.current?.scrollTo({ top: 0, left: 0 });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [location.pathname]);
 
   const activeVoiceAgent =
     org.voiceAgents.find((agent) => agent.id === org.activeVoiceAgentId) ||
     org.agent;
-  const pageMeta = getPageMeta(location.pathname, org);
-  const settingsSubpageBack = ["/team", "/billing"].includes(location.pathname);
+  const pageMeta = getPageMeta(location.pathname);
 
   return (
     <div className="relative h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
@@ -892,46 +877,32 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   </button>
 
                   <div className="min-w-0 flex-1">
-                    <div className="agently-topbar-context flex min-w-0 items-center gap-2 text-[12px] font-normal text-[#94A3B8] sm:text-[12px]">
-                      {settingsSubpageBack ? (
-                        <>
-                          <Link
-                            to="/settings"
-                            className="inline-flex shrink-0 items-center gap-1.5 transition hover:text-[#F59E0B]"
-                          >
-                            <i className="fa-sharp fa-solid fa-chevron-left text-[9px]" />
-                            Settings
-                          </Link>
-                          <span className="text-[#CBD5E1]">/</span>
-                        </>
-                      ) : null}
-                      <span className="truncate">{pageMeta.eyebrow}</span>
-                    </div>
-                    <h1 className="agently-topbar-title mt-0.5 overflow-visible py-1 text-[clamp(1.35rem,1.08rem+0.8vw,1.7rem)] font-medium leading-[1.32] tracking-[-0.025em] text-[#0F172A]">
+                    <h1 className="agently-topbar-title overflow-visible py-1 text-[clamp(1.35rem,1.08rem+0.8vw,1.7rem)] font-medium leading-[1.32] tracking-[-0.025em] text-[#0F172A]">
                       {pageMeta.title}
                     </h1>
                   </div>
                 </div>
 
-                <div className="agently-topbar-actions flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
+                <div className="agently-topbar-actions grid w-full min-w-0 grid-cols-[minmax(0,1.2fr)_2.75rem_minmax(0,0.95fr)_minmax(0,1fr)] items-center justify-center gap-2 sm:gap-2.5 lg:flex lg:w-auto lg:justify-end">
                   <span
                     data-tour="topbar-credit"
-                    className="contents-safe inline-flex"
+                    className="contents-safe inline-flex min-w-0 justify-center"
                   >
-                    <WalletCreditBadge wallet={walletMini} />
+                    <WalletCreditBadge wallet={walletMini} compact />
                   </span>
                   <span
                     data-tour="topbar-notifications"
-                    className="inline-flex"
+                    className="inline-flex min-w-0 justify-center"
                   >
                     <NotificationBell />
                   </span>
 
                   <div
                     data-tour="topbar-agent"
-                    className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 text-[12px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:px-3.5"
+                    className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-2 text-[11px] font-normal leading-none text-[#0F172A] shadow-sm sm:max-w-[15rem] sm:justify-start sm:gap-2 sm:px-3.5 sm:text-[12px]"
+                    title={`${activeVoiceAgent.name} — active voice agent`}
                   >
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 sm:h-2.5 sm:w-2.5" />
                     <span className="min-w-0 truncate">
                       {activeVoiceAgent.name}
                     </span>
@@ -948,13 +919,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   <Link
                     to="/knowledge-bases"
                     data-tour="topbar-workspace"
-                    className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-xl bg-[#F59E0B] px-3.5 text-[12px] font-normal leading-none text-white shadow-[0_10px_22px_rgba(245,158,11,0.18)] transition hover:bg-[#D97706] sm:max-w-[16rem] sm:px-4"
+                    className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl bg-[#F59E0B] px-2 text-[11px] font-normal leading-none text-white shadow-[0_10px_22px_rgba(245,158,11,0.18)] transition hover:bg-[#D97706] sm:max-w-[16rem] sm:justify-start sm:gap-2 sm:px-4 sm:text-[12px]"
                     title={`${org.profile.name || user.name} — open knowledge bases`}
                   >
                     <span className="min-w-0 truncate">
                       {org.profile.name || user.name}
                     </span>
-                    <i className="fa-solid fa-chevron-down shrink-0 text-[11px] text-white/80" />
+                    <i className="fa-solid fa-chevron-down hidden shrink-0 text-[11px] text-white/80 sm:inline" />
                   </Link>
                 </div>
               </div>
@@ -970,6 +941,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               edge on every route.
             */}
             <main
+              ref={contentViewportRef}
               className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-4 pb-0 pt-4 sm:px-5 md:pt-5 lg:px-6 xl:px-8"
               style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
             >
@@ -1010,12 +982,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                       </p>
                     </div>
                   </div>
-                  <div className="pointer-events-none select-none opacity-40">
+                  <div
+                    key={location.pathname}
+                    className="pointer-events-none min-w-0 select-none opacity-40"
+                  >
                     {children}
                   </div>
                 </div>
               ) : (
-                children
+                <div key={location.pathname} className="min-w-0">
+                  {children}
+                </div>
               )}
             </main>
           </div>
@@ -1027,7 +1004,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         an in-product help channel for signed-in tenants, and deliberately does
         not appear on the public marketing pages.
       */}
-      <PlatformAssistant />
+      <PlatformAssistant organizationId={org.id} />
     </div>
   );
 };

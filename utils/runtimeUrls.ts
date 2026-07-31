@@ -5,7 +5,6 @@ const FRONTEND_ONLY_HOSTS = new Set([
   "www.agentlycall.com",
   "agentlycall.com",
   "agentlycall.vercel.app",
-  "agently-frontend-v1.vercel.app",
 ]);
 
 function cleanBaseUrl(value?: string | null): string {
@@ -36,7 +35,11 @@ function isLocalHost(hostname: string): boolean {
 
 function isFrontendOnlyUrl(value: string): boolean {
   const host = hostFromUrl(value);
-  return Boolean(host && FRONTEND_ONLY_HOSTS.has(host));
+  return Boolean(
+    host &&
+      (FRONTEND_ONLY_HOSTS.has(host) ||
+        /^agently-frontend(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(host)),
+  );
 }
 
 function getWindowOrigin(): string {

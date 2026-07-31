@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Organization, User, UserRole } from "../types";
 import AppModal from "../components/AppModal";
 import SettingsTabs from "../components/SettingsTabs";
@@ -81,6 +81,8 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const mountedRef = useRef(true);
+  const loadRequestRef = useRef(0);
 
   const sortedMembers = useMemo(() => {
     const rank: Record<UserRole, number> = { Owner: 0, Admin: 1, Viewer: 2 };
@@ -89,27 +91,38 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     );
   }, [members]);
 
-  const loadMembers = async () => {
-    setLoading(true);
-    setError("");
+  const loadMembers = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    if (mountedRef.current) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = (await api.getTeamMembers()) as TeamResponse;
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       const nextMembers = response.members || [];
       setMembers(nextMembers);
       setMetrics(response.metrics || getInitialMetrics(nextMembers));
     } catch (err) {
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       setError(cleanError(err, "Unable to load team members."));
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestId === loadRequestRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     setMembers(org.members || []);
     setMetrics(getInitialMetrics(org.members || []));
     void loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org.id]);
+    return () => {
+      mountedRef.current = false;
+      loadRequestRef.current += 1;
+    };
+  }, [loadMembers, org.id]);
 
   const handleInvite = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -172,10 +185,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     <div className="space-y-6 animate-fade-up">
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
-            Settings
-          </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
             Team
           </h2>
           <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-slate-500 sm:block">
@@ -247,7 +257,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               {label}
             </p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
+            <p className="text-2xl font-black text-slate-900">{value}</p>
           </div>
         ))}
       </div>

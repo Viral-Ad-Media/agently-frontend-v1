@@ -364,7 +364,7 @@ const PageSelector: React.FC<Props> = ({
 
   if (phase === "idle" || phase === "discovering") {
     return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card">
+      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-card sm:p-8">
         <div className="mb-3 text-4xl">🔎</div>
         <h3 className="text-base font-black text-slate-900">Find your pages</h3>
         <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
@@ -390,9 +390,9 @@ const PageSelector: React.FC<Props> = ({
   const isPaused = job?.status === "paused";
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
       {/* Header + counts */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
+      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-base font-black text-slate-900">
@@ -403,22 +403,22 @@ const PageSelector: React.FC<Props> = ({
             </p>
           </div>
           {phase === "selecting" && (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full min-w-0 grid-cols-3 gap-1.5 sm:w-auto sm:flex sm:flex-wrap sm:gap-2">
               <button
                 onClick={selectRecommended}
-                className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300"
+                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
               >
                 Recommended
               </button>
               <button
                 onClick={selectAll}
-                className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300"
+                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
               >
                 Select all
               </button>
               <button
                 onClick={selectNone}
-                className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-amber-300"
+                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
               >
                 Clear
               </button>
@@ -428,7 +428,7 @@ const PageSelector: React.FC<Props> = ({
 
         {/* Issue 4: the burn-rate warning. */}
         {phase === "selecting" && (
-          <div className="mt-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mt-4 flex min-w-0 gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:gap-3 sm:p-4">
             <span className="text-lg">⚡</span>
             <div>
               <p className="text-xs font-bold text-amber-900">
@@ -444,13 +444,13 @@ const PageSelector: React.FC<Props> = ({
 
         {/* Live job bar */}
         {job && phase === "scraping" && (
-          <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-            <div className="mb-2 flex items-center justify-between">
+          <div className="mt-4 min-w-0 rounded-2xl border border-indigo-200 bg-indigo-50 p-3 sm:p-4">
+            <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-black text-indigo-900">
                 {isPaused ? "Paused" : "Reading your pages"} —{" "}
                 {job.completedPages}/{job.totalPages}
               </p>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 flex-wrap gap-1.5 sm:gap-2">
                 {isRunning && (
                   <button
                     onClick={() => void handlePauseResume("pause")}
@@ -497,7 +497,7 @@ const PageSelector: React.FC<Props> = ({
       </div>
 
       {/* Page list */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card">
+      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -511,7 +511,7 @@ const PageSelector: React.FC<Props> = ({
             return (
               <div
                 key={page.id}
-                className={`flex items-center gap-3 rounded-2xl border p-3 transition-all ${
+                className={`flex min-w-0 items-start gap-2 rounded-2xl border p-2.5 transition-all sm:items-center sm:gap-3 sm:p-3 ${
                   active
                     ? "border-indigo-300 bg-indigo-50/50 shadow-sm"
                     : isSelected
@@ -545,7 +545,7 @@ const PageSelector: React.FC<Props> = ({
                 </div>
 
                 {page.priorityScore >= 80 && phase === "selecting" && (
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                  <span className="hidden shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 sm:inline-flex">
                     Key page
                   </span>
                 )}

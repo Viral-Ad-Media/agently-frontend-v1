@@ -283,25 +283,24 @@ const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div className="w-full max-w-none pb-8">
-      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
-            Settings
-          </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 pb-5">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
             Profile
           </h2>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 min-[420px]:flex-row min-[420px]:items-center lg:justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
           {isEditing && (
             <button
               type="button"
               onClick={discardChanges}
               disabled={saving || passwordSaving}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-3.5"
+              aria-label="Cancel profile changes"
             >
-              Cancel
+              <i className="fa-sharp fa-solid fa-xmark" aria-hidden="true" />
+              <span className="ml-2 hidden sm:inline">Cancel</span>
             </button>
           )}
           <button
@@ -312,7 +311,7 @@ const Settings: React.FC<SettingsProps> = ({
               setPasswordMessage(null);
             }}
             disabled={saving || passwordSaving}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-2.5 text-[11px] font-black text-slate-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-xs"
             aria-label={isEditing ? "Lock profile fields" : "Edit profile fields"}
           >
             <i className={`fa-sharp fa-solid ${isEditing ? "fa-lock" : "fa-pen"}`} />
@@ -322,9 +321,14 @@ const Settings: React.FC<SettingsProps> = ({
             type="button"
             onClick={() => void saveSettings()}
             disabled={!isEditing || !hasUnsavedChanges || saving}
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-[11px] font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40 sm:px-5 sm:text-xs"
           >
-            {saving ? "Saving..." : "Save Profile"}
+            {saving ? "Saving..." : (
+              <>
+                <span className="sm:hidden">Save</span>
+                <span className="hidden sm:inline">Save Profile</span>
+              </>
+            )}
           </button>
         </div>
       </header>

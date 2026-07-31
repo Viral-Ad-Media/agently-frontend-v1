@@ -59,10 +59,27 @@ const defaultPosition = (): Point => {
   };
 };
 
-const readStoredPosition = (): Point | null => {
+const tenantStorageKey = (base: string, organizationId: string) =>
+  `${base}:${organizationId || 'default'}`;
+
+const readStoredHidden = (organizationId: string): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.localStorage.getItem(tenantStorageKey(HIDDEN_KEY, organizationId)) ===
+      '1'
+    );
+  } catch {
+    return false;
+  }
+};
+
+const readStoredPosition = (organizationId: string): Point | null => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(POSITION_KEY);
+    const raw = window.localStorage.getItem(
+      tenantStorageKey(POSITION_KEY, organizationId),
+    );
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Point;
     if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') {
@@ -138,15 +155,19 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
-const PlatformAssistant: React.FC = () => {
+interface PlatformAssistantProps {
+  organizationId: string;
+}
+
+const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
+  organizationId,
+}) => {
   const [config, setConfig] = useState<AssistantConfig | null>(null);
   const [open, setOpen] = useState(false);
-  const [hidden, setHidden] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.localStorage.getItem(HIDDEN_KEY) === '1',
+  const [hidden, setHidden] = useState(() => readStoredHidden(organizationId));
+  const [position, setPosition] = useState<Point>(
+    () => readStoredPosition(organizationId) || defaultPosition(),
   );
-  const [position, setPosition] = useState<Point>(defaultPosition);
   const [dragging, setDragging] = useState(false);
 
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
@@ -160,7 +181,6 @@ const PlatformAssistant: React.FC = () => {
     null,
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* ── Load config ────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -183,13 +203,14 @@ const PlatformAssistant: React.FC = () => {
 
   /* ── Restore + keep position inside the viewport on resize ──────────── */
   useEffect(() => {
-    const stored = readStoredPosition();
-    if (stored) setPosition(stored);
+    setPosition(readStoredPosition(organizationId) || defaultPosition());
+    setHidden(readStoredHidden(organizationId));
+    setOpen(false);
 
     const onResize = () => setPosition((current) => clampToViewport(current));
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [organizationId]);
 
   /* ── Drag ───────────────────────────────────────────────────────────── */
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -221,24 +242,42 @@ const PlatformAssistant: React.FC = () => {
     if (!state) return;
 
     try {
-      window.localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+      window.localStorage.setItem(
+        tenantStorageKey(POSITION_KEY, organizationId),
+        JSON.stringify(position),
+      );
     } catch {
       /* storage disabled — position simply resets next session */
     }
 
     // A drag should never also open the panel.
-    if (state.moved <= DRAG_THRESHOLD_PX) setOpen(true);
+    if (state.moved <= DRAG_THRESHOLD_PX) {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement !== document.body
+      ) {
+        activeElement.blur();
+      }
+      setOpen(true);
+    }
   };
 
   /* ── Hide / restore ─────────────────────────────────────────────────── */
-  const setHiddenPersisted = useCallback((value: boolean) => {
-    setHidden(value);
-    try {
-      window.localStorage.setItem(HIDDEN_KEY, value ? '1' : '0');
-    } catch {
-      /* non-fatal */
-    }
-  }, []);
+  const setHiddenPersisted = useCallback(
+    (value: boolean) => {
+      setHidden(value);
+      try {
+        window.localStorage.setItem(
+          tenantStorageKey(HIDDEN_KEY, organizationId),
+          value ? '1' : '0',
+        );
+      } catch {
+        /* non-fatal */
+      }
+    },
+    [organizationId],
+  );
 
   /* ── Scroll to newest ───────────────────────────────────────────────── */
   useEffect(() => {
@@ -246,10 +285,6 @@ const PlatformAssistant: React.FC = () => {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages, open, sending]);
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
 
   /* ── Send ───────────────────────────────────────────────────────────── */
   const send = useCallback(
@@ -325,7 +360,9 @@ const PlatformAssistant: React.FC = () => {
     );
   }
 
-  const panelRight = position.x > (window.innerWidth || 1200) / 2;
+  const panelRight =
+    typeof window === 'undefined' ||
+    position.x > (window.innerWidth || 1200) / 2;
 
   return (
     <>
@@ -427,10 +464,14 @@ const PlatformAssistant: React.FC = () => {
       {/* ── Panel ──────────────────────────────────────────────────────── */}
       {open ? (
         <div
-          className={`agently-panel fixed bottom-4 z-[71] flex w-[calc(100vw-2rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] sm:bottom-6 ${
-            panelRight ? 'right-4 sm:right-6' : 'left-4 sm:left-6'
+          className={`agently-panel fixed inset-x-3 bottom-3 z-[71] flex w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] sm:inset-x-auto sm:bottom-6 sm:w-[min(400px,calc(100vw-3rem))] ${
+            panelRight ? 'sm:right-6' : 'sm:left-6'
           }`}
-          style={{ height: 'min(560px, calc(100vh - 6rem))' }}
+          style={{
+            height:
+              'min(620px, calc(100dvh - 1.5rem - env(safe-area-inset-bottom, 0px)))',
+            bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+          }}
           role="dialog"
           aria-label={config.headerTitle}
         >
@@ -562,7 +603,6 @@ const PlatformAssistant: React.FC = () => {
             <div className="border-t border-slate-200 bg-white px-3 py-3">
               <div className="flex items-end gap-2">
                 <textarea
-                  ref={inputRef}
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {

@@ -21,6 +21,10 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
+import Billing from "./pages/Billing";
+import KnowledgeBases from "./pages/KnowledgeBases";
+import Settings from "./pages/Settings";
+import Team from "./pages/Team";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
 // ─────────────────────────────────────────────────────────────────────────
@@ -30,31 +34,68 @@ import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
 // import { PageTour, usePageTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const Leads = lazy(() => import("./pages/Leads"));
-const AgentSettings = lazy(() => import("./pages/AgentSettings"));
-const PhoneNumbers = lazy(() => import("./pages/PhoneNumbers"));
-const OutreachScheduler = lazy(() => import("./pages/OutreachScheduler"));
-const Notifications = lazy(() => import("./pages/Notifications"));
-const Billing = lazy(() => import("./pages/Billing"));
-const Team = lazy(() => import("./pages/Team"));
-const Login = lazy(() => import("./pages/Login"));
-const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
-const Messenger = lazy(() => import("./pages/Messenger"));
-const Features = lazy(() => import("./pages/Features"));
-const Home = lazy(() => import("./pages/Home"));
-const About = lazy(() => import("./pages/About"));
-const Contact = lazy(() => import("./pages/Contact"));
-const FAQs = lazy(() => import("./pages/FAQs"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const Terms = lazy(() => import("./pages/Terms"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Settings = lazy(() => import("./pages/Settings"));
-const KnowledgeBases = lazy(() => import("./pages/KnowledgeBases"));
-const Blog = lazy(() => import("./pages/Blog"));
-const BlogPost = lazy(() => import("./pages/BlogPost"));
-const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
+const ROUTE_CHUNK_RELOAD_PREFIX = "agently:route-chunk-reload:";
+
+/**
+ * Recover once from a stale route chunk after a production deployment.
+ *
+ * A browser tab can keep an older app shell open while a new Vercel deployment
+ * replaces the hashed lazy-route files. In that state React Router updates the
+ * hash, but the new route import fails and React can leave the previous screen
+ * visible. Reloading once fetches the current index and current chunk map.
+ */
+function lazyRoute<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+  routeKey: string,
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    const reloadKey = `${ROUTE_CHUNK_RELOAD_PREFIX}${routeKey}`;
+    try {
+      const module = await importer();
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(reloadKey);
+      }
+      return module;
+    } catch (error) {
+      if (typeof window !== "undefined") {
+        try {
+          if (!window.sessionStorage.getItem(reloadKey)) {
+            window.sessionStorage.setItem(reloadKey, "1");
+            window.location.reload();
+            return await new Promise<never>(() => {});
+          }
+          window.sessionStorage.removeItem(reloadKey);
+        } catch {
+          // Storage can be unavailable in strict privacy modes. Surface the
+          // original import error rather than hiding it behind another error.
+        }
+      }
+      throw error;
+    }
+  });
+}
+
+const Dashboard = lazyRoute(() => import("./pages/Dashboard"), "dashboard");
+const Onboarding = lazyRoute(() => import("./pages/Onboarding"), "onboarding");
+const Leads = lazyRoute(() => import("./pages/Leads"), "leads");
+const AgentSettings = lazyRoute(() => import("./pages/AgentSettings"), "agent-settings");
+const PhoneNumbers = lazyRoute(() => import("./pages/PhoneNumbers"), "phone-numbers");
+const OutreachScheduler = lazyRoute(() => import("./pages/OutreachScheduler"), "outreach");
+const Notifications = lazyRoute(() => import("./pages/Notifications"), "notifications");
+const Login = lazyRoute(() => import("./pages/Login"), "login");
+const ForgotPassword = lazyRoute(() => import("./pages/ForgotPassword"), "forgot-password");
+const Messenger = lazyRoute(() => import("./pages/Messenger"), "messenger");
+const Features = lazyRoute(() => import("./pages/Features"), "features");
+const Home = lazyRoute(() => import("./pages/Home"), "home");
+const About = lazyRoute(() => import("./pages/About"), "about");
+const Contact = lazyRoute(() => import("./pages/Contact"), "contact");
+const FAQs = lazyRoute(() => import("./pages/FAQs"), "faqs");
+const Pricing = lazyRoute(() => import("./pages/Pricing"), "pricing");
+const Terms = lazyRoute(() => import("./pages/Terms"), "terms");
+const Privacy = lazyRoute(() => import("./pages/Privacy"), "privacy");
+const Blog = lazyRoute(() => import("./pages/Blog"), "blog");
+const BlogPost = lazyRoute(() => import("./pages/BlogPost"), "blog-post");
+const SuperAdmin = lazyRoute(() => import("./pages/SuperAdmin"), "super-admin");
 
 function hasPasswordResetTokenInUrl() {
   if (typeof window === "undefined") return false;
@@ -730,7 +771,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <Router>
+    <Router unstable_useTransitions={false}>
       <Suspense fallback={<AppLoading />}>
         <Routes>
           <Route

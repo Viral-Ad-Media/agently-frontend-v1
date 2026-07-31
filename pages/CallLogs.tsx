@@ -711,6 +711,8 @@ const CallLogs: React.FC<CallLogsProps> = ({
     null,
   );
   const metricRevealTimer = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const callsRequestRef = useRef(0);
 
   const brieflyRevealMetricLabel = (label: string) => {
     setRevealedMetricLabel(label);
@@ -724,7 +726,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
   };
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      callsRequestRef.current += 1;
       if (metricRevealTimer.current) {
         window.clearTimeout(metricRevealTimer.current);
       }
@@ -748,8 +753,11 @@ const CallLogs: React.FC<CallLogsProps> = ({
   });
 
   const loadCalls = async (nextPage = page) => {
-    setLoading(true);
-    setError("");
+    const requestId = ++callsRequestRef.current;
+    if (mountedRef.current) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const params: Record<string, string | number | undefined> = {
         page: nextPage,
@@ -761,6 +769,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
       if (agentFilter !== "all") params.voiceAgentId = agentFilter;
       if (tagFilter !== "all") params.tag = tagFilter;
       const payload = await voiceCallsApi.calls.getCalls(params);
+      if (!mountedRef.current || requestId !== callsRequestRef.current) return;
       const normalized = normalizeCallsResponse(payload);
       startTransition(() => {
         setCalls(normalized.calls);
@@ -769,11 +778,15 @@ const CallLogs: React.FC<CallLogsProps> = ({
         setServerMetrics(normalized.metrics || null);
       });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load call logs.",
-      );
+      if (mountedRef.current && requestId === callsRequestRef.current) {
+        setError(
+          err instanceof Error ? err.message : "Could not load call logs.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestId === callsRequestRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1254,7 +1267,11 @@ const CallLogs: React.FC<CallLogsProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6" data-tour="calls-stats">
+      <div
+        className="grid gap-1.5 sm:gap-3"
+        style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
+        data-tour="calls-stats"
+      >
         {[
           {
             label: "Total calls",
@@ -1302,7 +1319,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
               onClick={() => brieflyRevealMetricLabel(item.label)}
               onBlur={() => setRevealedMetricLabel(null)}
               aria-label={`${item.label}: ${item.value}`}
-              className="agently-mobile-metric-card relative flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition active:scale-[0.99] sm:gap-3 sm:p-3.5"
+              className="agently-mobile-metric-card relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white p-1.5 text-center shadow-sm transition active:scale-[0.99] sm:flex-row sm:justify-start sm:gap-3 sm:rounded-2xl sm:p-3.5 sm:text-left"
             >
               <span
                 className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
@@ -1311,15 +1328,15 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 {item.label}
               </span>
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${item.color}`}
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl ${item.color}`}
               >
-                <i className={`fa-sharp fa-solid ${item.icon} text-sm`} />
+                <i className={`fa-sharp fa-solid ${item.icon} text-[10px] sm:text-sm`} />
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-[9px] font-black uppercase tracking-[0.13em] text-slate-400 sm:text-[10px] sm:tracking-widest">
+              <div className="w-full min-w-0 sm:w-auto">
+                <p className="truncate text-center text-[7px] font-black uppercase tracking-[0.06em] text-slate-400 sm:text-left sm:text-[10px] sm:tracking-widest">
                   {item.label}
                 </p>
-                <p className="mt-0.5 text-lg font-black leading-none text-slate-900 sm:text-base">
+                <p className="mt-0.5 text-sm font-black leading-none text-slate-900 sm:text-base">
                   {item.value}
                 </p>
               </div>
@@ -1394,7 +1411,105 @@ const CallLogs: React.FC<CallLogsProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {filtered.map((call, index) => {
+                const statusKey = call.status.toLowerCase();
+                const directionKey = call.direction.toLowerCase();
+                return (
+                  <div
+                    key={call.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => void openDetail(call)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void openDetail(call);
+                      }
+                    }}
+                    className="cursor-pointer p-4 outline-none transition active:bg-slate-50 focus-visible:bg-slate-50"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${index % 3 === 1 ? "bg-slate-600" : index % 3 === 2 ? "bg-slate-800" : "bg-slate-900"}`}
+                      >
+                        {(call.callerName || call.callerPhone || "C")[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">
+                              {call.callerName || "Unknown caller"}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
+                              {abbreviatePhone(call.callerPhone)}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-[10px] font-bold text-slate-400">
+                            {formatCallLogDate(call.timestamp)}
+                          </p>
+                        </div>
+
+                        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${STATUS_STYLE[statusKey] || "border-slate-200 bg-slate-100 text-slate-600"}`}
+                          >
+                            {titleCase(call.status || call.outcome)}
+                          </span>
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-600">
+                            {titleCase(directionKey || "call")}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {formatDuration(call.duration)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                      <p className="truncate text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Agent · {extractAgentName(org, call.voiceAgentId)}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-xs italic leading-5 text-slate-500">
+                        {getTranscriptPreview(call)}
+                      </p>
+                    </div>
+
+                    {call.transcript?.length || call.recordingAvailable ? (
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        {call.transcript?.length ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openDetail(call);
+                            }}
+                            className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-blue-600"
+                          >
+                            Transcript
+                          </button>
+                        ) : null}
+                        {call.recordingAvailable ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openDetail(call);
+                            }}
+                            className="rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-violet-600"
+                          >
+                            Recording
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
             <div className="min-w-[55rem]">
               <div className="grid grid-cols-[minmax(18rem,1.45fr)_9rem_minmax(16rem,1.15fr)_12rem] border-b border-slate-200 bg-slate-50/80 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <span>Name / Info</span>
@@ -1480,7 +1595,8 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 })}
               </div>
             </div>
-          </div>
+            </div>
+          </>
         )}
       </div>
 
