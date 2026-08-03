@@ -1,16 +1,5 @@
-import React, {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
-import {
-  Router,
-  UNSAFE_createHashHistory as createHashHistory,
-  useLocation,
-} from "react-router-dom";
+import React, { Suspense, useLayoutEffect, type ReactNode } from "react";
+import { HashRouter, useLocation } from "react-router-dom";
 
 interface StableHashRouterProps {
   children: ReactNode;
@@ -18,48 +7,20 @@ interface StableHashRouterProps {
 }
 
 /**
- * HashRouter in React Router 7 normally stores browser-history updates in
- * component state. Those updates can be scheduled as React transitions, which
- * allows the address bar to move before the matching route is committed.
- *
- * Agently needs the hash and rendered workspace screen to be atomic. Treating
- * history as an external store makes every hash update synchronous and prevents
- * a previous Settings screen from being retained while the URL already points
- * to Knowledge Bases, Team, or Billing.
+ * Use React Router's supported hash-history integration, but make route
+ * updates blocking/synchronous. The previous custom useSyncExternalStore
+ * implementation returned history.location directly; createHashHistory may
+ * expose a new location object on repeated reads, which causes React error
+ * #185 (maximum update depth exceeded) in production.
  */
 const StableHashRouter: React.FC<StableHashRouterProps> = ({
   children,
   basename,
-}) => {
-  const historyRef = useRef<ReturnType<typeof createHashHistory> | null>(null);
-
-  if (!historyRef.current) {
-    historyRef.current = createHashHistory({
-      window,
-      v5Compat: true,
-    });
-  }
-
-  const history = historyRef.current;
-  const subscribe = useCallback(
-    (notify: () => void) => history.listen(() => notify()),
-    [history],
-  );
-  const getSnapshot = useCallback(() => history.location, [history]);
-  const location = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-
-  return (
-    <Router
-      basename={basename}
-      location={location}
-      navigationType={history.action}
-      navigator={history}
-      unstable_useTransitions={false}
-    >
-      {children}
-    </Router>
-  );
-};
+}) => (
+  <HashRouter basename={basename} unstable_useTransitions={false}>
+    {children}
+  </HashRouter>
+);
 
 interface RouteCommitBoundaryProps {
   children: ReactNode;
