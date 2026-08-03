@@ -10,7 +10,11 @@ import {
 } from "../types";
 import { api } from "../services/api";
 import AppModal from "../components/AppModal";
-import { resolveApiBaseUrl, resolveChatbotWidgetBaseUrl } from "../utils/runtimeUrls";
+import {
+  resolveApiBaseUrl,
+  resolveChatbotWidgetBaseUrl,
+} from "../utils/runtimeUrls";
+import ChatMessageContent from "../components/ChatMessageContent";
 
 interface MessengerProps {
   org: Organization;
@@ -391,10 +395,12 @@ const Messenger: React.FC<MessengerProps> = ({
     const backendUrl = resolveChatbotWidgetBaseUrl();
     const widgetId = `agently-widget-${chatbot.id}`;
     const position = chatbot.position === "left" ? "left" : "right";
-    const side = position === "left" ? "left:16px;right:auto;" : "right:16px;left:auto;";
-    const mobileSide = position === "left"
-      ? "left:12px!important;right:12px!important;"
-      : "right:12px!important;left:12px!important;";
+    const side =
+      position === "left" ? "left:16px;right:auto;" : "right:16px;left:auto;";
+    const mobileSide =
+      position === "left"
+        ? "left:12px!important;right:12px!important;"
+        : "right:12px!important;left:12px!important;";
     const langs = (chatbot.chatLanguages || ["en"]).join(",");
     const voice = chatbot.chatVoice || "alloy";
     const widgetSrc = `${backendUrl}/chatbot-widget/${chatbot.id}?langs=${encodeURIComponent(langs)}&voice=${encodeURIComponent(voice)}`;
@@ -746,14 +752,6 @@ const Messenger: React.FC<MessengerProps> = ({
     safeChatbotFleetPage * chatbotFleetPageSize,
     safeChatbotFleetPage * chatbotFleetPageSize + chatbotFleetPageSize,
   );
-  const chatbotFleetRangeStart = org.chatbots.length
-    ? safeChatbotFleetPage * chatbotFleetPageSize + 1
-    : 0;
-  const chatbotFleetRangeEnd = Math.min(
-    org.chatbots.length,
-    safeChatbotFleetPage * chatbotFleetPageSize + pagedChatbots.length,
-  );
-
   return (
     <div className="min-w-0 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 sm:space-y-8">
       {/* Chatbot selector */}
@@ -805,7 +803,7 @@ const Messenger: React.FC<MessengerProps> = ({
             </button>
           )}
 
-          <div className="grid grid-cols-3 gap-2 xl:grid-cols-5">
+          <div className="ag-chatbot-fleet-grid grid grid-cols-3 gap-1.5 sm:gap-2 xl:grid-cols-5">
             {pagedChatbots.map((bot) => {
               const isActive = bot.id === org.activeChatbotId;
               const displayBot = isActive ? { ...bot, ...draft } : bot;
@@ -832,7 +830,7 @@ const Messenger: React.FC<MessengerProps> = ({
                       );
                     }
                   }}
-                  className={`group min-h-[5.9rem] min-w-0 cursor-pointer rounded-2xl border px-2 py-2 text-left transition-all sm:min-h-[6.2rem] sm:px-3 ${
+                  className={`ag-chatbot-fleet-card group min-h-[4rem] min-w-0 cursor-pointer rounded-xl border px-1.5 py-1.5 text-left transition-all sm:min-h-[6.2rem] sm:rounded-2xl sm:px-3 sm:py-2 ${
                     isActive
                       ? "border-[#D97706] bg-[#FFF7ED] text-[#111827] shadow-[0_18px_38px_rgba(217,119,6,0.18)] ring-2 ring-[#F59E0B]/35"
                       : "border-slate-200 bg-white/75 text-[#232f3e] hover:border-[#fbbf24] hover:bg-[#fffbeb]"
@@ -842,13 +840,18 @@ const Messenger: React.FC<MessengerProps> = ({
                     <ChatbotAvatar
                       avatarLabel={displayBot.avatarLabel}
                       fallbackName={displayBot.name}
-                      className="h-9 w-9 rounded-2xl sm:h-12 sm:w-12"
-                      textClassName="text-[10px] sm:text-[11px]"
+                      className="h-6 w-6 rounded-lg sm:h-12 sm:w-12 sm:rounded-2xl"
+                      textClassName="text-[8px] sm:text-[11px]"
                     />
                     <div className="flex min-w-0 flex-1 flex-col justify-center">
                       <div className="flex min-w-0 items-start justify-between gap-1.5">
-                        <p className="min-w-0 truncate text-[10px] font-semibold leading-tight text-slate-900 sm:text-[12px]">
-                          {displayBot.name}
+                        <p
+                          className="min-w-0 flex-1 text-[8px] font-semibold leading-tight text-slate-900 sm:text-[12px]"
+                          title={displayBot.name}
+                        >
+                          <span className="ag-marquee-text">
+                            <span>{displayBot.name}</span>
+                          </span>
                         </p>
                         <span
                           className="mt-0.5 hidden h-2 w-2 shrink-0 rounded-full ring-2 ring-white sm:block"
@@ -857,7 +860,7 @@ const Messenger: React.FC<MessengerProps> = ({
                           }}
                         />
                       </div>
-                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                      <div className="mt-0.5 hidden min-w-0 flex-wrap items-center gap-1 sm:flex sm:mt-1">
                         <span
                           className={`max-w-full truncate rounded-full border px-1.5 py-0.5 text-[8px] font-medium uppercase leading-none tracking-[0.08em] ${
                             isActive
@@ -869,7 +872,7 @@ const Messenger: React.FC<MessengerProps> = ({
                         </span>
                       </div>
                       <div
-                        className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mt-2"
+                        className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0 sm:mt-2 sm:gap-x-2 sm:gap-y-1"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
@@ -880,7 +883,7 @@ const Messenger: React.FC<MessengerProps> = ({
                             )
                           }
                           disabled={isActive}
-                          className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#7a8493] transition hover:text-amber-700 disabled:text-amber-700"
+                          className="text-[7px] font-medium uppercase tracking-[0.04em] text-[#7a8493] transition hover:text-amber-700 disabled:text-amber-700 sm:text-[9px] sm:tracking-[0.14em]"
                         >
                           {isActive ? "Active" : "Open"}
                         </button>
@@ -893,7 +896,7 @@ const Messenger: React.FC<MessengerProps> = ({
                             )
                           }
                           disabled={org.chatbots.length <= 1}
-                          className="text-[9px] font-medium uppercase tracking-[0.14em] text-red-300 transition hover:text-red-500 disabled:opacity-30"
+                          className="text-[7px] font-medium uppercase tracking-[0.04em] text-red-300 transition hover:text-red-500 disabled:opacity-30 sm:text-[9px] sm:tracking-[0.14em]"
                         >
                           Delete
                         </button>
@@ -934,27 +937,27 @@ const Messenger: React.FC<MessengerProps> = ({
         </div>
 
         {chatbotFleetPageCount > 1 && (
-          <div className="mt-5 flex items-center justify-center gap-3 text-[13px] font-medium text-[#7a8493]">
-            <span>
-              {chatbotFleetRangeStart}-{chatbotFleetRangeEnd} of{" "}
-              {org.chatbots.length} chatbots
-            </span>
-            <span className="flex items-center gap-1.5">
-              {Array.from({ length: chatbotFleetPageCount }).map((_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  aria-label={`Chatbot page ${index + 1}`}
-                  onClick={() => setChatbotFleetPage(index)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    index === safeChatbotFleetPage
-                      ? "w-5 bg-[#F59E0B]"
-                      : "w-1.5 bg-slate-300 hover:bg-slate-400"
-                  }`}
-                />
-              ))}
-            </span>
-          </div>
+          <nav
+            className="ag-agent-page-dots mx-auto mt-2 w-full justify-center"
+            aria-label="Chatbot pages"
+          >
+            {Array.from({ length: chatbotFleetPageCount }).map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`Chatbot page ${index + 1}`}
+                aria-current={
+                  index === safeChatbotFleetPage ? "page" : undefined
+                }
+                onClick={() => setChatbotFleetPage(index)}
+                className={`ag-agent-page-dot ${
+                  index === safeChatbotFleetPage
+                    ? "ag-agent-page-dot-active"
+                    : ""
+                }`}
+              />
+            ))}
+          </nav>
         )}
       </div>
 
@@ -1409,7 +1412,12 @@ const Messenger: React.FC<MessengerProps> = ({
               >
                 <div className="flex justify-start">
                   <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-slate-100 text-slate-700 text-sm font-medium">
-                    {draft.welcomeMessage || "Hello! How can I help you today?"}
+                    <ChatMessageContent
+                      text={
+                        draft.welcomeMessage ||
+                        "Hello! How can I help you today?"
+                      }
+                    />
                     <div className="text-[10px] text-slate-400 mt-1">
                       Just now
                     </div>
@@ -1428,7 +1436,13 @@ const Messenger: React.FC<MessengerProps> = ({
                           : undefined
                       }
                     >
-                      {msg.text}
+                      {msg.role === "user" ? (
+                        <div className="whitespace-pre-wrap break-words leading-6">
+                          {msg.text}
+                        </div>
+                      ) : (
+                        <ChatMessageContent text={msg.text} />
+                      )}
                       <div
                         className={`text-[10px] mt-1 ${msg.role === "user" ? "text-white/50" : "text-slate-400"}`}
                       >

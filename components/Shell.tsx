@@ -728,7 +728,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     const cachedWallet = readWalletCache(org.id);
     if (cachedWallet) setWalletMini(cachedWallet);
     void refreshWalletMini();
-    const interval = window.setInterval(() => void refreshWalletMini(), 5000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshWalletMini();
+    }, 30000);
     const handler = (event: Event) => {
       const detail =
         (event as CustomEvent<{ organizationId?: string; balanceUsd?: number }>)
@@ -768,6 +770,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   useEffect(() => {
     setMobileNavOpen(false);
+    // A modal or drawer from the previous page must never leave the document
+    // scroll-locked after its route unmounts. Production navigation can expose
+    // this more often because pages and network requests resolve at different speeds.
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+    document.documentElement.style.overflow = "";
     const activeElement = document.activeElement;
     if (
       activeElement instanceof HTMLElement &&

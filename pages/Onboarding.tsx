@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import knowledgeScrapeApi from "../services/knowledgeScrapeApi";
 import { BusinessProfile, FAQ, AgentConfig } from "../types";
 
 interface OnboardingProps {
@@ -1279,15 +1278,6 @@ const Onboarding: React.FC<OnboardingProps> = ({
   // which is why it popped up a second and third time after a selection.
   // This flag suppresses exactly one search cycle after a deliberate pick.
   const citySelectedRef = useRef(false);
-  // Page discovery result. Counts pages WITHOUT scraping them, so onboarding
-  // stays fast and the tenant is not charged to ingest a whole site they have
-  // not chosen yet.
-  const [discovery, setDiscovery] = useState<{
-    discoveryId: string;
-    totalPagesFound: number;
-    domain: string;
-    message: string;
-  } | null>(null);
   const cityAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -1395,30 +1385,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
         setLoading(true);
         const website = profile.website.trim();
 
-        // Phase 1 — enumerate the site and return a COUNT. Nothing is read yet.
-        if (website) {
-          try {
-            const found = await knowledgeScrapeApi.discover({
-              website,
-              duringOnboarding: true,
-            });
-            setDiscovery({
-              discoveryId: found.discoveryId,
-              totalPagesFound: found.totalPagesFound,
-              domain: found.domain,
-              message:
-                found.onboardingMessage ||
-                `We found ${found.totalPagesFound} pages on your website. For now we'll read just your homepage so you can get started quickly — you can choose the rest anytime from Settings.`,
-            });
-          } catch (discoveryError) {
-            // Discovery is a nicety, not a gate. If it fails we still generate
-            // FAQs from the homepage rather than blocking onboarding.
-            console.warn("Page discovery skipped:", discoveryError);
-          }
-        }
-
-        // Phase 2 — homepage only. Discovery already marked the homepage as the
-        // single selected page, so this reads one page and nothing more.
+        // Onboarding deliberately reads only the homepage. Full sitemap and
+        // route discovery happens later from Settings -> Knowledge Bases, where
+        // the tenant can choose multiple pages or Select all before scraping.
         const generated = await onGenerateFaqs(website);
         setAgent((a) => ({ ...a, faqs: generated.slice(0, 5) }));
         setStep(3);
@@ -1781,17 +1750,6 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     Continue and Agently will read your homepage to draft your
                     first answers. This takes a few seconds.
                   </p>
-                  {discovery && (
-                    <div className="mt-3 rounded-[1.35rem] border border-[#0F172A]/10 bg-white/70 p-3.5">
-                      <p className="text-[13px] font-medium text-[#0F172A]">
-                        {discovery.totalPagesFound} pages found on{" "}
-                        {discovery.domain}
-                      </p>
-                      <p className="mt-1 text-[12px] leading-4 text-[#0F172A]/60">
-                        {discovery.message}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </section>
             )}
@@ -1813,16 +1771,11 @@ const Onboarding: React.FC<OnboardingProps> = ({
                       them as they are and refine them later from Settings.
                     </p>
                   </div>
-                  {discovery && discovery.totalPagesFound > 1 && (
-                    <p className="mt-2 text-[12px] leading-4 text-[#0F172A]/55">
-                      There are{" "}
-                      <span className="font-medium text-[#0F172A]/75">
-                        {discovery.totalPagesFound - 1} more pages
-                      </span>{" "}
-                      we can learn from. Choose them in Settings → Knowledge
-                      Base once you are set up.
-                    </p>
-                  )}
+                  <p className="mt-2 text-[12px] leading-4 text-[#0F172A]/55">
+                    After setup, open Settings → Knowledge Bases to discover
+                    every route under your website and choose the pages your
+                    agents should learn from.
+                  </p>
                 </div>
                 {/*
                   ISSUE 3a - "the editable questions and answer cards are too

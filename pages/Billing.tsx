@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Invoice, Organization } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 import SettingsTabs from "../components/SettingsTabs";
@@ -48,6 +54,7 @@ type BillingWallet = {
   latestTransactionAt?: string | null;
   recentTransactions?: WalletTransaction[];
   recentUsageCharges?: WalletUsageCharge[];
+  recentActivity?: ActivityItem[];
   demoTopUpEnabled?: boolean;
   creditEnforcementMode?: string;
   autoChargeWalletEnabled?: boolean;
@@ -214,53 +221,57 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     1,
   );
 
-  const loadBilling = useCallback(async (options?: { silent?: boolean }) => {
-    if (billingRequestInFlight.current) return;
-    billingRequestInFlight.current = true;
-    const requestId = ++billingRequestIdRef.current;
-    const silent = Boolean(options?.silent);
-    if (mountedRef.current && !silent) {
-      setLoading(true);
-      setError("");
-    }
-    try {
-      const response = (await api.getBillingSummary()) as BillingMetrics;
-      if (response?.organizationId && response.organizationId !== org.id) {
-        throw new Error(
-          "Billing summary returned a different organization. Please log out and log back in before continuing.",
-        );
+  const loadBilling = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (billingRequestInFlight.current) return;
+      billingRequestInFlight.current = true;
+      const requestId = ++billingRequestIdRef.current;
+      const silent = Boolean(options?.silent);
+      if (mountedRef.current && !silent) {
+        setLoading(true);
+        setError("");
       }
-      if (!mountedRef.current || requestId !== billingRequestIdRef.current) return;
-      setBilling(response);
-      const nextBalance = Number(response?.wallet?.balanceUsd);
-      if (Number.isFinite(nextBalance)) {
-        window.dispatchEvent(
-          new CustomEvent("agently:wallet-refresh", {
-            detail: {
-              organizationId: org.id,
-              balanceUsd: nextBalance,
-              source: "billing-summary",
-            },
-          }),
-        );
+      try {
+        const response = (await api.getBillingSummary()) as BillingMetrics;
+        if (response?.organizationId && response.organizationId !== org.id) {
+          throw new Error(
+            "Billing summary returned a different organization. Please log out and log back in before continuing.",
+          );
+        }
+        if (!mountedRef.current || requestId !== billingRequestIdRef.current)
+          return;
+        setBilling(response);
+        const nextBalance = Number(response?.wallet?.balanceUsd);
+        if (Number.isFinite(nextBalance)) {
+          window.dispatchEvent(
+            new CustomEvent("agently:wallet-refresh", {
+              detail: {
+                organizationId: org.id,
+                balanceUsd: nextBalance,
+                source: "billing-summary",
+              },
+            }),
+          );
+        }
+      } catch (err) {
+        if (mountedRef.current && requestId === billingRequestIdRef.current) {
+          setError(cleanError(err, "Unable to load billing details."));
+        }
+      } finally {
+        if (requestId === billingRequestIdRef.current) {
+          billingRequestInFlight.current = false;
+        }
+        if (
+          mountedRef.current &&
+          requestId === billingRequestIdRef.current &&
+          !silent
+        ) {
+          setLoading(false);
+        }
       }
-    } catch (err) {
-      if (mountedRef.current && requestId === billingRequestIdRef.current) {
-        setError(cleanError(err, "Unable to load billing details."));
-      }
-    } finally {
-      if (requestId === billingRequestIdRef.current) {
-        billingRequestInFlight.current = false;
-      }
-      if (
-        mountedRef.current &&
-        requestId === billingRequestIdRef.current &&
-        !silent
-      ) {
-        setLoading(false);
-      }
-    }
-  }, [org.id]);
+    },
+    [org.id],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -339,6 +350,15 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
   };
 
   const activity = useMemo<ActivityItem[]>(() => {
+    if (Array.isArray(wallet.recentActivity)) {
+      return wallet.recentActivity.map((item) => ({
+        ...item,
+        amountUsd: Number(item.amountUsd || 0),
+        balanceAfterUsd:
+          item.balanceAfterUsd == null ? null : Number(item.balanceAfterUsd),
+      }));
+    }
+
     const scopedTransactions = (wallet.recentTransactions || []).filter(
       (tx) => tx.organizationId === org.id,
     );
@@ -349,7 +369,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     const chargeItems: ActivityItem[] = scopedCharges
       .filter(
         (charge) =>
-          Number(charge.customerChargeUsd || 0) <= 0 ||
+          Number(charge.customerChargeUsd || 0) > 0 &&
           Boolean(charge.walletTransactionId),
       )
       .map((charge) => {
@@ -388,7 +408,12 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [org.id, wallet.recentTransactions, wallet.recentUsageCharges]);
+  }, [
+    org.id,
+    wallet.recentActivity,
+    wallet.recentTransactions,
+    wallet.recentUsageCharges,
+  ]);
 
   const filteredActivity = useMemo(() => {
     if (usageRange === "all") return activity;

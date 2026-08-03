@@ -87,6 +87,9 @@ export interface DiscoverResponse {
   rootUrl: string;
   domain: string;
   totalPagesFound: number;
+  candidatePagesFound?: number;
+  truncated?: boolean;
+  maxPages?: number;
   method: string;
   estimatedFullScanUsd: number;
   onboardingMessage: string | null;
@@ -124,6 +127,14 @@ export interface StartJobResponse {
 export interface JobStatusResponse {
   job: ScrapeJob;
   pages: DiscoveredPage[];
+}
+
+export interface ActiveJobResponse {
+  job: {
+    id: string;
+    status: 'queued' | 'running' | 'paused';
+    discoveryId: string | null;
+  } | null;
 }
 
 export interface JobControlResponse {
@@ -186,6 +197,11 @@ export const knowledgeScrapeApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  getActiveJob: (knowledgeBaseId: string): Promise<ActiveJobResponse> =>
+    call<ActiveJobResponse>(
+      `/knowledge-bases/${knowledgeBaseId}/active-job`,
+    ),
 
   /** Cheap tick. Returns ONLY job + page rows — never the whole KB list. */
   getJob: (jobId: string): Promise<JobStatusResponse> =>

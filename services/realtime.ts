@@ -103,8 +103,10 @@ export function subscribeToOrgRealtime(
         filter: `id=eq.${orgId}`,
       },
       () => {
+        // Usage counters update frequently in production. Wallet has its own
+        // lightweight event path; a full workspace bootstrap here can race
+        // with route transitions and is unnecessary.
         callbacks.onUsage?.();
-        callbacks.onAny?.();
       },
     )
     .subscribe();

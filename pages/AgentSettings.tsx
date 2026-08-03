@@ -1276,14 +1276,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     safeAgentFleetPage * agentFleetPageSize,
     safeAgentFleetPage * agentFleetPageSize + agentFleetPageSize,
   );
-  const agentFleetRangeStart = visibleVoiceAgents.length
-    ? safeAgentFleetPage * agentFleetPageSize + 1
-    : 0;
-  const agentFleetRangeEnd = Math.min(
-    visibleVoiceAgents.length,
-    safeAgentFleetPage * agentFleetPageSize + pagedVoiceAgents.length,
-  );
-
   useEffect(() => {
     if (agentFleetPage > agentFleetPageCount - 1) {
       setAgentFleetPage(Math.max(0, agentFleetPageCount - 1));
@@ -1949,7 +1941,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   </svg>
                 </button>
               )}
-              <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
+              <div className="ag-voice-fleet-grid grid grid-cols-3 gap-1.5 sm:gap-2 md:grid-cols-5">
                 {pagedVoiceAgents.map((agent) => {
                   const isEditing = agent.id === draft.id;
                   const isOutbound = agent.direction === "outbound";
@@ -1965,7 +1957,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           selectAgentForEditing(agent);
                         }
                       }}
-                      className={`ag-agent-fleet-card group min-h-[5.4rem] min-w-0 cursor-pointer rounded-2xl border px-2.5 py-2.5 text-left transition-all ${
+                      className={`ag-agent-fleet-card group min-h-[4.35rem] min-w-0 cursor-pointer rounded-xl border px-1.5 py-1.5 text-left transition-all sm:min-h-[5.4rem] sm:rounded-2xl sm:px-2.5 sm:py-2.5 ${
                         isEditing
                           ? "border-[#ff9f43] bg-[#fff5eb] text-[#232f3e] shadow-[0_16px_34px_rgba(255,85,39,0.12)] ring-2 ring-[#ffd6af]"
                           : "border-[#eee2d2] bg-[#fbfaf4] text-[#232f3e] hover:border-[#ffb26b] hover:bg-white"
@@ -1973,7 +1965,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span
-                          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[9px] font-black uppercase ${
+                          className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[8px] font-black uppercase sm:h-6 sm:w-6 sm:rounded-lg sm:text-[9px] ${
                             isOutbound
                               ? "bg-indigo-100 text-indigo-700"
                               : "bg-slate-200 text-[#566274]"
@@ -1982,16 +1974,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           {agent.direction === "outbound" ? "O" : "I"}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-black leading-tight text-slate-900">
+                          <p className="text-[9px] font-black leading-tight text-slate-900 sm:text-[11px]">
                             <MarqueeText>{agent.name}</MarqueeText>
                           </p>
-                          <p className="mt-0.5 truncate text-[8px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
+                          <p className="mt-0.5 truncate text-[7px] font-medium uppercase tracking-[0.08em] text-[#7a8493] sm:text-[8px] sm:tracking-[0.18em]">
                             {isEditing ? "Editing" : agent.direction}
                           </p>
                         </div>
                       </div>
                       <div
-                        className="mt-1.5 flex items-center justify-between gap-2"
+                        className="mt-1 flex items-center justify-between gap-1 sm:mt-1.5 sm:gap-2"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
@@ -1999,7 +1991,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           onClick={() =>
                             void openAgentModal(getDisplayAgent(agent))
                           }
-                          className="text-[9px] font-medium uppercase tracking-[0.18em] text-[#7a8493] transition hover:text-amber-700"
+                          className="text-[7px] font-medium uppercase tracking-[0.08em] text-[#7a8493] transition hover:text-amber-700 sm:text-[9px] sm:tracking-[0.18em]"
                         >
                           Details
                         </button>
@@ -2009,7 +2001,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                             setDeleteConfirmAgent(getDisplayAgent(agent))
                           }
                           disabled={org.voiceAgents.length <= 1}
-                          className="text-[9px] font-medium uppercase tracking-[0.18em] text-red-300 transition hover:text-red-500 disabled:opacity-30"
+                          className="text-[7px] font-medium uppercase tracking-[0.08em] text-red-300 transition hover:text-red-500 disabled:opacity-30 sm:text-[9px] sm:tracking-[0.18em]"
                         >
                           Delete
                         </button>
@@ -2047,25 +2039,27 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
 
             {agentFleetPageCount > 1 && (
-              <div className="ag-agent-page-indicator">
-                <span>
-                  {agentFleetRangeStart}-{agentFleetRangeEnd} of{" "}
-                  {visibleVoiceAgents.length} agents
-                </span>
-                <span className="ag-agent-page-dots">
-                  {Array.from({ length: agentFleetPageCount }).map(
-                    (_, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        aria-label={`Agent page ${index + 1}`}
-                        onClick={() => setAgentFleetPage(index)}
-                        className={`ag-agent-page-dot ${index === safeAgentFleetPage ? "ag-agent-page-dot-active" : ""}`}
-                      />
-                    ),
-                  )}
-                </span>
-              </div>
+              <nav
+                className="ag-agent-page-dots mx-auto mt-2 w-full justify-center"
+                aria-label="Voice agent pages"
+              >
+                {Array.from({ length: agentFleetPageCount }).map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    aria-label={`Voice agent page ${index + 1}`}
+                    aria-current={
+                      index === safeAgentFleetPage ? "page" : undefined
+                    }
+                    onClick={() => setAgentFleetPage(index)}
+                    className={`ag-agent-page-dot ${
+                      index === safeAgentFleetPage
+                        ? "ag-agent-page-dot-active"
+                        : ""
+                    }`}
+                  />
+                ))}
+              </nav>
             )}
           </div>
 
@@ -2255,17 +2249,17 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
 
             <div className="ag-voice-engine-card space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="ag-voice-engine-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <div>
                   <p className="text-sm font-medium text-[#232f3e]">
                     Voice Engine Settings
                   </p>
-                  <p className="text-xs text-[#7a8493] mt-0.5">
+                  <p className="ag-voice-engine-description mt-0.5 text-xs text-[#7a8493]">
                     Tune how the agent sounds on live calls without changing its
                     script or assigned Knowledge Base.
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="ag-voice-engine-actions flex gap-1.5 sm:gap-2">
                   <button
                     onClick={() => void previewVoice()}
                     disabled={
@@ -2274,7 +2268,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       (voiceProvider === "elevenlabs" &&
                         !selectedElevenLabsVoiceId)
                     }
-                    className="rounded-xl border border-slate-200 bg-white text-slate-700 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-all"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[8px] font-medium uppercase tracking-[0.08em] text-slate-700 transition-all hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 sm:rounded-xl sm:px-4 sm:py-2 sm:text-[10px] sm:tracking-[0.18em]"
                   >
                     {voicePreviewing ? "Listening…" : "Listen to Voice"}
                   </button>
@@ -2286,7 +2280,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       (voiceProvider === "elevenlabs" &&
                         !selectedElevenLabsVoiceId)
                     }
-                    className="rounded-xl bg-slate-900 text-white px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:bg-amber-600 disabled:opacity-40 transition-all"
+                    className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-[8px] font-medium uppercase tracking-[0.08em] text-white transition-all hover:bg-amber-600 disabled:opacity-40 sm:rounded-xl sm:px-4 sm:py-2 sm:text-[10px] sm:tracking-[0.18em]"
                   >
                     {voiceConfigSaving ? "Saving…" : "Save Voice"}
                   </button>
@@ -2316,7 +2310,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
 
               {voiceProvider === "elevenlabs" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="ag-voice-dials-grid grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:gap-x-3 sm:gap-y-4 md:grid-cols-2 md:gap-4">
                   {[
                     {
                       key: "stability",
@@ -2363,9 +2357,9 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     );
                     return (
                       <div key={control.key} className="ag-voice-control-row">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="ag-voice-control-heading mb-1 flex items-center justify-between sm:mb-2">
                           <Label>{control.label}</Label>
-                          <span className="text-[10px] font-black text-[#687386]">
+                          <span className="ag-voice-control-value text-[9px] font-black text-[#687386] sm:text-[10px]">
                             {value.toFixed(2)}
                           </span>
                         </div>
@@ -2391,12 +2385,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       </div>
                     );
                   })}
-                  <div className="md:col-span-2 flex items-center justify-between rounded-2xl bg-[#fffaf1] px-4 py-3 ring-1 ring-[#f2e2cf]">
+                  <div className="ag-speaker-boost-row col-span-2 flex items-center justify-between rounded-xl bg-[#fffaf1] px-2.5 py-2 ring-1 ring-[#f2e2cf] sm:rounded-2xl sm:px-4 sm:py-3">
                     <div>
-                      <p className="text-sm font-medium text-[#232f3e]">
+                      <p className="text-[11px] font-medium text-[#232f3e] sm:text-sm">
                         Speaker Boost
                       </p>
-                      <p className="text-xs text-[#7a8493]">
+                      <p className="hidden text-xs text-[#7a8493] sm:block">
                         Improve similarity and clarity when supported.
                       </p>
                     </div>
@@ -2407,10 +2401,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                           !voiceSettings.use_speaker_boost,
                         )
                       }
-                      className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${voiceSettings.use_speaker_boost ? "bg-amber-500" : "bg-slate-200"}`}
+                      className={`relative flex h-5 w-9 items-center rounded-full px-0.5 transition-all sm:h-6 sm:w-11 ${voiceSettings.use_speaker_boost ? "bg-amber-500" : "bg-slate-200"}`}
                     >
                       <div
-                        className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${voiceSettings.use_speaker_boost ? "translate-x-5" : "translate-x-0"}`}
+                        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-all sm:h-5 sm:w-5 ${voiceSettings.use_speaker_boost ? "translate-x-4 sm:translate-x-5" : "translate-x-0"}`}
                       />
                     </button>
                   </div>
@@ -2991,7 +2985,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
 
             <div className="rounded-3xl border border-sky-100 bg-sky-50/40 p-5 space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between" data-tour="agent-escalation">
+              <div
+                className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                data-tour="agent-escalation"
+              >
                 <div>
                   <p className="text-sm font-medium text-[#232f3e]">
                     Call Screening Assistants
@@ -3328,7 +3325,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
             {/* Assigned schedules */}
             <div>
-              <div className="flex items-center justify-between mb-3" data-tour="agent-call-now">
+              <div
+                className="flex items-center justify-between mb-3"
+                data-tour="agent-call-now"
+              >
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7a8493]">
                   Call Campaigns
                 </p>

@@ -128,6 +128,7 @@ const PageSelector: React.FC<Props> = ({
     warning: "",
   });
   const [filter, setFilter] = useState("");
+  const [pageIndex, setPageIndex] = useState(0);
   // Every insufficient-credit response on this page renders as a modal.
   const credit = useCreditGuard();
 
@@ -136,13 +137,13 @@ const PageSelector: React.FC<Props> = ({
   const pollRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
       if (pollRef.current) window.clearInterval(pollRef.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   const loadPages = useCallback(async (id: string) => {
     const result: ListPagesResponse = await knowledgeScrapeApi.listPages(id);
@@ -163,7 +164,10 @@ const PageSelector: React.FC<Props> = ({
   }, []);
 
   useEffect(() => {
-    if (existingDiscoveryId) void loadPages(existingDiscoveryId);
+    if (!existingDiscoveryId) return;
+    setDiscoveryId(existingDiscoveryId);
+    setPhase((current) => (current === "idle" ? "selecting" : current));
+    void loadPages(existingDiscoveryId);
   }, [existingDiscoveryId, loadPages]);
 
   // ── 1. Discover. Counts pages. Scrapes nothing. Issues 1, 2, 4.
@@ -179,7 +183,9 @@ const PageSelector: React.FC<Props> = ({
       await loadPages(result.discoveryId);
       setPhase("selecting");
       onToast?.(
-        `We found ${result.totalPagesFound} pages on ${result.domain}. Choose which ones your agent should learn from.`,
+        result.truncated
+          ? `We listed ${result.totalPagesFound} pages on ${result.domain}. The site is larger than the current discovery safety limit; narrow the list with search or raise DISCOVERY_MAX_PAGES.`
+          : `We found ${result.totalPagesFound} pages on ${result.domain}. Choose which ones your agent should learn from.`,
       );
     } catch (err: any) {
       setPhase("idle");
@@ -209,6 +215,23 @@ const PageSelector: React.FC<Props> = ({
         (p.title || "").toLowerCase().includes(q),
     );
   }, [pages, filter]);
+
+  const pageSize = 100;
+  const pageCount = Math.max(1, Math.ceil(visiblePages.length / pageSize));
+  const pagedPages = useMemo(
+    () => visiblePages.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+    [visiblePages, pageIndex],
+  );
+  const estimatedPerPage = pages.length > 0 ? estimates.all / pages.length : 0;
+  const selectedEstimate = estimatedPerPage * selected.size;
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [filter, pages.length]);
+
+  useEffect(() => {
+    if (pageIndex >= pageCount) setPageIndex(Math.max(0, pageCount - 1));
+  }, [pageIndex, pageCount]);
 
   const selectAll = () => setSelected(new Set(pages.map((p) => p.id)));
   const selectNone = () => setSelected(new Set());
@@ -247,7 +270,7 @@ const PageSelector: React.FC<Props> = ({
    * SCOPED POLL. This is the whole fix. One endpoint, small payload,
    * updates only the page rows whose progress moved.
    */
-  const startPolling = (jobId: string) => {
+  function startPolling(jobId: string) {
     if (pollRef.current) window.clearInterval(pollRef.current);
 
     const tick = async () => {
@@ -309,7 +332,36 @@ const PageSelector: React.FC<Props> = ({
 
     void tick();
     pollRef.current = window.setInterval(tick, 2000);
-  };
+  }
+
+  // Restore a running background scan after the tenant navigates away and
+  // returns. This reads one tiny job record and resumes the scoped poll without
+  // reloading the whole Knowledge Bases page.
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      try {
+        const active = await knowledgeScrapeApi.getActiveJob(knowledgeBaseId);
+        if (cancelled || !active.job) return;
+        if (active.job.discoveryId) {
+          setDiscoveryId(active.job.discoveryId);
+          await loadPages(active.job.discoveryId);
+        }
+        if (cancelled) return;
+        setPhase("scraping");
+        startPolling(active.job.id);
+      } catch {
+        // No active job, an older backend, or a transient request failure. The
+        // normal page-selection state remains available.
+      }
+    };
+    void restore();
+    return () => {
+      cancelled = true;
+    };
+    // knowledgeBaseId identifies the lifecycle. loadPages is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knowledgeBaseId, loadPages]);
 
   // ── 4. Stop / resume. Issue 4(f), with the warning from 4(g).
   const requestStop = async () => {
@@ -399,11 +451,18 @@ const PageSelector: React.FC<Props> = ({
               {pages.length} pages discovered
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              {selected.size} selected · estimated {money(estimates.selected)}
+              {selected.size} selected · estimated {money(selectedEstimate)}
             </p>
           </div>
           {phase === "selecting" && (
-            <div className="grid w-full min-w-0 grid-cols-3 gap-1.5 sm:w-auto sm:flex sm:flex-wrap sm:gap-2">
+            <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:w-auto sm:flex sm:flex-wrap sm:gap-2">
+              <button
+                onClick={() => void handleDiscover()}
+                disabled={busy === "discover"}
+                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 disabled:opacity-50 sm:px-3 sm:text-[10px] sm:tracking-widest"
+              >
+                Refresh list
+              </button>
               <button
                 onClick={selectRecommended}
                 className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
@@ -505,7 +564,7 @@ const PageSelector: React.FC<Props> = ({
           className="mb-4 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-amber-300"
         />
         <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
-          {visiblePages.map((page) => {
+          {pagedPages.map((page) => {
             const isSelected = selected.has(page.id);
             const active = page.scrapeStatus === "scraping";
             return (
@@ -561,6 +620,36 @@ const PageSelector: React.FC<Props> = ({
           })}
         </div>
 
+        {visiblePages.length > pageSize && (
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <button
+              type="button"
+              onClick={() =>
+                setPageIndex((current) => Math.max(0, current - 1))
+              }
+              disabled={pageIndex === 0}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <p className="text-center text-[11px] text-slate-500">
+              {pageIndex * pageSize + 1}–
+              {Math.min((pageIndex + 1) * pageSize, visiblePages.length)} of{" "}
+              {visiblePages.length}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setPageIndex((current) => Math.min(pageCount - 1, current + 1))
+              }
+              disabled={pageIndex >= pageCount - 1}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        )}
+
         {/* Issue 4(c): the button only appears once pages are selected. */}
         {phase === "selecting" && (
           <button
@@ -572,7 +661,7 @@ const PageSelector: React.FC<Props> = ({
               ? "Select pages to continue"
               : busy === "start"
                 ? "Starting…"
-                : `Read ${selected.size} selected page${selected.size === 1 ? "" : "s"} · ${money(estimates.selected)}`}
+                : `Read ${selected.size} selected page${selected.size === 1 ? "" : "s"} · ${money(selectedEstimate)}`}
           </button>
         )}
       </div>

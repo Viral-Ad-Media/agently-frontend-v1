@@ -100,9 +100,17 @@ export function resolveChatbotWidgetBaseUrl(): string {
 }
 
 export function resolveAppBaseUrl(): string {
+  const origin = getWindowOrigin();
+  const host = getWindowHost();
+
+  // In production the domain in the address bar is the source of truth. This
+  // prevents an old VITE_APP_URL from reviving a retired Vercel hostname after
+  // the canonical domain changes. Local development may still use VITE_APP_URL.
+  if (origin && !isLocalHost(host)) return origin;
+
   const configured = cleanBaseUrl(import.meta.env.VITE_APP_URL);
   if (configured) return originFromUrl(configured);
-  return getWindowOrigin();
+  return origin;
 }
 
 export { DEFAULT_BACKEND_URL };

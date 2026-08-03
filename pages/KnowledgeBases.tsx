@@ -33,13 +33,18 @@
  * acts on it.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   AgentConfig,
   ChatbotConfig,
   KnowledgeBase,
-  KnowledgeSource,
   Organization,
 } from "../types";
 import { api } from "../services/api";
@@ -98,7 +103,6 @@ const KB_INDUSTRIES = [
 ];
 
 const emptyForm = { name: "", website: "", industry: "", description: "" };
-
 
 /* ══════════════════════════════════════════════════════════════════════════
  * AttachmentList — ITEM 17
@@ -214,165 +218,6 @@ const AttachmentList: React.FC<{
   );
 };
 
-/* ══════════════════════════════════════════════════════════════════════════
- * SourceList — ITEM 16
- * ══════════════════════════════════════════════════════════════════════════
- * The knowledge base description was rendering as a run-on sentence:
- *
- *   "Website knowledge scraped from x.com. Main page topics: Ecomm Theme -
- *    Home Page; Blood Sugar Ultra – Natural Support for Healthy Glucose Leve;
- *    ...; Hero Theme - Page Not Found; Hero Theme - Page Not Found; ..."
- *
- * Three things wrong with that. It is unreadable; the titles are truncated
- * mid-word by whatever generated it; and it surfaces junk pages ("Page Not
- * Found", duplicates) with no way to act on them. Read-only prose about your
- * data is the least useful form it can take.
- *
- * The same information is now the source rows themselves — collapsible,
- * selectable, with bulk removal. The generated topic list is stripped from the
- * description, since the list below says it properly.
- */
-const SOURCE_JUNK = /(page not found|404|untitled|^all$)/i;
-
-const SourceList: React.FC<{
-  sources: KnowledgeSource[];
-  busy: string | null;
-  onRemove: (ids: string[]) => void;
-}> = ({ sources, busy, onRemove }) => {
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
-
-  const toggle = (id: string) =>
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
-    );
-
-  const suspect = sources.filter((source) =>
-    SOURCE_JUNK.test(source.title || ""),
-  );
-
-  if (sources.length === 0) return null;
-
-  return (
-    <div className="mt-5 min-w-0 overflow-hidden rounded-2xl border border-slate-200">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-3 text-left sm:gap-3 sm:px-4"
-      >
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 sm:text-xs sm:tracking-widest">
-            Pages in this knowledge base
-          </span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-            {sources.length}
-          </span>
-          {suspect.length > 0 && !open ? (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-              {suspect.length} may be junk
-            </span>
-          ) : null}
-        </span>
-        <span className="shrink-0 text-xs text-slate-400">
-          {open ? "Hide" : "Show"}
-        </span>
-      </button>
-
-      {open ? (
-        <div className="border-t border-slate-200">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
-            <button
-              type="button"
-              onClick={() =>
-                setSelected(
-                  selected.length === sources.length
-                    ? []
-                    : sources.map((source) => source.id),
-                )
-              }
-              className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900"
-            >
-              {selected.length === sources.length
-                ? "Clear all"
-                : "Select all"}
-            </button>
-            {suspect.length > 0 ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setSelected(suspect.map((source) => source.id))
-                }
-                className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-800"
-              >
-                Select {suspect.length} likely junk
-              </button>
-            ) : null}
-            <span className="flex-1" />
-            {selected.length > 0 ? (
-              <button
-                type="button"
-                disabled={Boolean(busy)}
-                onClick={() => {
-                  onRemove(selected);
-                  setSelected([]);
-                }}
-                className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-40"
-              >
-                Remove {selected.length}
-              </button>
-            ) : null}
-          </div>
-
-          <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
-            {sources.map((source) => {
-              const isSuspect = SOURCE_JUNK.test(source.title || "");
-              return (
-                <li
-                  key={source.id}
-                  className="flex min-w-0 items-start gap-2 px-3 py-2.5 sm:gap-3 sm:px-4"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(source.id)}
-                    onChange={() => toggle(source.id)}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`truncate text-xs font-bold ${
-                        isSuspect ? "text-amber-700" : "text-slate-700"
-                      }`}
-                      title={source.title || source.url}
-                    >
-                      {source.title || source.url}
-                    </p>
-                    <p className="truncate font-mono text-[10px] text-slate-400">
-                      {source.url}
-                      {source.chunkCount
-                        ? ` · ${source.chunkCount} passages`
-                        : ""}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => onRemove([source.id])}
-                    className="shrink-0 text-[9px] font-black uppercase tracking-wider text-slate-300 transition hover:text-rose-600 disabled:opacity-40 sm:text-[10px] sm:tracking-widest"
-                  >
-                    Remove
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
 const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   org,
   initialKnowledgeBases = [],
@@ -438,43 +283,6 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
       setLoaded(true);
     }
   }, [showToast]);
-
-  /**
-   * ITEM 16 — bulk page removal.
-   *
-   * Deletes run sequentially rather than via Promise.all: each one cascades to
-   * the source's knowledge chunks server-side, and firing twenty concurrent
-   * cascades at Supabase is how you get partial failures that leave orphaned
-   * chunks still being retrieved into agent prompts.
-   */
-  const removeSources = useCallback(
-    async (knowledgeBaseId: string, sourceIds: string[]) => {
-      if (!sourceIds.length) return;
-      setBusy(`sources-${knowledgeBaseId}`);
-      let removed = 0;
-      try {
-        for (const sourceId of sourceIds) {
-          await api.deleteKnowledgeSource(knowledgeBaseId, sourceId);
-          removed += 1;
-        }
-        showToast(
-          `Removed ${removed} page${removed === 1 ? "" : "s"} from this knowledge base.`,
-        );
-      } catch (error) {
-        showToast(
-          removed
-            ? `Removed ${removed}, then hit an error. Try the rest again.`
-            : "Could not remove those pages.",
-          false,
-        );
-      } finally {
-        setBusy(null);
-        await loadAll();
-        onChanged?.();
-      }
-    },
-    [loadAll, onChanged, showToast],
-  );
 
   useEffect(() => {
     if (!initialKnowledgeBases.length) void loadAll();
@@ -632,9 +440,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
       )}
 
-      <header className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-4 sm:gap-3 sm:pb-5">
+      <header className="ag-kb-page-header flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-4 sm:gap-3 sm:pb-5">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-xl font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
+          <h2 className="ag-kb-page-title truncate text-[17px] font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
             Knowledge Bases
           </h2>
           <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-slate-500 sm:block">
@@ -644,10 +452,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="inline-flex h-10 max-w-[44%] shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-slate-900 px-3 text-[10px] font-black uppercase tracking-wider text-white hover:bg-amber-600 sm:h-auto sm:max-w-none sm:rounded-2xl sm:px-5 sm:py-2.5 sm:tracking-widest"
+          className="ag-kb-new-button inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-amber-600 sm:h-auto sm:rounded-2xl sm:px-5 sm:py-2.5 sm:text-[10px] sm:uppercase sm:tracking-widest"
         >
-          <span className="sm:hidden">+ New KB</span>
-          <span className="hidden sm:inline">+ New knowledge base</span>
+          <span>+ New knowledge base</span>
         </button>
       </header>
 
@@ -788,12 +595,6 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                       />
                     </div>
                   </div>
-
-                  <SourceList
-                    sources={(active as any).sources || []}
-                    busy={busy}
-                    onRemove={(ids) => void removeSources(active.id, ids)}
-                  />
                 </div>
 
                 {/*
@@ -827,7 +628,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                     (active as any).changeMonitoringEnabled === true
                   }
                   initialMode={
-                    (active as any).changeMonitoringMode || "notify_only"
+                    (active as any).changeMonitoringMode || "auto_rescrape"
                   }
                   initialIntervalHours={
                     (active as any).changeMonitoringIntervalHours || 24

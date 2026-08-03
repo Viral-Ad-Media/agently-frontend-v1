@@ -14,7 +14,10 @@ interface SettingsPayload {
     name: string;
     email: string;
   };
-  businessProfile: Pick<BusinessProfile, "name" | "industry" | "website" | "location">;
+  businessProfile: Pick<
+    BusinessProfile,
+    "name" | "industry" | "website" | "location"
+  >;
 }
 
 interface SettingsProps {
@@ -150,7 +153,10 @@ const Settings: React.FC<SettingsProps> = ({
       return;
     }
     if (!nextEmail || !/^\S+@\S+\.\S+$/.test(nextEmail)) {
-      setMessage({ type: "error", text: "Enter a valid account email address." });
+      setMessage({
+        type: "error",
+        text: "Enter a valid account email address.",
+      });
       return;
     }
     if (!nextBusinessName) {
@@ -213,7 +219,10 @@ const Settings: React.FC<SettingsProps> = ({
   const sendResetLink = async () => {
     const targetEmail = cleanEmail(accountEmail || initialAccountEmail);
     if (!targetEmail) {
-      setPasswordMessage({ type: "error", text: "Save an account email first." });
+      setPasswordMessage({
+        type: "error",
+        text: "Save an account email first.",
+      });
       return;
     }
     setResetSending(true);
@@ -246,7 +255,10 @@ const Settings: React.FC<SettingsProps> = ({
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage({ type: "error", text: "New passwords do not match." });
+      setPasswordMessage({
+        type: "error",
+        text: "New passwords do not match.",
+      });
       return;
     }
 
@@ -257,14 +269,15 @@ const Settings: React.FC<SettingsProps> = ({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordMessage({ type: "success", text: "Password updated successfully." });
+      setPasswordMessage({
+        type: "success",
+        text: "Password updated successfully.",
+      });
     } catch (error) {
       setPasswordMessage({
         type: "error",
         text:
-          error instanceof Error
-            ? error.message
-            : "Could not change password.",
+          error instanceof Error ? error.message : "Could not change password.",
       });
     } finally {
       setPasswordSaving(false);
@@ -278,7 +291,8 @@ const Settings: React.FC<SettingsProps> = ({
       : "border-slate-300 bg-white text-slate-900 focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
   }`;
   const selectClass = `${fieldClass} appearance-none`;
-  const labelClass = "text-[10px] font-black uppercase tracking-widest text-slate-400";
+  const labelClass =
+    "text-[10px] font-black uppercase tracking-widest text-slate-400";
   const sectionClass = "border-b border-slate-200/80 py-6 last:border-b-0";
 
   return (
@@ -312,9 +326,13 @@ const Settings: React.FC<SettingsProps> = ({
             }}
             disabled={saving || passwordSaving}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-2.5 text-[11px] font-black text-slate-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-xs"
-            aria-label={isEditing ? "Lock profile fields" : "Edit profile fields"}
+            aria-label={
+              isEditing ? "Lock profile fields" : "Edit profile fields"
+            }
           >
-            <i className={`fa-sharp fa-solid ${isEditing ? "fa-lock" : "fa-pen"}`} />
+            <i
+              className={`fa-sharp fa-solid ${isEditing ? "fa-lock" : "fa-pen"}`}
+            />
             {isEditing ? "Lock" : "Edit"}
           </button>
           <button
@@ -323,7 +341,9 @@ const Settings: React.FC<SettingsProps> = ({
             disabled={!isEditing || !hasUnsavedChanges || saving}
             className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-3 text-[11px] font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40 sm:px-5 sm:text-xs"
           >
-            {saving ? "Saving..." : (
+            {saving ? (
+              "Saving..."
+            ) : (
               <>
                 <span className="sm:hidden">Save</span>
                 <span className="hidden sm:inline">Save Profile</span>
@@ -339,7 +359,9 @@ const Settings: React.FC<SettingsProps> = ({
         <section className={sectionClass} data-tour="settings-general">
           <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="text-base font-black text-slate-900">Customer Account</h3>
+              <h3 className="text-base font-black text-slate-900">
+                Customer Account
+              </h3>
               <p className="mt-1 text-xs font-medium text-slate-500">
                 Name and registered email for the customer account.
               </p>
@@ -374,7 +396,9 @@ const Settings: React.FC<SettingsProps> = ({
 
         <section className={sectionClass}>
           <div className="mb-5">
-            <h3 className="text-base font-black text-slate-900">Business Profile</h3>
+            <h3 className="text-base font-black text-slate-900">
+              Business Profile
+            </h3>
             <p className="mt-1 text-xs font-medium text-slate-500">
               Business details used across the workspace.
             </p>
@@ -429,7 +453,9 @@ const Settings: React.FC<SettingsProps> = ({
 
         <section className={sectionClass}>
           <div className="mb-5">
-            <h3 className="text-base font-black text-slate-900">Workspace Preferences</h3>
+            <h3 className="text-base font-black text-slate-900">
+              Workspace Preferences
+            </h3>
             <p className="mt-1 text-xs font-medium text-slate-500">
               Default phone number and timezone for the organization.
             </p>
@@ -468,9 +494,12 @@ const Settings: React.FC<SettingsProps> = ({
         <section className={sectionClass}>
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-base font-black text-slate-900">Password Access</h3>
+              <h3 className="text-base font-black text-slate-900">
+                Password Access
+              </h3>
               <p className="mt-1 text-xs font-medium text-slate-500">
-                Change the password in edit mode, or send a reset link to the registered email.
+                Change the password in edit mode, or send a reset link to the
+                registered email.
               </p>
             </div>
             <button
@@ -523,7 +552,13 @@ const Settings: React.FC<SettingsProps> = ({
             <button
               type="button"
               onClick={() => void changePassword()}
-              disabled={!isEditing || passwordSaving || (!currentPassword && !!user?.email) || !newPassword || !confirmPassword}
+              disabled={
+                !isEditing ||
+                passwordSaving ||
+                (!currentPassword && !!user?.email) ||
+                !newPassword ||
+                !confirmPassword
+              }
               className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {passwordSaving ? "Updating..." : "Apply Password Change"}

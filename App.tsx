@@ -21,8 +21,16 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
+import AgentSettings from "./pages/AgentSettings";
 import Billing from "./pages/Billing";
+import Dashboard from "./pages/Dashboard";
 import KnowledgeBases from "./pages/KnowledgeBases";
+import Leads from "./pages/Leads";
+import Messenger from "./pages/Messenger";
+import Notifications from "./pages/Notifications";
+import Onboarding from "./pages/Onboarding";
+import OutreachScheduler from "./pages/OutreachScheduler";
+import PhoneNumbers from "./pages/PhoneNumbers";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
 // THE TOUR. It was written last round but never imported by anything, which is
@@ -75,16 +83,11 @@ function lazyRoute<T extends React.ComponentType<any>>(
   });
 }
 
-const Dashboard = lazyRoute(() => import("./pages/Dashboard"), "dashboard");
-const Onboarding = lazyRoute(() => import("./pages/Onboarding"), "onboarding");
-const Leads = lazyRoute(() => import("./pages/Leads"), "leads");
-const AgentSettings = lazyRoute(() => import("./pages/AgentSettings"), "agent-settings");
-const PhoneNumbers = lazyRoute(() => import("./pages/PhoneNumbers"), "phone-numbers");
-const OutreachScheduler = lazyRoute(() => import("./pages/OutreachScheduler"), "outreach");
-const Notifications = lazyRoute(() => import("./pages/Notifications"), "notifications");
 const Login = lazyRoute(() => import("./pages/Login"), "login");
-const ForgotPassword = lazyRoute(() => import("./pages/ForgotPassword"), "forgot-password");
-const Messenger = lazyRoute(() => import("./pages/Messenger"), "messenger");
+const ForgotPassword = lazyRoute(
+  () => import("./pages/ForgotPassword"),
+  "forgot-password",
+);
 const Features = lazyRoute(() => import("./pages/Features"), "features");
 const Home = lazyRoute(() => import("./pages/Home"), "home");
 const About = lazyRoute(() => import("./pages/About"), "about");
@@ -257,6 +260,8 @@ const App: React.FC = () => {
   const realtimeDebounceRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const workspaceRefreshPromiseRef =
+    React.useRef<Promise<WorkspaceBootstrap> | null>(null);
   useEffect(() => {
     if (!org?.id) return;
     const unsubscribe = subscribeToOrgRealtime(org.id, {
@@ -354,7 +359,15 @@ const App: React.FC = () => {
   };
 
   const refreshWorkspace = async () => {
-    await loadWorkspace();
+    // Production realtime events and user actions can request a refresh at the
+    // same time. Collapse them into one bootstrap request so route changes are
+    // never competing with several full-workspace responses.
+    if (!workspaceRefreshPromiseRef.current) {
+      workspaceRefreshPromiseRef.current = loadWorkspace().finally(() => {
+        workspaceRefreshPromiseRef.current = null;
+      });
+    }
+    await workspaceRefreshPromiseRef.current;
   };
 
   const requireWorkspace = () => {
