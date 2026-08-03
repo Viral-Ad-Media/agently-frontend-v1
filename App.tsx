@@ -1,10 +1,5 @@
-import React, { Suspense, lazy, useEffect, useState } from "react";
-import {
-  HashRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import React, { lazy, useEffect, useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import {
   AgentConfig,
   BusinessProfile,
@@ -21,6 +16,9 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
+import StableHashRouter, {
+  RouteCommitBoundary,
+} from "./components/StableHashRouter";
 import AgentSettings from "./pages/AgentSettings";
 import Billing from "./pages/Billing";
 import Dashboard from "./pages/Dashboard";
@@ -784,8 +782,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <Router unstable_useTransitions={false}>
-      <Suspense fallback={<AppLoading />}>
+    <StableHashRouter>
+      <RouteCommitBoundary fallback={<AppLoading />}>
         <Routes>
           <Route
             path="/"
@@ -1122,7 +1120,7 @@ const App: React.FC = () => {
             }
           />
         </Routes>
-      </Suspense>
+      </RouteCommitBoundary>
 
       {creditAlert && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#232f3e]/55 px-4 backdrop-blur-sm">
@@ -1177,7 +1175,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-    </Router>
+    </StableHashRouter>
   );
 };
 

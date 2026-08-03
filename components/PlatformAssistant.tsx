@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   platformAssistantApi,
   type AssistantConfig,
   type AssistantMessage,
-} from '../services/platformAssistantApi';
+} from "../services/platformAssistantApi";
 
 /**
  * agently/components/PlatformAssistant.tsx   <-- NEW FILE
@@ -28,8 +28,8 @@ import {
  * - Respects prefers-reduced-motion: the breath and shimmer stop entirely.
  */
 
-const POSITION_KEY = 'agently.assistant.position';
-const HIDDEN_KEY = 'agently.assistant.hidden';
+const POSITION_KEY = "agently.assistant.position";
+const HIDDEN_KEY = "agently.assistant.hidden";
 
 const LAUNCHER_SIZE = 60;
 const EDGE_PADDING = 16;
@@ -38,7 +38,7 @@ const DRAG_THRESHOLD_PX = 4; // below this a pointer-up is a click, not a drag
 type Point = { x: number; y: number };
 
 const clampToViewport = (point: Point): Point => {
-  if (typeof window === 'undefined') return point;
+  if (typeof window === "undefined") return point;
   return {
     x: Math.min(
       Math.max(point.x, EDGE_PADDING),
@@ -52,20 +52,38 @@ const clampToViewport = (point: Point): Point => {
 };
 
 const defaultPosition = (): Point => {
-  if (typeof window === 'undefined') return { x: 24, y: 24 };
+  if (typeof window === "undefined") return { x: 24, y: 24 };
   return {
     x: window.innerWidth - LAUNCHER_SIZE - 24,
     y: window.innerHeight - LAUNCHER_SIZE - 24,
   };
 };
 
-const readStoredPosition = (): Point | null => {
-  if (typeof window === 'undefined') return null;
+const tenantStorageKey = (base: string, organizationId: string) =>
+  `${base}:${organizationId || "default"}`;
+
+const readStoredHidden = (organizationId: string): boolean => {
+  if (typeof window === "undefined") return false;
   try {
-    const raw = window.localStorage.getItem(POSITION_KEY);
+    return (
+      window.localStorage.getItem(
+        tenantStorageKey(HIDDEN_KEY, organizationId),
+      ) === "1"
+    );
+  } catch {
+    return false;
+  }
+};
+
+const readStoredPosition = (organizationId: string): Point | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(
+      tenantStorageKey(POSITION_KEY, organizationId),
+    );
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Point;
-    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') {
+    if (typeof parsed?.x !== "number" || typeof parsed?.y !== "number") {
       return null;
     }
     return clampToViewport(parsed);
@@ -93,7 +111,7 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
             <a
               key={key}
               href={link[2]}
-              target={link[2].startsWith('http') ? '_blank' : undefined}
+              target={link[2].startsWith("http") ? "_blank" : undefined}
               rel="noreferrer"
               className="font-semibold text-[#B45309] underline underline-offset-2"
             >
@@ -107,7 +125,7 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
   return (
     <>
       {blocks.map((block, blockIndex) => {
-        const lines = block.split('\n');
+        const lines = block.split("\n");
         const isList = lines.every((line) => /^\s*[-*\d]+[.)]?\s+/.test(line));
 
         if (isList) {
@@ -119,7 +137,7 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
               {lines.map((line, lineIndex) => (
                 <li key={lineIndex}>
                   {inline(
-                    line.replace(/^\s*[-*\d]+[.)]?\s+/, ''),
+                    line.replace(/^\s*[-*\d]+[.)]?\s+/, ""),
                     `${blockIndex}-${lineIndex}`,
                   )}
                 </li>
@@ -138,29 +156,32 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
-const PlatformAssistant: React.FC = () => {
+interface PlatformAssistantProps {
+  organizationId: string;
+}
+
+const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
+  organizationId,
+}) => {
   const [config, setConfig] = useState<AssistantConfig | null>(null);
   const [open, setOpen] = useState(false);
-  const [hidden, setHidden] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.localStorage.getItem(HIDDEN_KEY) === '1',
+  const [hidden, setHidden] = useState(() => readStoredHidden(organizationId));
+  const [position, setPosition] = useState<Point>(
+    () => readStoredPosition(organizationId) || defaultPosition(),
   );
-  const [position, setPosition] = useState<Point>(defaultPosition);
   const [dragging, setDragging] = useState(false);
 
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [escalating, setEscalating] = useState(false);
-  const [escalationNote, setEscalationNote] = useState('');
-  const [banner, setBanner] = useState('');
+  const [escalationNote, setEscalationNote] = useState("");
+  const [banner, setBanner] = useState("");
 
   const dragState = useRef<{ dx: number; dy: number; moved: number } | null>(
     null,
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* ── Load config ────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -170,7 +191,7 @@ const PlatformAssistant: React.FC = () => {
       .then((result) => {
         if (cancelled || !result?.enabled) return;
         setConfig(result);
-        setMessages([{ role: 'assistant', text: result.welcomeMessage }]);
+        setMessages([{ role: "assistant", text: result.welcomeMessage }]);
       })
       .catch(() => {
         // Assistant unavailable: stay silent and unmounted. A support widget
@@ -183,13 +204,14 @@ const PlatformAssistant: React.FC = () => {
 
   /* ── Restore + keep position inside the viewport on resize ──────────── */
   useEffect(() => {
-    const stored = readStoredPosition();
-    if (stored) setPosition(stored);
+    setPosition(readStoredPosition(organizationId) || defaultPosition());
+    setHidden(readStoredHidden(organizationId));
+    setOpen(false);
 
     const onResize = () => setPosition((current) => clampToViewport(current));
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [organizationId]);
 
   /* ── Drag ───────────────────────────────────────────────────────────── */
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -210,7 +232,8 @@ const PlatformAssistant: React.FC = () => {
       x: event.clientX - state.dx,
       y: event.clientY - state.dy,
     });
-    state.moved += Math.abs(next.x - position.x) + Math.abs(next.y - position.y);
+    state.moved +=
+      Math.abs(next.x - position.x) + Math.abs(next.y - position.y);
     setPosition(next);
   };
 
@@ -221,24 +244,42 @@ const PlatformAssistant: React.FC = () => {
     if (!state) return;
 
     try {
-      window.localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+      window.localStorage.setItem(
+        tenantStorageKey(POSITION_KEY, organizationId),
+        JSON.stringify(position),
+      );
     } catch {
       /* storage disabled — position simply resets next session */
     }
 
     // A drag should never also open the panel.
-    if (state.moved <= DRAG_THRESHOLD_PX) setOpen(true);
+    if (state.moved <= DRAG_THRESHOLD_PX) {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement !== document.body
+      ) {
+        activeElement.blur();
+      }
+      setOpen(true);
+    }
   };
 
   /* ── Hide / restore ─────────────────────────────────────────────────── */
-  const setHiddenPersisted = useCallback((value: boolean) => {
-    setHidden(value);
-    try {
-      window.localStorage.setItem(HIDDEN_KEY, value ? '1' : '0');
-    } catch {
-      /* non-fatal */
-    }
-  }, []);
+  const setHiddenPersisted = useCallback(
+    (value: boolean) => {
+      setHidden(value);
+      try {
+        window.localStorage.setItem(
+          tenantStorageKey(HIDDEN_KEY, organizationId),
+          value ? "1" : "0",
+        );
+      } catch {
+        /* non-fatal */
+      }
+    },
+    [organizationId],
+  );
 
   /* ── Scroll to newest ───────────────────────────────────────────────── */
   useEffect(() => {
@@ -247,10 +288,6 @@ const PlatformAssistant: React.FC = () => {
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages, open, sending]);
 
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
   /* ── Send ───────────────────────────────────────────────────────────── */
   const send = useCallback(
     async (raw: string) => {
@@ -258,23 +295,23 @@ const PlatformAssistant: React.FC = () => {
       if (!text || sending) return;
 
       const history = messages;
-      setMessages((current) => [...current, { role: 'user', text }]);
-      setInput('');
+      setMessages((current) => [...current, { role: "user", text }]);
+      setInput("");
       setSending(true);
 
       try {
         const result = await platformAssistantApi.chat(text, history);
         setMessages((current) => [
           ...current,
-          { role: 'assistant', text: result.response },
+          { role: "assistant", text: result.response },
         ]);
       } catch {
         setMessages((current) => [
           ...current,
           {
-            role: 'assistant',
+            role: "assistant",
             text: `I couldn't reach the assistant just then. Try again in a moment — or email ${
-              config?.supportEmail || 'agentlycallsupport@gmail.com'
+              config?.supportEmail || "agentlycallsupport@gmail.com"
             } and the team will pick it up.`,
           },
         ]);
@@ -294,12 +331,12 @@ const PlatformAssistant: React.FC = () => {
         history: messages,
       });
       setBanner(result.message);
-      setEscalationNote('');
+      setEscalationNote("");
       setEscalating(false);
     } catch {
       setBanner(
         `Couldn't log that. Email ${
-          config?.supportEmail || 'agentlycallsupport@gmail.com'
+          config?.supportEmail || "agentlycallsupport@gmail.com"
         } directly and the team will help.`,
       );
     }
@@ -325,7 +362,9 @@ const PlatformAssistant: React.FC = () => {
     );
   }
 
-  const panelRight = position.x > (window.innerWidth || 1200) / 2;
+  const panelRight =
+    typeof window === "undefined" ||
+    position.x > (window.innerWidth || 1200) / 2;
 
   return (
     <>
@@ -377,7 +416,7 @@ const PlatformAssistant: React.FC = () => {
           <span
             aria-hidden
             className={`pointer-events-none absolute inset-0 rounded-full bg-[#F59E0B]/45 ${
-              dragging ? '' : 'agently-halo'
+              dragging ? "" : "agently-halo"
             }`}
           />
 
@@ -390,7 +429,9 @@ const PlatformAssistant: React.FC = () => {
             aria-label={`Open ${config.name}`}
             style={{ width: LAUNCHER_SIZE, height: LAUNCHER_SIZE }}
             className={`group relative flex touch-none items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#0F172A] shadow-[0_14px_38px_rgba(15,23,42,0.34)] outline-none transition-shadow duration-200 hover:shadow-[0_18px_46px_rgba(15,23,42,0.42)] focus-visible:ring-4 focus-visible:ring-[#F59E0B]/45 ${
-              dragging ? 'cursor-grabbing scale-105' : 'cursor-grab agently-breathe'
+              dragging
+                ? "cursor-grabbing scale-105"
+                : "cursor-grab agently-breathe"
             }`}
           >
             <img
@@ -402,7 +443,7 @@ const PlatformAssistant: React.FC = () => {
             <span
               aria-hidden
               className={`pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/55 to-transparent ${
-                dragging ? '' : 'agently-sheen'
+                dragging ? "" : "agently-sheen"
               }`}
             />
             {/* Live dot */}
@@ -427,10 +468,14 @@ const PlatformAssistant: React.FC = () => {
       {/* ── Panel ──────────────────────────────────────────────────────── */}
       {open ? (
         <div
-          className={`agently-panel fixed bottom-4 z-[71] flex w-[calc(100vw-2rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] sm:bottom-6 ${
-            panelRight ? 'right-4 sm:right-6' : 'left-4 sm:left-6'
+          className={`agently-panel fixed inset-x-3 bottom-3 z-[71] flex w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.26)] sm:inset-x-auto sm:bottom-6 sm:w-[min(400px,calc(100vw-3rem))] ${
+            panelRight ? "sm:right-6" : "sm:left-6"
           }`}
-          style={{ height: 'min(560px, calc(100vh - 6rem))' }}
+          style={{
+            height:
+              "min(620px, calc(100dvh - 1.5rem - env(safe-area-inset-bottom, 0px)))",
+            bottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+          }}
           role="dialog"
           aria-label={config.headerTitle}
         >
@@ -469,17 +514,17 @@ const PlatformAssistant: React.FC = () => {
               <div
                 key={index}
                 className={`flex ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
+                  message.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
                 <div
                   className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
-                    message.role === 'user'
-                      ? 'rounded-br-md bg-[#0F172A] text-white'
-                      : 'rounded-bl-md border border-slate-200 bg-white text-slate-700'
+                    message.role === "user"
+                      ? "rounded-br-md bg-[#0F172A] text-white"
+                      : "rounded-bl-md border border-slate-200 bg-white text-slate-700"
                   }`}
                 >
-                  {message.role === 'assistant' ? (
+                  {message.role === "assistant" ? (
                     <RichText text={message.text} />
                   ) : (
                     message.text
@@ -530,7 +575,7 @@ const PlatformAssistant: React.FC = () => {
                 Send this to the Agently team
               </p>
               <p className="mt-1 text-[11px] text-slate-500">
-                They'll reply to your account email. Goes to{' '}
+                They'll reply to your account email. Goes to{" "}
                 {config.supportEmail}.
               </p>
               <textarea
@@ -562,11 +607,10 @@ const PlatformAssistant: React.FC = () => {
             <div className="border-t border-slate-200 bg-white px-3 py-3">
               <div className="flex items-end gap-2">
                 <textarea
-                  ref={inputRef}
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
+                    if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       void send(input);
                     }

@@ -1,4 +1,11 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Organization, User } from "../types";
 import { ICONS } from "@/constants";
@@ -768,7 +775,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     };
   }, [org.id]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMobileNavOpen(false);
     // A modal or drawer from the previous page must never leave the document
     // scroll-locked after its route unmounts. Production navigation can expose
@@ -795,7 +802,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const pageMeta = getPageMeta(location.pathname);
 
   return (
-    <div className="relative h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div
+      data-agently-route={location.pathname}
+      className="relative h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]"
+    >
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.06),transparent_28%)]" />
       <div className="relative flex h-full min-h-0 overflow-hidden">
         <div
@@ -991,14 +1001,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     </div>
                   </div>
                   <div
-                    key={location.pathname}
+                    key={`${location.key}:${location.pathname}:${location.search}`}
                     className="pointer-events-none min-w-0 select-none opacity-40"
                   >
                     {children}
                   </div>
                 </div>
               ) : (
-                <div key={location.pathname} className="min-w-0">
+                <div
+                  key={`${location.key}:${location.pathname}:${location.search}`}
+                  className="min-w-0"
+                >
                   {children}
                 </div>
               )}
