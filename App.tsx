@@ -110,6 +110,53 @@ function hasPasswordResetTokenInUrl() {
   );
 }
 
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  isInitializing: boolean;
+  user: WorkspaceBootstrap["user"] | null;
+  org: WorkspaceBootstrap["organization"] | null;
+  onLogout: () => void;
+  onGenerateFaqs: React.ComponentProps<typeof Onboarding>["onGenerateFaqs"];
+  onOnboardingComplete: React.ComponentProps<typeof Onboarding>["onComplete"];
+}
+
+/**
+ * Keep the authenticated route wrapper at module scope.
+ *
+ * Defining this component inside App creates a new component type every time
+ * workspace state changes. React then unmounts and remounts MainLayout and the
+ * active page, which is especially disruptive when realtime refreshes overlap
+ * a route transition in production.
+ */
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  isInitializing,
+  user,
+  org,
+  onLogout,
+  onGenerateFaqs,
+  onOnboardingComplete,
+}) => {
+  if (isInitializing) return <AppLoading />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!org) return <AppLoading />;
+
+  if (!org.profile.onboarded) {
+    return (
+      <Onboarding
+        onGenerateFaqs={onGenerateFaqs}
+        onComplete={onOnboardingComplete}
+      />
+    );
+  }
+
+  return (
+    <MainLayout org={org} user={user} onLogout={onLogout}>
+      {children}
+    </MainLayout>
+  );
+};
+
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -693,50 +740,13 @@ const App: React.FC = () => {
     await api.changePassword(payload);
   };
 
-  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
-    children,
-  }) => {
-    if (isInitializing) {
-      return <AppLoading />;
-    }
-
-    if (!user) {
-      return <Navigate to="/login" />;
-    }
-
-    if (!org) {
-      return <AppLoading />;
-    }
-
-    if (!org.profile.onboarded) {
-      return (
-        <Onboarding
-          onGenerateFaqs={handleGenerateFaqs}
-          onComplete={handleOnboardingComplete}
-        />
-      );
-    }
-
-    return (
-      <MainLayout org={org} user={user} onLogout={() => void handleLogout()}>
-        {children}
-        {/*
-          Mounted HERE, not inside a single route. It was previously rendered
-          inside the Dashboard element, which meant Phone Numbers, Voice Agent,
-          Call Logs and every other page could never show their tour — the
-          component simply was not on the page. ProtectedRoute wraps every
-          authenticated page, so one mount covers all of them.
-        */}
-        {/* PRODUCT TOUR REMOVED
-        <PageTour
-          page={pageTour.page || ""}
-          steps={pageTour.steps}
-          open={pageTour.open}
-          onClose={pageTour.close}
-        />
-        */}
-      </MainLayout>
-    );
+  const protectedRouteProps: Omit<ProtectedRouteProps, "children"> = {
+    isInitializing,
+    user,
+    org,
+    onLogout: handleLogout,
+    onGenerateFaqs: handleGenerateFaqs,
+    onOnboardingComplete: handleOnboardingComplete,
   };
 
   if (isInitializing) {
@@ -887,7 +897,7 @@ const App: React.FC = () => {
             path="/dashboard"
             element={
               org && dashboard ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Dashboard org={org} dashboard={dashboard} />
                 </ProtectedRoute>
               ) : (
@@ -899,7 +909,7 @@ const App: React.FC = () => {
             path="/agent"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <AgentSettings
                     org={org}
                     onUpdateAgent={handleUpdateAgent}
@@ -925,7 +935,7 @@ const App: React.FC = () => {
             path="/messenger"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Messenger
                     org={org}
                     messages={conversation}
@@ -949,7 +959,7 @@ const App: React.FC = () => {
             path="/calls"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <PhoneNumbers
                     org={org}
                     calls={calls}
@@ -967,7 +977,7 @@ const App: React.FC = () => {
             path="/outreach"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <OutreachScheduler
                     org={org}
                     leads={leads}
@@ -983,7 +993,7 @@ const App: React.FC = () => {
             path="/notifications"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Notifications />
                 </ProtectedRoute>
               ) : (
@@ -995,7 +1005,7 @@ const App: React.FC = () => {
             path="/leads"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Leads
                     leads={leads}
                     org={org}
@@ -1016,7 +1026,7 @@ const App: React.FC = () => {
             path="/team"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Team
                     org={org}
                     onInvite={handleInviteMember}
@@ -1032,7 +1042,7 @@ const App: React.FC = () => {
             path="/billing"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Billing
                     org={org}
                     onUpdatePlan={handleUpdatePlan}
@@ -1050,7 +1060,7 @@ const App: React.FC = () => {
             path="/phone-numbers"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <PhoneNumbers
                     org={org}
                     calls={calls}
@@ -1078,7 +1088,7 @@ const App: React.FC = () => {
               path={path}
               element={
                 org ? (
-                  <ProtectedRoute>
+                  <ProtectedRoute {...protectedRouteProps}>
                     <KnowledgeBases
                       org={org}
                       initialKnowledgeBases={knowledgeBases}
@@ -1095,7 +1105,7 @@ const App: React.FC = () => {
             path="/settings"
             element={
               org ? (
-                <ProtectedRoute>
+                <ProtectedRoute {...protectedRouteProps}>
                   <Settings
                     org={org}
                     user={user}
