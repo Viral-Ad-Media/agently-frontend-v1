@@ -8,6 +8,7 @@ import React, {
 import { Invoice, Organization } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 import SettingsTabs from "../components/SettingsTabs";
+import { useSearchParams } from "react-router-dom";
 
 interface BillingProps {
   org: Organization;
@@ -56,6 +57,8 @@ type BillingWallet = {
   recentUsageCharges?: WalletUsageCharge[];
   recentActivity?: ActivityItem[];
   demoTopUpEnabled?: boolean;
+  stripeTopUpEnabled?: boolean;
+  stripeWebhookConfigured?: boolean;
   creditEnforcementMode?: string;
   autoChargeWalletEnabled?: boolean;
   numberRetention?: {
@@ -192,20 +195,20 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       enabled: true,
       currency: "USD",
       balanceUsd: undefined,
-      minimumRechargeUsd: 30,
+      minimumRechargeUsd: 10,
       status: "loading",
       recentTransactions: [],
       recentUsageCharges: [],
       demoTopUpEnabled: false,
+      stripeTopUpEnabled: false,
+      stripeWebhookConfigured: false,
     },
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [topUpAmount, setTopUpAmount] = useState("30");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvc, setCardCvc] = useState("");
+  const [topUpAmount, setTopUpAmount] = useState("10");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [usageRange, setUsageRange] = useState<UsageRange>("all");
   const mountedRef = useRef(true);
   const billingRequestInFlight = useRef(false);
@@ -213,7 +216,10 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
 
   const wallet = billing.wallet || {};
   const balance = Number(wallet.balanceUsd ?? 0);
-  const minimumRecharge = Math.max(1, Number(wallet.minimumRechargeUsd || 30));
+  const minimumRecharge = Math.max(
+    0.5,
+    Number(wallet.minimumRechargeUsd || 10),
+  );
   const minimumActive = Math.max(
     Number(wallet.numberRetention?.minimumRequiredUsd || 0),
     Number(wallet.minimums?.callUsd || 0),
@@ -306,6 +312,80 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     setTopUpAmount(String(minimumRecharge));
   }, [minimumRecharge]);
 
+  useEffect(() => {
+    const result = searchParams.get("stripe");
+    const sessionId = searchParams.get("session_id");
+    if (result === "cancelled") {
+      setError("");
+      setSuccess("Payment was cancelled. No credit was added.");
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (result !== "success" || !sessionId) return;
+
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempts = 0;
+    setError("");
+    setSuccess("Payment received. Confirming your wallet credit…");
+
+    const checkStatus = async () => {
+      attempts += 1;
+      try {
+        const response = await api.getStripeWalletTopUpStatus(sessionId);
+        if (cancelled) return;
+        const topUp = response.topUp;
+        if (topUp.credited) {
+          setSuccess(
+            `${money(topUp.amountUsd)} was added to your usage credit.`,
+          );
+          setSearchParams({}, { replace: true });
+          await loadBilling();
+          return;
+        }
+        if (
+          ["payment_failed", "checkout_failed", "expired"].includes(
+            topUp.status,
+          )
+        ) {
+          setSuccess("");
+          setError(
+            topUp.failureMessage ||
+              "The payment was not completed. No credit was added.",
+          );
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        if (attempts < 30) {
+          timer = window.setTimeout(checkStatus, 2000);
+        } else {
+          setSuccess(
+            "Payment is still being confirmed. Your balance will update automatically after Stripe confirms it.",
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (attempts < 8) {
+          timer = window.setTimeout(checkStatus, 2500);
+        } else {
+          setSuccess("");
+          setError(
+            cleanError(
+              err,
+              "Unable to confirm the payment yet. Refresh billing shortly.",
+            ),
+          );
+        }
+      }
+    };
+
+    void checkStatus();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [loadBilling, searchParams, setSearchParams]);
+
   const handlePurchaseCredit = async () => {
     setError("");
     setSuccess("");
@@ -316,34 +396,31 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     }
     setLoading(true);
     try {
-      if (!wallet.demoTopUpEnabled) {
-        setSuccess(
-          "Payment details captured. Connect the live payment processor to charge cards automatically.",
-        );
+      if (wallet.stripeTopUpEnabled) {
+        const response = await api.createStripeWalletTopUp(amount);
+        if (!response.checkoutUrl)
+          throw new Error("Stripe checkout URL was not returned.");
+        window.location.assign(response.checkoutUrl);
         return;
       }
-      const response = (await api.demoTopUpWallet(amount)) as {
-        wallet?: BillingWallet;
-      };
-      if (response?.wallet) {
-        setBilling((current) => ({ ...current, wallet: response.wallet }));
-        const nextBalance = Number(response.wallet.balanceUsd);
-        if (Number.isFinite(nextBalance)) {
-          window.dispatchEvent(
-            new CustomEvent("agently:wallet-refresh", {
-              detail: {
-                organizationId: org.id,
-                balanceUsd: nextBalance,
-                source: "billing-topup",
-              },
-            }),
-          );
+
+      if (wallet.demoTopUpEnabled) {
+        const response = (await api.demoTopUpWallet(amount)) as {
+          wallet?: BillingWallet;
+        };
+        if (response?.wallet) {
+          setBilling((current) => ({ ...current, wallet: response.wallet }));
         }
+        setSuccess(`Added ${money(amount)} test credit.`);
+        await loadBilling();
+        return;
       }
-      setSuccess(`Added ${money(amount)} usage credit.`);
-      await loadBilling();
+
+      throw new Error(
+        "Card top-ups are not configured yet. Add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET on the backend.",
+      );
     } catch (err) {
-      setError(cleanError(err, "Unable to add credit."));
+      setError(cleanError(err, "Unable to start secure checkout."));
     } finally {
       setLoading(false);
     }
@@ -471,7 +548,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0F172A]/40">
-                Add card details
+                Secure card payment
               </p>
               <h3 className="mt-1 text-xl font-black text-[#0F172A]">
                 Top up usage credit
@@ -482,13 +559,14 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
             </span>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-[#64748B]">
-            This replaces the old Starter/Professional plan card. Customers add
-            credit and Agently deducts each service as it is used.
+            Choose an amount, then enter your card details on Stripe's secure
+            checkout page. Credit is added only after Stripe confirms that
+            payment succeeded.
           </p>
           <div className="mt-5 grid gap-3">
             <label className="block">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Amount
+                Amount (USD)
               </span>
               <input
                 value={topUpAmount}
@@ -499,42 +577,19 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
                 className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-[#0F172A] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
               />
             </label>
-            <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Card number
-              </span>
-              <input
-                value={cardNumber}
-                onChange={(event) => setCardNumber(event.target.value)}
-                inputMode="numeric"
-                placeholder="1234 1234 1234 1234"
-                className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Expiry
-                </span>
-                <input
-                  value={cardExpiry}
-                  onChange={(event) => setCardExpiry(event.target.value)}
-                  placeholder="MM / YY"
-                  className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  CVC
-                </span>
-                <input
-                  value={cardCvc}
-                  onChange={(event) => setCardCvc(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="123"
-                  className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-                />
-              </label>
+            <div className="flex flex-wrap gap-2">
+              {[10, 25, 50, 100]
+                .filter((amount) => amount >= minimumRecharge)
+                .map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => setTopUpAmount(String(amount))}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
+                  >
+                    ${amount}
+                  </button>
+                ))}
             </div>
             <button
               type="button"
@@ -542,8 +597,17 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
               onClick={handlePurchaseCredit}
               className="h-11 w-full rounded-xl bg-[#0F172A] px-5 text-xs font-black uppercase tracking-[0.14em] text-white transition hover:bg-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Add credit
+              {loading ? "Opening checkout…" : "Continue to secure checkout"}
             </button>
+            <p className="text-xs leading-relaxed text-slate-400">
+              Minimum top-up: {money(minimumRecharge)}. Agently never receives
+              or stores your card number.
+            </p>
+            {!wallet.stripeTopUpEnabled && !wallet.demoTopUpEnabled ? (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                Stripe checkout is not configured on the backend yet.
+              </p>
+            ) : null}
           </div>
         </div>
 

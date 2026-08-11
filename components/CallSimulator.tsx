@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { AgentConfig, CallOutcome, Lead, Organization } from "../types";
 import { createPortal } from "react-dom";
 import { resolveApiBaseUrl } from "../utils/runtimeUrls";
+import { getSessionToken } from "../services/session";
+import { WebcallClient, WebcallStatus } from "../lib/webcallClient";
 
 interface CallSimulatorProps {
   agent: AgentConfig;
   org: Organization;
   onClose: () => void;
-  onCallFinished: (payload: {
+  onCallFinished?: (payload: {
     transcript: string;
     duration: number;
     outcome?: CallOutcome;
@@ -20,11 +22,13 @@ interface CallSimulatorProps {
 type SimulatorMessage = { speaker: "Agent" | "You"; text: string };
 type CallMode = "web" | "sim";
 
+const noop = async () => {};
+
 const CallSimulator: React.FC<CallSimulatorProps> = ({
   agent,
   org,
   onClose,
-  onCallFinished,
+  onCallFinished = noop,
 }) => {
   const [mode, setMode] = useState<CallMode>("web");
   const [status, setStatus] = useState<
@@ -43,18 +47,23 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
   const transferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Real web call state
-  const [webCallStatus, setWebCallStatus] = useState<
-    "idle" | "connecting" | "connected" | "ended"
-  >("idle");
-  const [webCallError, setWebCallError] = useState("");
-  const [micPermission, setMicPermission] = useState<
-    "unknown" | "granted" | "denied"
-  >("unknown");
-  const [isMuted, setIsMuted] = useState(false);
-  const [webCallDuration, setWebCallDuration] = useState(0);
-  const webCallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioStreamRef = useRef<MediaStream | null>(null);
+  // ── Real live webcall state ──
+  const [webStatus, setWebStatus] = useState<WebcallStatus>("idle");
+  const [webError, setWebError] = useState<{
+    code: string;
+    message: string;
+  } | null>(null);
+  const [webDuration, setWebDuration] = useState(0);
+  const [agentSpeaking, setAgentSpeaking] = useState(false);
+  const [userSpeaking, setUserSpeaking] = useState(false);
+  const [webMuted, setWebMuted] = useState(false);
+  const [captions, setCaptions] = useState<
+    { speaker: "You" | "Agent"; text: string; partial?: boolean }[]
+  >([]);
+  const [maxSessionSeconds, setMaxSessionSeconds] = useState(300);
+  const clientRef = useRef<WebcallClient | null>(null);
+  const webTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const captionsEndRef = useRef<HTMLDivElement | null>(null);
 
   const clearTimers = () => {
     [timerRef, connectTimeoutRef, transferTimeoutRef, closeTimeoutRef].forEach(
@@ -71,96 +80,103 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // ─── WEB CALL ───
-  const initiateWebCall = async () => {
-    setWebCallError("");
-    setWebCallStatus("connecting");
+  // ─── LIVE WEBCALL ───
+  const startWebcall = async () => {
+    setWebError(null);
+    setCaptions([]);
+    setWebStatus("connecting");
 
-    // Check mic permission
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioStreamRef.current = stream;
-      setMicPermission("granted");
-    } catch {
-      setMicPermission("denied");
-      setWebCallError(
-        "Microphone access denied. Allow mic access to make calls.",
-      );
-      setWebCallStatus("idle");
-      return;
-    }
-
-    // Verify the Twilio-native voice test endpoint before connecting the simulator
     try {
       const apiBase = resolveApiBaseUrl();
-      const token =
-        localStorage.getItem("agently.auth.token") ||
-        sessionStorage.getItem("agently.auth.token") ||
-        "";
-      const resp = await fetch(
-        `${apiBase}/api/twilio/voice-test?agentId=${encodeURIComponent(agent.id)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const token = getSessionToken() || "";
+      const resp = await fetch(`${apiBase}/api/webcall/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
-
-      if (!resp.ok) throw new Error("Failed to initiate test call");
-      const twiml = await resp.text();
-
-      if (twiml.includes("<ConversationRelay")) {
-        setWebCallStatus("connected");
-        setWebCallDuration(0);
-        webCallTimerRef.current = setInterval(
-          () => setWebCallDuration((d) => d + 1),
-          1000,
+        body: JSON.stringify({ agentId: agent.id }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data?.wsUrl) {
+        throw new Error(
+          data?.error?.message || "Could not start a live test call right now.",
         );
-        return;
       }
+      setMaxSessionSeconds(Number(data.maxSessionSeconds || 300));
 
-      // Fallback: simulator mode if the browser does not support a full live relay
-      setTimeout(() => {
-        setWebCallStatus("connected");
-        webCallTimerRef.current = setInterval(
-          () => setWebCallDuration((d) => d + 1),
-          1000,
-        );
-      }, 2000);
-    } catch (e) {
-      // Fallback: show connected state for demo
-      setTimeout(() => {
-        setWebCallStatus("connected");
-        webCallTimerRef.current = setInterval(
-          () => setWebCallDuration((d) => d + 1),
-          1000,
-        );
-      }, 2500);
+      const client = new WebcallClient(data.wsUrl, {
+        onStatusChange: (s) => setWebStatus(s),
+        onReady: () => {
+          setWebDuration(0);
+          webTimerRef.current = setInterval(
+            () => setWebDuration((d) => d + 1),
+            1000,
+          );
+        },
+        onTranscriptUser: (text) =>
+          setCaptions((prev) => [...prev, { speaker: "You", text }]),
+        onTranscriptAgent: (text, partial) =>
+          setCaptions((prev) => {
+            if (
+              partial &&
+              prev.length &&
+              prev[prev.length - 1].speaker === "Agent" &&
+              prev[prev.length - 1].partial
+            ) {
+              const next = prev.slice(0, -1);
+              next.push({ speaker: "Agent", text, partial });
+              return next;
+            }
+            return [...prev, { speaker: "Agent", text, partial }];
+          }),
+        onAgentSpeakingChange: setAgentSpeaking,
+        onUserSpeakingChange: setUserSpeaking,
+        onError: (code, message) => {
+          setWebError({ code, message });
+          if (webTimerRef.current) {
+            clearInterval(webTimerRef.current);
+            webTimerRef.current = null;
+          }
+        },
+        onEnded: () => {
+          if (webTimerRef.current) {
+            clearInterval(webTimerRef.current);
+            webTimerRef.current = null;
+          }
+        },
+      });
+      clientRef.current = client;
+      await client.start();
+    } catch (e: any) {
+      setWebStatus("error");
+      setWebError({
+        code: "START_FAILED",
+        message:
+          e?.message === "Permission denied" || e?.name === "NotAllowedError"
+            ? "Microphone access was denied. Allow mic access in your browser to test the agent."
+            : e?.message || "Could not start a live test call right now.",
+      });
     }
   };
 
-  const endWebCall = () => {
-    if (webCallTimerRef.current) {
-      clearInterval(webCallTimerRef.current);
-      webCallTimerRef.current = null;
+  const endWebcall = () => {
+    clientRef.current?.hangup();
+    clientRef.current = null;
+    if (webTimerRef.current) {
+      clearInterval(webTimerRef.current);
+      webTimerRef.current = null;
     }
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach((t) => t.stop());
-      audioStreamRef.current = null;
-    }
-    setWebCallStatus("ended");
-    void onCallFinished({
-      transcript: `Web Call: ${callerName} called ${agent.twilioPhoneNumber || "agent"} for ${formatTime(webCallDuration)}`,
-      duration: Math.max(webCallDuration, 1),
-      callerName,
-      callerPhone,
-      lead: { name: callerName, phone: callerPhone, reason: "Web call test" },
-    });
-    setTimeout(onClose, 1500);
+    setWebStatus("ended");
   };
 
-  // ─── SIMULATION ───
+  const toggleWebMute = () => {
+    const next = !webMuted;
+    setWebMuted(next);
+    clientRef.current?.setMuted(next);
+  };
+
+  // ─── SIMULATION (unchanged) ───
   const startCall = () => {
     clearTimers();
     setStatus("calling");
@@ -173,10 +189,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
 
       try {
         const apiBase = resolveApiBaseUrl();
-        const token =
-          localStorage.getItem("agently.auth.token") ||
-          sessionStorage.getItem("agently.auth.token") ||
-          "";
+        const token = getSessionToken() || "";
         const resp = await fetch(`${apiBase}/api/messenger/messages`, {
           method: "POST",
           headers: {
@@ -247,9 +260,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
   }, [duration, status]);
 
   useEffect(() => {
+    captionsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [captions]);
+
+  useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         clearTimers();
+        clientRef.current?.stop();
         onClose();
       }
     };
@@ -260,46 +278,51 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
   useEffect(
     () => () => {
       clearTimers();
-      if (webCallTimerRef.current) clearInterval(webCallTimerRef.current);
-      if (audioStreamRef.current)
-        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      if (webTimerRef.current) clearInterval(webTimerRef.current);
+      clientRef.current?.stop();
+      clientRef.current = null;
     },
     [],
   );
 
-  const hasNumber = !!agent.twilioPhoneNumber;
+  const isWebActive = webStatus === "connecting" || webStatus === "ready";
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-[500] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) {
+        if (e.target === e.currentTarget && !isWebActive) {
           clearTimers();
           onClose();
         }
       }}
     >
       <div
-        className="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
-        style={{ maxHeight: "min(680px, 92vh)" }}
+        className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
+        style={{ maxHeight: "min(700px, 92vh)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-slate-900 px-7 py-5 text-white flex items-center justify-between flex-shrink-0">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+        <div className="bg-[#0F172A] px-7 py-5 text-white flex items-center justify-between flex-shrink-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
               Agent Test Console
             </p>
-            <h3 className="text-xl font-black tracking-tight mt-0.5">
+            <h3 className="text-xl font-black tracking-tight mt-0.5 truncate">
               {agent.name}
             </h3>
-            <p className="text-xs text-white/40 mt-0.5 font-mono">
-              {agent.twilioPhoneNumber || "No number assigned"}
+            <p className="text-xs text-white/40 mt-0.5">
+              Talk to the exact agent that answers your real calls
             </p>
           </div>
           <button
-            onClick={onClose}
-            className="p-2.5 hover:bg-white/10 rounded-2xl transition-all"
+            onClick={() => {
+              if (isWebActive) endWebcall();
+              clearTimers();
+              onClose();
+            }}
+            className="p-2.5 hover:bg-white/10 rounded-2xl transition-all flex-shrink-0"
+            aria-label="Close"
           >
             <i className="fa-solid fa-xmark text-lg" />
           </button>
@@ -308,15 +331,15 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
         {/* Mode tabs */}
         <div className="flex border-b border-slate-200 bg-slate-50 flex-shrink-0">
           <button
-            onClick={() => setMode("web")}
-            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "web" ? "bg-white text-slate-900 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
+            onClick={() => !isWebActive && setMode("web")}
+            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "web" ? "bg-white text-[#0F172A] border-b-2 border-[#F59E0B]" : "text-[#7a8493] hover:text-slate-600"}`}
           >
             <i className="fa-solid fa-phone-volume text-sm" />
-            Live Web Call
+            Talk to Your Agent
           </button>
           <button
-            onClick={() => setMode("sim")}
-            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "sim" ? "bg-white text-slate-900 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
+            onClick={() => !isWebActive && setMode("sim")}
+            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${mode === "sim" ? "bg-white text-[#0F172A] border-b-2 border-[#F59E0B]" : "text-[#7a8493] hover:text-slate-600"}`}
           >
             <i className="fa-solid fa-flask text-sm" />
             Simulate Call
@@ -324,170 +347,164 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto max-h-[calc(min(680px,92vh)-140px)]">
-          {/* ─── WEB CALL MODE ─── */}
+        <div className="flex-1 overflow-y-auto max-h-[calc(min(700px,92vh)-140px)]">
+          {/* ─── LIVE WEBCALL MODE ─── */}
           {mode === "web" && (
             <div className="p-6 space-y-5">
-              {!hasNumber && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
-                  <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-black text-amber-800">
-                      No number assigned to this agent
-                    </p>
-                    <p className="text-xs text-amber-600 mt-0.5">
-                      Go to Phone Numbers to purchase and assign a Twilio number
-                      first.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {webCallStatus === "idle" && (
+              {webStatus === "idle" && (
                 <>
-                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5">
+                  <div className="rounded-3xl bg-slate-50 border border-slate-200 p-5 shadow-card">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                        <i className="fa-solid fa-phone text-indigo-600 text-base" />
+                      <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center">
+                        <i className="fa-solid fa-phone text-[#F59E0B] text-base" />
                       </div>
                       <div>
-                        <p className="font-black text-slate-900 text-sm">
-                          Make a Real Call
+                        <p className="font-black text-[#0F172A] text-sm">
+                          Talk to it, right now
                         </p>
-                        <p className="text-xs text-slate-400">
-                          Connect your browser to this agent's Twilio line
+                        <p className="text-xs text-[#7a8493]">
+                          Connects your microphone straight to this agent's live
+                          persona and knowledge base
                         </p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                          Your Name
-                        </label>
-                        <input
-                          value={callerName}
-                          onChange={(e) => setCallerName(e.target.value)}
-                          placeholder="Test Caller"
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                          Your Phone
-                        </label>
-                        <input
-                          value={callerPhone}
-                          onChange={(e) => setCallerPhone(e.target.value)}
-                          placeholder="+15551234567"
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 mb-4">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        Calling
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-phone-arrow-down-left text-emerald-500 text-sm" />
-                        <p className="font-black text-slate-900">
-                          {agent.twilioPhoneNumber || "No number assigned"}
-                        </p>
-                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase">
-                          {agent.direction}
-                        </span>
-                      </div>
-                    </div>
-                    {webCallError && (
-                      <p className="text-xs text-red-500 font-medium mb-3">
-                        {webCallError}
-                      </p>
-                    )}
                     <button
-                      onClick={initiateWebCall}
-                      disabled={!hasNumber}
-                      className="w-full rounded-2xl bg-emerald-600 text-white py-3.5 text-xs font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
+                      onClick={startWebcall}
+                      className="w-full rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
                     >
                       <i className="fa-solid fa-phone text-sm" />
-                      {hasNumber ? "Connect to Agent" : "Assign a Number First"}
+                      Start Test Call
                     </button>
+                    <p className="text-[11px] text-[#7a8493] text-center mt-3">
+                      Up to {Math.round(maxSessionSeconds / 60)} minutes · uses
+                      your account's usage credit, same as a real call
+                    </p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <div className="rounded-3xl bg-slate-50 border border-slate-100 p-4">
+                    <p className="text-[10px] font-black text-[#7a8493] uppercase tracking-widest mb-2 flex items-center gap-1.5">
                       <i className="fa-solid fa-circle-info text-xs" /> How it
                       works
                     </p>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      This connects your browser's microphone directly to your
-                      Twilio number. Your voice agent will answer, process
-                      speech, and respond in real-time — exactly like a real
-                      caller would experience. Leads captured during the call
-                      will appear in your CRM.
+                    <p className="text-xs text-[#7a8493] leading-relaxed">
+                      This is the exact same persona, voice, and knowledge base
+                      your phone agent uses on real calls — it just runs through
+                      your browser instead of a phone number. Nothing is saved
+                      to your leads or call history.
                     </p>
                   </div>
                 </>
               )}
 
-              {webCallStatus === "connecting" && (
+              {webStatus === "connecting" && (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
                   <div className="relative mb-6">
-                    <div className="w-20 h-20 rounded-[2rem] bg-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-100">
+                    <div className="w-20 h-20 rounded-3xl bg-[#F59E0B] flex items-center justify-center shadow-xl shadow-amber-100">
                       <i className="fa-solid fa-phone text-3xl text-white" />
                     </div>
-                    <div className="absolute inset-0 rounded-[2rem] border-2 border-emerald-400 animate-ping opacity-30" />
+                    <div className="absolute inset-0 rounded-3xl border-2 border-amber-300 animate-ping opacity-40" />
                   </div>
-                  <p className="text-xl font-black text-slate-900 mb-1">
+                  <p className="text-xl font-black text-[#0F172A] mb-1">
                     Connecting…
                   </p>
-                  <p className="text-sm text-slate-400">
-                    Linking browser to {agent.twilioPhoneNumber}
+                  <p className="text-sm text-[#7a8493]">
+                    Loading {agent.name}'s persona and knowledge base
                   </p>
                 </div>
               )}
 
-              {webCallStatus === "connected" && (
+              {webStatus === "ready" && (
                 <div className="space-y-4">
-                  <div className="flex flex-col items-center py-6 text-center">
-                    <div className="relative mb-5">
-                      <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20 scale-150" />
-                      <div className="relative w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center shadow-2xl">
-                        <i className="fa-solid fa-microphone text-2xl text-white" />
+                  <div className="flex flex-col items-center py-4 text-center">
+                    <div className="relative mb-4 flex items-center justify-center h-20">
+                      <div
+                        className={`absolute inset-0 rounded-full bg-[#F59E0B] transition-opacity duration-200 ${agentSpeaking ? "opacity-20 animate-ping" : "opacity-0"}`}
+                        style={{ margin: "auto", width: 80, height: 80 }}
+                      />
+                      <div className="relative w-20 h-20 rounded-full bg-[#0F172A] flex items-center justify-center shadow-2xl">
+                        <i
+                          className={`fa-solid ${agentSpeaking ? "fa-volume-high" : "fa-microphone"} text-2xl text-white`}
+                        />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                      <p className="text-emerald-600 font-black text-sm uppercase tracking-widest">
-                        Live Call Active
+                      <p className="text-emerald-600 font-black text-[10px] uppercase tracking-widest">
+                        Live Test Call Active
                       </p>
                     </div>
-                    <p className="text-3xl font-black text-slate-900 tracking-tight">
-                      {formatTime(webCallDuration)}
+                    <p className="text-3xl font-black text-[#0F172A] tracking-tight">
+                      {formatTime(webDuration)}
                     </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {agent.name} is listening
+                    <p className="text-xs text-[#7a8493] mt-1">
+                      {agentSpeaking
+                        ? `${agent.name} is speaking…`
+                        : userSpeaking
+                          ? "Listening…"
+                          : `${agent.name} is listening`}
                     </p>
+                  </div>
+
+                  {/* Live captions */}
+                  <div className="rounded-2xl bg-[#0F172A] p-4 space-y-2 max-h-44 overflow-y-auto">
+                    {captions.length === 0 && (
+                      <p className="text-white/30 text-xs text-center py-4">
+                        Live captions will appear here as you talk
+                      </p>
+                    )}
+                    {captions.map((msg, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${msg.speaker === "You" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[80%] px-3 py-2 rounded-xl text-sm font-medium ${msg.speaker === "You" ? "bg-[#F59E0B] text-white" : "bg-white/10 text-white/90"} ${msg.partial ? "opacity-60" : ""}`}
+                        >
+                          <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">
+                            {msg.speaker}
+                          </p>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={captionsEndRef} />
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <button
-                      onClick={() => setIsMuted((m) => !m)}
-                      className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${isMuted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
+                      onClick={toggleWebMute}
+                      className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${webMuted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
                     >
                       <i
-                        className={`fa-solid ${isMuted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
+                        className={`fa-solid ${webMuted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
                       />
                       <span className="text-[10px] font-black uppercase tracking-widest">
-                        {isMuted ? "Unmute" : "Mute"}
+                        {webMuted ? "Unmute" : "Mute"}
                       </span>
                     </button>
-                    <button className="rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 py-3.5 flex flex-col items-center gap-1.5 hover:border-slate-300 transition-all">
-                      <i className="fa-solid fa-volume-high text-lg" />
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 py-3.5 flex flex-col items-center justify-center gap-1.5">
+                      <div className="flex items-end gap-0.5 h-4">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className="w-1 bg-[#F59E0B] rounded-full"
+                            style={{
+                              height:
+                                agentSpeaking || userSpeaking ? undefined : 4,
+                              animation:
+                                agentSpeaking || userSpeaking
+                                  ? `webcall-eq 0.9s ease-in-out ${i * 0.15}s infinite`
+                                  : "none",
+                            }}
+                          />
+                        ))}
+                      </div>
                       <span className="text-[10px] font-black uppercase tracking-widest">
-                        Speaker
+                        Live
                       </span>
-                    </button>
+                    </div>
                     <button
-                      onClick={endWebCall}
+                      onClick={endWebcall}
                       className="rounded-2xl bg-red-500 hover:bg-red-600 text-white py-3.5 flex flex-col items-center gap-1.5 transition-all shadow-lg shadow-red-100"
                     >
                       <i className="fa-solid fa-phone-hangup text-lg" />
@@ -499,23 +516,57 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
                 </div>
               )}
 
-              {webCallStatus === "ended" && (
+              {webStatus === "ended" && (
                 <div className="flex flex-col items-center py-10 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                     <i className="fa-solid fa-check text-2xl text-emerald-500" />
                   </div>
-                  <p className="text-xl font-black text-slate-900 mb-1">
-                    Call Ended
+                  <p className="text-xl font-black text-[#0F172A] mb-1">
+                    Test Call Ended
                   </p>
-                  <p className="text-sm text-slate-400">
-                    Duration: {formatTime(webCallDuration)} · Lead data saved
+                  <p className="text-sm text-[#7a8493] mb-5">
+                    Duration: {formatTime(webDuration)} · nothing was saved to
+                    your leads or call history
                   </p>
+                  <button
+                    onClick={() => {
+                      setWebStatus("idle");
+                      setCaptions([]);
+                    }}
+                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#0F172A] hover:border-slate-300 transition-all"
+                  >
+                    Call Again
+                  </button>
+                </div>
+              )}
+
+              {webStatus === "error" && (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+                    <i className="fa-solid fa-triangle-exclamation text-2xl text-red-500" />
+                  </div>
+                  <p className="text-xl font-black text-[#0F172A] mb-1">
+                    Couldn't Connect
+                  </p>
+                  <p className="text-sm text-[#7a8493] mb-5 max-w-sm">
+                    {webError?.message ||
+                      "Something went wrong starting the test call."}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setWebStatus("idle");
+                      setWebError(null);
+                    }}
+                    className="rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Try Again
+                  </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* ─── SIMULATION MODE ─── */}
+          {/* ─── SIMULATION MODE (unchanged) ─── */}
           {mode === "sim" && (
             <div className="p-6">
               {status === "idle" && (
@@ -669,6 +720,12 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({
           )}
         </div>
       </div>
+      <style>{`
+        @keyframes webcall-eq {
+          0%, 100% { height: 4px; }
+          50% { height: 16px; }
+        }
+      `}</style>
     </div>,
     document.body,
   );

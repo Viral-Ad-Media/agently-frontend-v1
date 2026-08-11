@@ -19,6 +19,7 @@ import {
   VoiceSettings,
 } from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
+import CallSimulator from "../components/CallSimulator";
 import { formatTimezoneOptionLabel } from "@/utils/timezones";
 
 // Voice display must come from saved provider config, not legacy seeded voice names.
@@ -327,6 +328,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
   const [agentSchedules, setAgentSchedules] = useState<Schedule[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [showTalkToAgent, setShowTalkToAgent] = useState(false);
 
   /* knowledge-base state */
   const [scrapeUrl, setScrapeUrl] = useState(org.profile.website || "");
@@ -1903,6 +1905,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setShowTalkToAgent(true)}
+            className="ag-button-soft"
+          >
+            Talk to Your Agent
+          </button>
+          <button
+            type="button"
             onClick={() => void openCallCampaignComposer("call-now")}
             className="ag-button-orange"
           >
@@ -3435,6 +3444,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
           </div>
         </AppModal>
+      )}
+
+      {showTalkToAgent && draft?.id && (
+        <CallSimulator
+          agent={draft}
+          org={org}
+          onClose={() => setShowTalkToAgent(false)}
+        />
       )}
     </div>
   );

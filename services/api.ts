@@ -839,7 +839,40 @@ export const api = {
     return request('/api/billing/summary');
   },
 
-  async demoTopUpWallet(amountUsd = 30) {
+  async createStripeWalletTopUp(amountUsd: number) {
+    return request<{
+      success: boolean;
+      topUpId: string;
+      sessionId: string;
+      checkoutUrl: string;
+      amountUsd: number;
+      minimumTopUpUsd: number;
+      expiresAt: string | null;
+    }>('/api/billing/stripe/checkout-session', {
+      method: 'POST',
+      body: { amountUsd },
+    });
+  },
+
+  async getStripeWalletTopUpStatus(sessionId: string) {
+    return request<{
+      success: boolean;
+      topUp: {
+        id: string;
+        amountUsd: number;
+        currency: string;
+        status: string;
+        credited: boolean;
+        walletTransactionId: string | null;
+        failureMessage: string | null;
+        createdAt: string;
+        creditedAt: string | null;
+        updatedAt: string;
+      };
+    }>(`/api/billing/stripe/sessions/${encodeURIComponent(sessionId)}`);
+  },
+
+  async demoTopUpWallet(amountUsd = 10) {
     return request('/api/billing/wallet/demo-top-up', {
       method: 'POST',
       body: { amountUsd },

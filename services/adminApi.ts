@@ -26,6 +26,20 @@ export type SuperAdminUser = {
   walletStatus: string;
 };
 
+
+export type PlatformBillingPricing = {
+  minimumTopUpUsd: number;
+  defaultMarginPercent: number;
+  openAiRealtimeMarginPercent: number;
+  elevenLabsMarginPercent: number;
+  twilioCallMarginPercent: number;
+  twilioNumberMarginPercent: number;
+  stripeCheckoutEnabled: boolean;
+  stripeWebhookConfigured: boolean;
+  settingsSource?: string;
+  updatedAt?: string | null;
+};
+
 export type BlogPostInput = {
   title: string;
   slug?: string;
@@ -255,6 +269,24 @@ export const adminApi = {
       `/api/super-admin/wallets/${encodeURIComponent(organizationId)}/top-up`,
       { method: "POST", body: JSON.stringify({ amountUsd, note }) },
     );
+  },
+
+  async billingPricing() {
+    const response = await request<{ pricing: PlatformBillingPricing }>(
+      "/api/super-admin/billing/pricing",
+    );
+    return response.pricing;
+  },
+
+  async updateBillingPricing(pricing: PlatformBillingPricing) {
+    const response = await request<{
+      success: boolean;
+      pricing: PlatformBillingPricing;
+    }>("/api/super-admin/billing/pricing", {
+      method: "PATCH",
+      body: JSON.stringify(pricing),
+    });
+    return response.pricing;
   },
 
   /* ── Platform assistant ─────────────────────────────────────────────── */
