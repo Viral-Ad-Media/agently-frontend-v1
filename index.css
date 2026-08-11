@@ -727,6 +727,8 @@ main {
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border-color 180ms ease;
 }
 
@@ -2828,5 +2830,76 @@ textarea,
   .ag-agent-fleet-card,
   .ag-chatbot-fleet-card {
     padding: 0.32rem !important;
+  }
+
+  .ag-voice-dials-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ag-speaker-boost-row {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* ============================================================
+   ROUND 4 — authoritative mobile pass for Voice Agent Studio.
+   Appended last so it wins the cascade over the many earlier,
+   layered redefinitions of these same selectors. Scoped to
+   <=767px so desktop is untouched.
+   ============================================================ */
+@media (max-width: 767px) {
+
+  /* Identity + voice selects must never force horizontal overflow.
+     Belt-and-suspenders with the min-w-0 utilities added in the TSX. */
+  .ag-identity-language-card {
+    padding: 1rem !important;
+    overflow: hidden;
+  }
+
+  .ag-identity-language-card select,
+  .ag-identity-language-card input {
+    min-width: 0 !important;
+    width: 100% !important;
+    text-overflow: ellipsis;
+  }
+
+  /* Voice Engine card: calmer padding, sliders comfortable not giant */
+  .ag-voice-engine-card {
+    padding: 0.9rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .ag-voice-dials-grid {
+    gap: 0.9rem 0.75rem !important;
+  }
+
+  .ag-range-slider {
+    height: 0.35rem !important;
+  }
+
+  .ag-range-slider::-webkit-slider-runnable-track,
+  .ag-range-slider::-moz-range-track,
+  .ag-range-slider::-moz-range-progress {
+    height: 0.35rem !important;
+  }
+
+  .ag-range-slider::-webkit-slider-thumb {
+    width: 0.85rem !important;
+    height: 0.85rem !important;
+    margin-top: -0.25rem !important;
+    border-width: 2px !important;
+  }
+
+  .ag-range-slider::-moz-range-thumb {
+    width: 0.85rem !important;
+    height: 0.85rem !important;
+    border-width: 2px !important;
+  }
+
+  .ag-voice-dials-grid .ag-voice-control-row label,
+  .ag-voice-dials-grid .ag-voice-control-row p,
+  .ag-voice-control-value {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
   }
 }

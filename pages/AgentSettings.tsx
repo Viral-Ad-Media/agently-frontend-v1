@@ -229,7 +229,7 @@ interface Schedule extends LeadOutreachSchedule {
 const Inp = (p: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input
     {...p}
-    className={`w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all ${p.className ?? ""}`}
+    className={`w-full min-w-0 px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all ${p.className ?? ""}`}
   />
 );
 const Sel = (
@@ -239,7 +239,7 @@ const Sel = (
 ) => (
   <select
     {...p}
-    className={`w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all ${p.className ?? ""}`}
+    className={`w-full min-w-0 px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all ${p.className ?? ""}`}
   >
     {p.children}
   </select>
@@ -2076,7 +2076,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           <div className="ag-identity-language-card w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-card space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-base font-medium text-[#0F172A] flex items-center gap-2.5">
+                <h3 className="text-base font-medium text-[#0F172A] flex flex-wrap items-center gap-2.5">
                   <svg
                     width="16"
                     height="16"
@@ -2103,14 +2103,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   )}
                 </h3>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={discardUnsavedChanges}
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#475569] transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex-1 sm:flex-none whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#475569] transition-all hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Discard
                 </button>
@@ -2120,21 +2120,21 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="rounded-xl bg-[#F59E0B] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white transition-all hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex-1 sm:flex-none whitespace-nowrap rounded-xl bg-[#F59E0B] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white transition-all hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
+            <div className="grid min-w-0 grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="min-w-0">
                 <Label>Agent Name</Label>
                 <Inp
                   value={draft.name}
                   onChange={(e) => updateDraftField("name", e.target.value)}
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Direction</Label>
                 <Sel
                   value={draft.direction}
@@ -2149,7 +2149,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   <option value="outbound">Outbound</option>
                 </Sel>
               </div>
-              <div className="col-span-2 sm:col-span-1">
+              <div className="col-span-2 sm:col-span-1 min-w-0">
                 <Label>Voice Provider</Label>
                 <Sel
                   value={voiceProvider}
@@ -2164,7 +2164,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
 
               {voiceProvider === "openai" ? (
-                <div className="col-span-2 sm:col-span-1">
+                <div className="col-span-2 sm:col-span-1 min-w-0">
                   <Label>OpenAI Voice</Label>
                   <Sel
                     value={openAiVoiceId}
@@ -2185,7 +2185,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="col-span-2 sm:col-span-1">
+                <div className="col-span-2 sm:col-span-1 min-w-0">
                   <Label>ElevenLabs Voice</Label>
                   <Sel
                     value={selectedElevenLabsVoiceId}
@@ -2211,7 +2211,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </div>
               )}
 
-              <div>
+              <div className="min-w-0">
                 <Label>Language</Label>
                 <Sel
                   value={draft.language}
@@ -2227,7 +2227,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   ))}
                 </Sel>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Assigned Number</Label>
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-[#687386] flex items-center gap-2">
