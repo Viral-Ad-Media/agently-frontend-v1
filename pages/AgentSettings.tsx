@@ -2319,7 +2319,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
 
               {voiceProvider === "elevenlabs" && (
-                <div className="ag-voice-dials-grid grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:gap-x-3 sm:gap-y-4 md:grid-cols-2 md:gap-4">
+                <div className="agwc-dials">
                   {[
                     {
                       key: "stability",
@@ -2365,10 +2365,12 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       control.max,
                     );
                     return (
-                      <div key={control.key} className="ag-voice-control-row">
-                        <div className="ag-voice-control-heading mb-1 flex items-center justify-between sm:mb-2">
-                          <Label>{control.label}</Label>
-                          <span className="ag-voice-control-value text-[9px] font-black text-[#687386] sm:text-[10px]">
+                      <div key={control.key} className="agwc-dial">
+                        <div className="agwc-dial-head">
+                          <span className="agwc-dial-label">
+                            {control.label}
+                          </span>
+                          <span className="agwc-dial-value">
                             {value.toFixed(2)}
                           </span>
                         </div>
@@ -2384,39 +2386,110 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                               Number(e.target.value) as never,
                             )
                           }
-                          className="ag-range-slider"
+                          className="agwc-range"
                           style={
                             {
-                              "--ag-range-progress": `${progress}%`,
+                              "--agwc-fill": `${progress}%`,
                             } as React.CSSProperties
                           }
                         />
                       </div>
                     );
                   })}
-                  <div className="ag-speaker-boost-row col-span-2 flex items-center justify-between rounded-xl bg-[#fffaf1] px-2.5 py-2 ring-1 ring-[#f2e2cf] sm:rounded-2xl sm:px-4 sm:py-3">
+                  <div className="agwc-boost">
                     <div>
-                      <p className="text-[11px] font-medium text-[#232f3e] sm:text-sm">
-                        Speaker Boost
-                      </p>
-                      <p className="hidden text-xs text-[#7a8493] sm:block">
+                      <p className="agwc-boost-title">Speaker Boost</p>
+                      <p className="agwc-boost-sub">
                         Improve similarity and clarity when supported.
                       </p>
                     </div>
                     <button
+                      type="button"
+                      aria-pressed={voiceSettings.use_speaker_boost}
                       onClick={() =>
                         updateVoiceSetting(
                           "use_speaker_boost",
                           !voiceSettings.use_speaker_boost,
                         )
                       }
-                      className={`relative flex h-5 w-9 items-center rounded-full px-0.5 transition-all sm:h-6 sm:w-11 ${voiceSettings.use_speaker_boost ? "bg-amber-500" : "bg-slate-200"}`}
+                      className={`agwc-toggle ${voiceSettings.use_speaker_boost ? "is-on" : ""}`}
                     >
-                      <div
-                        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-all sm:h-5 sm:w-5 ${voiceSettings.use_speaker_boost ? "translate-x-4 sm:translate-x-5" : "translate-x-0"}`}
-                      />
+                      <span className="agwc-toggle-knob" />
                     </button>
                   </div>
+                  <style>{`
+                    .agwc-dials {
+                      display: grid;
+                      grid-template-columns: 1fr;
+                      gap: 0.85rem;
+                      width: 100%;
+                      min-width: 0;
+                    }
+                    @media (min-width: 640px) {
+                      .agwc-dials { grid-template-columns: 1fr 1fr; gap: 1rem 1.25rem; }
+                    }
+                    .agwc-dial { min-width: 0; }
+                    .agwc-dial-head {
+                      display: flex; align-items: center; justify-content: space-between;
+                      margin-bottom: 0.4rem;
+                    }
+                    .agwc-dial-label {
+                      font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+                      color: #475569; text-transform: none;
+                    }
+                    .agwc-dial-value {
+                      font-size: 11px; font-weight: 700; color: #0F172A;
+                      font-variant-numeric: tabular-nums;
+                    }
+                    .agwc-range {
+                      -webkit-appearance: none; appearance: none;
+                      width: 100%; height: 6px; border-radius: 999px; outline: none;
+                      cursor: pointer; margin: 0; padding: 0; border: 0;
+                      background: linear-gradient(90deg,#F59E0B 0%,#F59E0B var(--agwc-fill,0%),#E2E8F0 var(--agwc-fill,0%),#E2E8F0 100%);
+                    }
+                    .agwc-range::-webkit-slider-runnable-track {
+                      height: 6px; border-radius: 999px; background: transparent;
+                    }
+                    .agwc-range::-webkit-slider-thumb {
+                      -webkit-appearance: none; appearance: none;
+                      width: 16px; height: 16px; margin-top: -5px;
+                      border-radius: 999px; background: #fff; border: 3px solid #F59E0B;
+                      box-shadow: 0 2px 6px rgba(15,23,42,0.18);
+                    }
+                    .agwc-range::-moz-range-track {
+                      height: 6px; border-radius: 999px; background: #E2E8F0;
+                    }
+                    .agwc-range::-moz-range-progress {
+                      height: 6px; border-radius: 999px; background: #F59E0B;
+                    }
+                    .agwc-range::-moz-range-thumb {
+                      width: 16px; height: 16px; border-radius: 999px;
+                      background: #fff; border: 3px solid #F59E0B;
+                      box-shadow: 0 2px 6px rgba(15,23,42,0.18);
+                    }
+                    .agwc-boost {
+                      grid-column: 1 / -1;
+                      display: flex; align-items: center; justify-content: space-between;
+                      gap: 0.75rem; border-radius: 0.9rem; background: #fffaf1;
+                      box-shadow: inset 0 0 0 1px #f2e2cf; padding: 0.7rem 0.9rem;
+                    }
+                    .agwc-boost-title { font-size: 13px; font-weight: 500; color: #232f3e; margin: 0; }
+                    .agwc-boost-sub { font-size: 12px; color: #7a8493; margin: 0.1rem 0 0; }
+                    @media (max-width: 480px) { .agwc-boost-sub { display: none; } }
+                    .agwc-toggle {
+                      position: relative; flex: 0 0 auto; display: inline-flex; align-items: center;
+                      width: 2.4rem; height: 1.4rem; border-radius: 999px; border: 0;
+                      padding: 0 0.15rem; cursor: pointer; background: #E2E8F0;
+                      transition: background 160ms ease;
+                    }
+                    .agwc-toggle.is-on { background: #F59E0B; }
+                    .agwc-toggle-knob {
+                      width: 1.05rem; height: 1.05rem; border-radius: 999px; background: #fff;
+                      box-shadow: 0 1px 3px rgba(15,23,42,0.2); transition: transform 160ms ease;
+                      transform: translateX(0);
+                    }
+                    .agwc-toggle.is-on .agwc-toggle-knob { transform: translateX(1rem); }
+                  `}</style>
                 </div>
               )}
 

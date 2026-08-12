@@ -51,7 +51,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data?.wsUrl) {
         throw new Error(
-          data?.error?.message || "Could not start a live test call right now.",
+          data?.error?.message || "Could not start the call right now.",
         );
       }
       setMaxSessionSeconds(Number(data.maxSessionSeconds || 300));
@@ -106,7 +106,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
         message:
           e?.message === "Permission denied" || e?.name === "NotAllowedError"
             ? "Microphone access was denied. Allow mic access in your browser to test the agent."
-            : e?.message || "Could not start a live test call right now.",
+            : e?.message || "Could not start the call right now.",
       });
     }
   };
@@ -166,7 +166,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
         <div className="bg-[#0F172A] px-7 py-5 text-white flex items-center justify-between flex-shrink-0">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
-              Agent Test Console
+              Live Call
             </p>
             <h3 className="text-xl font-black tracking-tight mt-0.5 truncate">
               {agent.name}
@@ -212,7 +212,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                     className="w-full rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
                   >
                     <i className="fa-solid fa-phone text-sm" />
-                    Start Test Call
+                    Start Live Call
                   </button>
                   <p className="text-[11px] text-[#7a8493] text-center mt-3">
                     Up to {Math.round(maxSessionSeconds / 60)} minutes · uses
@@ -269,7 +269,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                     <p className="text-emerald-600 font-black text-[10px] uppercase tracking-widest">
-                      Live Test Call Active
+                      Live Call · Connected
                     </p>
                   </div>
                   <p className="text-3xl font-black text-[#0F172A] tracking-tight">
@@ -361,7 +361,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   <i className="fa-solid fa-check text-2xl text-emerald-500" />
                 </div>
                 <p className="text-xl font-black text-[#0F172A] mb-1">
-                  Test Call Ended
+                  Call Ended
                 </p>
                 <p className="text-sm text-[#7a8493] mb-5">
                   Duration: {formatTime(webDuration)} · nothing was saved to
@@ -389,7 +389,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                 </p>
                 <p className="text-sm text-[#7a8493] mb-5 max-w-sm">
                   {webError?.message ||
-                    "Something went wrong starting the test call."}
+                    "Something went wrong starting the call."}
                 </p>
                 <button
                   onClick={() => {
