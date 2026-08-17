@@ -491,26 +491,42 @@ const Notifications: React.FC = () => {
       </div>
 
       <div className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Notifications</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Actionable alerts for follow-ups, messages, unanswered questions,
-              and schedules.
-            </p>
+        {/* Refresh stays top-right at every width. All/Unread/Mark-all-read
+            move to their own compact row below instead of competing with
+            the title for space on mobile. */}
+        <div className="border-b border-slate-100 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-black text-slate-900 sm:text-xl">
+                Notifications
+              </h2>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">
+                Actionable alerts for follow-ups, messages, unanswered
+                questions, and schedules.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadNotifications()}
+              disabled={loading}
+              aria-label="Refresh notifications"
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 px-3 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40 sm:h-10 sm:px-4"
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setFilter("all")}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${filter === "all" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+              className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${filter === "all" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => setFilter("unread")}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition ${filter === "unread" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+              className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition ${filter === "unread" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             >
               Unread
             </button>
@@ -518,17 +534,9 @@ const Notifications: React.FC = () => {
               type="button"
               onClick={() => void markAllRead()}
               disabled={!unreadCount}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
             >
               Mark all read
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadNotifications()}
-              disabled={loading}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </div>
@@ -587,88 +595,90 @@ const Notifications: React.FC = () => {
             {pagedNotifications.map((notification) => {
               const target = getNotificationTarget(notification);
               return (
+                // Compact row instead of a spacious card: tighter padding,
+                // smaller text, icon-only actions — same info, less space.
                 <div
                   key={notification.id}
-                  className={`p-5 transition ${notification.isRead ? "bg-white" : "bg-amber-50/40"}`}
+                  className={`flex items-start gap-2.5 p-3 transition sm:p-4 ${notification.isRead ? "bg-white" : "bg-amber-50/40"}`}
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(notification.id)}
-                        onChange={() => toggleSelected(notification.id)}
-                        className="mt-3 h-4 w-4 rounded border-slate-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void openRelated(notification)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span
-                            className={`mt-2 h-2.5 w-2.5 rounded-full ${notification.isRead ? "bg-slate-200" : "bg-amber-400"}`}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${toneForType(notification.type)}`}
-                              >
-                                {getTypeLabel(notification.type)}
-                              </span>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                {formatDate(notification.createdAt)}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-base font-black text-slate-900">
-                              {notification.title}
-                            </p>
-                            {notification.body ? (
-                              <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-slate-500">
-                                {notification.body}
-                              </p>
-                            ) : null}
-                            {target ? (
-                              <p className="mt-2 text-xs font-bold text-indigo-600">
-                                Open related{" "}
-                                {target.startsWith("/calls?")
-                                  ? "call"
-                                  : target.replace("/", "")}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </button>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(notification.id)}
+                    onChange={() => toggleSelected(notification.id)}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void openRelated(notification)}
+                    className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                  >
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.isRead ? "bg-slate-200" : "bg-amber-400"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${toneForType(notification.type)}`}
+                        >
+                          {getTypeLabel(notification.type)}
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                          {formatDate(notification.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-sm font-black text-slate-900">
+                        {notification.title}
+                      </p>
+                      {notification.body ? (
+                        <p className="mt-0.5 line-clamp-1 text-xs leading-5 text-slate-500">
+                          {notification.body}
+                        </p>
+                      ) : null}
+                      {target ? (
+                        <p className="mt-1 text-[10px] font-bold text-indigo-600">
+                          Open related{" "}
+                          {target.startsWith("/calls?")
+                            ? "call"
+                            : target.replace("/", "")}
+                        </p>
+                      ) : null}
                     </div>
+                  </button>
 
-                    <div className="flex shrink-0 gap-2">
-                      {notification.isRead ? (
-                        <button
-                          type="button"
-                          onClick={() => void markUnread(notification)}
-                          disabled={busyId === notification.id}
-                          className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
-                        >
-                          Mark unread
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void markRead(notification)}
-                          disabled={busyId === notification.id}
-                          className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
-                        >
-                          Mark read
-                        </button>
-                      )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {notification.isRead ? (
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget(notification)}
+                        onClick={() => void markUnread(notification)}
                         disabled={busyId === notification.id}
-                        className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 transition hover:bg-red-50 disabled:opacity-40"
+                        aria-label="Mark unread"
+                        title="Mark unread"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
                       >
-                        Delete
+                        <i className="fa-sharp fa-solid fa-envelope text-[10px]" />
                       </button>
-                    </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void markRead(notification)}
+                        disabled={busyId === notification.id}
+                        aria-label="Mark read"
+                        title="Mark read"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-amber-200 hover:text-indigo-600 disabled:opacity-40"
+                      >
+                        <i className="fa-sharp fa-solid fa-envelope-open text-[10px]" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(notification)}
+                      disabled={busyId === notification.id}
+                      aria-label="Delete"
+                      title="Delete"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-100 text-red-500 transition hover:bg-red-50 disabled:opacity-40"
+                    >
+                      <i className="fa-sharp fa-solid fa-trash-can text-[10px]" />
+                    </button>
                   </div>
                 </div>
               );

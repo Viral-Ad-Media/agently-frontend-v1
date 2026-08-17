@@ -1245,8 +1245,9 @@ const CallLogs: React.FC<CallLogsProps> = ({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      {/* Refresh stays top-right at every width, never drops below the title. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
             Call Logs
           </h1>
@@ -1258,10 +1259,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
         <button
           onClick={() => void loadCalls(page)}
           disabled={loading || isPending}
-          className="inline-flex h-10 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 text-[11px] font-black uppercase tracking-wider text-amber-600 transition hover:bg-amber-50 disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-amber-300 bg-white px-3 text-[10px] font-black uppercase tracking-wider text-amber-600 transition hover:bg-amber-50 disabled:opacity-50 sm:h-10 sm:px-4 sm:text-[11px]"
         >
           <i
-            className={`fa-sharp fa-solid ${loading ? "fa-spinner fa-spin" : "fa-rotate-right"} mr-2 text-[10px]`}
+            className={`fa-sharp fa-solid ${loading ? "fa-spinner fa-spin" : "fa-rotate-right"} mr-1.5 text-[10px] sm:mr-2`}
           />
           {loading ? "Refreshing" : "Refresh"}
         </button>
@@ -1345,14 +1346,16 @@ const CallLogs: React.FC<CallLogsProps> = ({
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-[minmax(0,1fr)_10.5rem_10.5rem_11rem]">
-        <label className="relative block min-w-0 md:col-span-3 lg:col-span-1">
-          <i className="fa-sharp fa-solid fa-magnifying-glass pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
+      {/* Single row at every width: search flexes, the three filters are
+          compact and shrink-0 so they always fit alongside it on mobile. */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <label className="relative min-w-[8rem] flex-1">
+          <i className="fa-sharp fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 sm:left-4" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search calls, agents or tags..."
-            className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+            className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:pl-10 sm:pr-4 sm:text-sm"
           />
         </label>
         <select
@@ -1361,7 +1364,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             setDirectionFilter(event.target.value);
             setPage(1);
           }}
-          className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+          className="h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:px-4 sm:text-xs"
         >
           <option value="all">All directions</option>
           <option value="inbound">Inbound</option>
@@ -1373,7 +1376,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             setStatusFilter(event.target.value);
             setPage(1);
           }}
-          className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+          className="h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:px-4 sm:text-xs"
         >
           <option value="all">All statuses</option>
           <option value="completed">Completed</option>
@@ -1387,7 +1390,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             setCategoryFilter(event.target.value);
             setPage(1);
           }}
-          className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+          className="h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:px-4 sm:text-xs"
         >
           {CATEGORY_OPTIONS.map((item) => (
             <option key={item.value} value={item.value}>
@@ -1412,10 +1415,12 @@ const CallLogs: React.FC<CallLogsProps> = ({
           </div>
         ) : (
           <>
+            {/* Mobile: one compact row per call. No transcript preview, no
+                separate agent box, no action-button row — tapping the row
+                opens the full detail, so nothing is lost, just decluttered. */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filtered.map((call, index) => {
                 const statusKey = call.status.toLowerCase();
-                const directionKey = call.direction.toLowerCase();
                 return (
                   <div
                     key={call.id}
@@ -1428,82 +1433,30 @@ const CallLogs: React.FC<CallLogsProps> = ({
                         void openDetail(call);
                       }
                     }}
-                    className="cursor-pointer p-4 outline-none transition active:bg-slate-50 focus-visible:bg-slate-50"
+                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 outline-none transition active:bg-slate-50 focus-visible:bg-slate-50"
                   >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${index % 3 === 1 ? "bg-slate-600" : index % 3 === 2 ? "bg-slate-800" : "bg-slate-900"}`}
-                      >
-                        {(call.callerName || call.callerPhone || "C")[0].toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-black text-slate-900">
-                              {call.callerName || "Unknown caller"}
-                            </p>
-                            <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
-                              {abbreviatePhone(call.callerPhone)}
-                            </p>
-                          </div>
-                          <p className="shrink-0 text-[10px] font-bold text-slate-400">
-                            {formatCallLogDate(call.timestamp)}
-                          </p>
-                        </div>
-
-                        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${STATUS_STYLE[statusKey] || "border-slate-200 bg-slate-100 text-slate-600"}`}
-                          >
-                            {titleCase(call.status || call.outcome)}
-                          </span>
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-600">
-                            {titleCase(directionKey || "call")}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-400">
-                            {formatDuration(call.duration)}
-                          </span>
-                        </div>
-                      </div>
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black text-white ${index % 3 === 1 ? "bg-slate-600" : index % 3 === 2 ? "bg-slate-800" : "bg-slate-900"}`}
+                    >
+                      {(call.callerName || call.callerPhone || "C")[0].toUpperCase()}
                     </div>
-
-                    <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                      <p className="truncate text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Agent · {extractAgentName(org, call.voiceAgentId)}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black text-slate-900">
+                        {call.callerName || "Unknown caller"}
                       </p>
-                      <p className="mt-1 line-clamp-2 text-xs italic leading-5 text-slate-500">
-                        {getTranscriptPreview(call)}
+                      <p className="truncate text-[10px] font-medium text-slate-400">
+                        {abbreviatePhone(call.callerPhone)} ·{" "}
+                        {formatDuration(call.duration)}
                       </p>
                     </div>
-
-                    {call.transcript?.length || call.recordingAvailable ? (
-                      <div className="mt-3 flex items-center justify-end gap-2">
-                        {call.transcript?.length ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void openDetail(call);
-                            }}
-                            className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-blue-600"
-                          >
-                            Transcript
-                          </button>
-                        ) : null}
-                        {call.recordingAvailable ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void openDetail(call);
-                            }}
-                            className="rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-violet-600"
-                          >
-                            Recording
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <span
+                      className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${STATUS_STYLE[statusKey] || "border-slate-200 bg-slate-100 text-slate-600"}`}
+                    >
+                      {titleCase(call.status || call.outcome)}
+                    </span>
+                    <p className="shrink-0 text-[9px] font-bold text-slate-400">
+                      {formatCallLogDate(call.timestamp)}
+                    </p>
                   </div>
                 );
               })}

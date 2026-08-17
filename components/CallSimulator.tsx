@@ -1,160 +1,61 @@
-import React, { useState, useEffect, useRef } from "react";
-import { AgentConfig, Organization } from "../types";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { resolveApiBaseUrl } from "../utils/runtimeUrls";
-import { getSessionToken } from "../services/session";
-import { WebcallClient, WebcallStatus } from "../lib/webcallClient";
+import { useWebcall } from "../contexts/WebcallContext";
 
-interface CallSimulatorProps {
-  agent: AgentConfig;
-  org: Organization;
-  onClose: () => void;
-}
+/**
+ * Presentation layer only. All call state lives in WebcallContext, mounted
+ * above the router, so the call survives navigation — this modal is just a
+ * view onto it. Closing this modal (X, or navigating away) never hangs up;
+ * only the explicit "End Call" button does. See WebcallBadge for the
+ * floating indicator that reopens this same live state.
+ */
+const CallSimulator: React.FC = () => {
+  const {
+    status,
+    error,
+    duration,
+    captions,
+    agentSpeaking,
+    userSpeaking,
+    muted,
+    maxSessionSeconds,
+    agentName,
+    isModalOpen,
+    isCallLive,
+    endCall,
+    toggleMute,
+    closeModal,
+    resetToIdle,
+    restartCall,
+  } = useWebcall();
 
-const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
-  const [webStatus, setWebStatus] = useState<WebcallStatus>("idle");
-  const [webError, setWebError] = useState<{
-    code: string;
-    message: string;
-  } | null>(null);
-  const [webDuration, setWebDuration] = useState(0);
-  const [agentSpeaking, setAgentSpeaking] = useState(false);
-  const [userSpeaking, setUserSpeaking] = useState(false);
-  const [webMuted, setWebMuted] = useState(false);
-  const [captions, setCaptions] = useState<
-    { speaker: "You" | "Agent"; text: string; partial?: boolean }[]
-  >([]);
-  const [maxSessionSeconds, setMaxSessionSeconds] = useState(300);
-  const clientRef = useRef<WebcallClient | null>(null);
-  const webTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const captionsEndRef = useRef<HTMLDivElement | null>(null);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-
-  const startWebcall = async () => {
-    setWebError(null);
-    setCaptions([]);
-    setWebStatus("connecting");
-
-    try {
-      const apiBase = resolveApiBaseUrl();
-      const token = getSessionToken() || "";
-      const resp = await fetch(`${apiBase}/api/webcall/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ agentId: agent.id }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || !data?.wsUrl) {
-        throw new Error(
-          data?.error?.message || "Could not start the call right now.",
-        );
-      }
-      setMaxSessionSeconds(Number(data.maxSessionSeconds || 300));
-
-      const client = new WebcallClient(data.wsUrl, {
-        onStatusChange: (s) => setWebStatus(s),
-        onReady: () => {
-          setWebDuration(0);
-          webTimerRef.current = setInterval(
-            () => setWebDuration((d) => d + 1),
-            1000,
-          );
-        },
-        onTranscriptUser: (text) =>
-          setCaptions((prev) => [...prev, { speaker: "You", text }]),
-        onTranscriptAgent: (text, partial) =>
-          setCaptions((prev) => {
-            if (
-              partial &&
-              prev.length &&
-              prev[prev.length - 1].speaker === "Agent" &&
-              prev[prev.length - 1].partial
-            ) {
-              const next = prev.slice(0, -1);
-              next.push({ speaker: "Agent", text, partial });
-              return next;
-            }
-            return [...prev, { speaker: "Agent", text, partial }];
-          }),
-        onAgentSpeakingChange: setAgentSpeaking,
-        onUserSpeakingChange: setUserSpeaking,
-        onError: (code, message) => {
-          setWebError({ code, message });
-          if (webTimerRef.current) {
-            clearInterval(webTimerRef.current);
-            webTimerRef.current = null;
-          }
-        },
-        onEnded: () => {
-          if (webTimerRef.current) {
-            clearInterval(webTimerRef.current);
-            webTimerRef.current = null;
-          }
-        },
-      });
-      clientRef.current = client;
-      await client.start();
-    } catch (e: any) {
-      setWebStatus("error");
-      setWebError({
-        code: "START_FAILED",
-        message:
-          e?.message === "Permission denied" || e?.name === "NotAllowedError"
-            ? "Microphone access was denied. Allow mic access in your browser to test the agent."
-            : e?.message || "Could not start the call right now.",
-      });
-    }
-  };
-
-  const endWebcall = () => {
-    clientRef.current?.hangup();
-    clientRef.current = null;
-    if (webTimerRef.current) {
-      clearInterval(webTimerRef.current);
-      webTimerRef.current = null;
-    }
-    setWebStatus("ended");
-  };
-
-  const toggleWebMute = () => {
-    const next = !webMuted;
-    setWebMuted(next);
-    clientRef.current?.setMuted(next);
-  };
 
   useEffect(() => {
     captionsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [captions]);
 
   useEffect(() => {
+    if (!isModalOpen) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeModal();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [isModalOpen, closeModal]);
 
-  useEffect(
-    () => () => {
-      if (webTimerRef.current) clearInterval(webTimerRef.current);
-      clientRef.current?.stop();
-      clientRef.current = null;
-    },
-    [],
-  );
-
-  const isWebActive = webStatus === "connecting" || webStatus === "ready";
+  if (!isModalOpen) return null;
 
   return createPortal(
     <div
       className="fixed inset-0 z-[500] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !isWebActive) onClose();
+        // A live call minimizes on backdrop click, same as the X button —
+        // it never hangs up implicitly.
+        if (e.target === e.currentTarget) closeModal();
       }}
     >
       <div
@@ -169,28 +70,28 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
               Live Call
             </p>
             <h3 className="text-xl font-black tracking-tight mt-0.5 truncate">
-              {agent.name}
+              {agentName}
             </h3>
             <p className="text-xs text-white/40 mt-0.5">
               Talk to the exact agent that answers your real calls
             </p>
           </div>
           <button
-            onClick={() => {
-              if (isWebActive) endWebcall();
-              onClose();
-            }}
+            onClick={closeModal}
             className="p-2.5 hover:bg-white/10 rounded-2xl transition-all flex-shrink-0"
-            aria-label="Close"
+            aria-label={isCallLive ? "Minimize (call keeps running)" : "Close"}
+            title={isCallLive ? "Minimize — the call keeps running" : "Close"}
           >
-            <i className="fa-solid fa-xmark text-lg" />
+            <i
+              className={`fa-solid ${isCallLive ? "fa-minus" : "fa-xmark"} text-lg`}
+            />
           </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto max-h-[calc(min(700px,92vh)-90px)]">
           <div className="p-6 space-y-5">
-            {webStatus === "idle" && (
+            {status === "idle" && (
               <>
                 <div className="rounded-3xl bg-slate-50 border border-slate-200 p-5 shadow-card">
                   <div className="flex items-center gap-3 mb-4">
@@ -199,16 +100,12 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                     </div>
                     <div>
                       <p className="font-black text-[#0F172A] text-sm">
-                        Talk to it, right now
-                      </p>
-                      <p className="text-xs text-[#7a8493]">
-                        Connects your microphone straight to this agent's live
-                        persona and knowledge base
+                        Call your AI workforce now
                       </p>
                     </div>
                   </div>
                   <button
-                    onClick={startWebcall}
+                    onClick={() => void restartCall()}
                     className="w-full rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
                   >
                     <i className="fa-solid fa-phone text-sm" />
@@ -220,22 +117,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   </p>
                 </div>
 
-                <div className="rounded-3xl bg-slate-50 border border-slate-100 p-4">
-                  <p className="text-[10px] font-black text-[#7a8493] uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <i className="fa-solid fa-circle-info text-xs" /> How it
-                    works
-                  </p>
-                  <p className="text-xs text-[#7a8493] leading-relaxed">
-                    This is the exact same persona, voice, and knowledge base
-                    your phone agent uses on real calls — it just runs through
-                    your browser instead of a phone number. Nothing is saved to
-                    your leads or call history.
-                  </p>
-                </div>
+                <p className="text-[11px] text-[#7a8493] text-center px-2">
+                  Same voice and knowledge base as your real calls — nothing
+                  here is saved to leads or call history.
+                </p>
               </>
             )}
 
-            {webStatus === "connecting" && (
+            {status === "connecting" && (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="relative mb-6">
                   <div className="w-20 h-20 rounded-3xl bg-[#F59E0B] flex items-center justify-center shadow-xl shadow-amber-100">
@@ -247,12 +136,12 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   Connecting…
                 </p>
                 <p className="text-sm text-[#7a8493]">
-                  Loading {agent.name}'s persona and knowledge base
+                  Loading {agentName}'s persona and knowledge base
                 </p>
               </div>
             )}
 
-            {webStatus === "ready" && (
+            {status === "ready" && (
               <div className="space-y-4">
                 <div className="flex flex-col items-center py-4 text-center">
                   <div className="relative mb-4 flex items-center justify-center h-20">
@@ -273,14 +162,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                     </p>
                   </div>
                   <p className="text-3xl font-black text-[#0F172A] tracking-tight">
-                    {formatTime(webDuration)}
+                    {formatTime(duration)}
                   </p>
                   <p className="text-xs text-[#7a8493] mt-1">
                     {agentSpeaking
-                      ? `${agent.name} is speaking…`
+                      ? `${agentName} is speaking…`
                       : userSpeaking
                         ? "Listening…"
-                        : `${agent.name} is listening`}
+                        : `${agentName} is listening`}
                   </p>
                 </div>
 
@@ -311,14 +200,14 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
 
                 <div className="grid grid-cols-3 gap-3">
                   <button
-                    onClick={toggleWebMute}
-                    className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${webMuted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
+                    onClick={toggleMute}
+                    className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${muted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
                   >
                     <i
-                      className={`fa-solid ${webMuted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
+                      className={`fa-solid ${muted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
                     />
                     <span className="text-[10px] font-black uppercase tracking-widest">
-                      {webMuted ? "Unmute" : "Mute"}
+                      {muted ? "Unmute" : "Mute"}
                     </span>
                   </button>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 py-3.5 flex flex-col items-center justify-center gap-1.5">
@@ -343,7 +232,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                     </span>
                   </div>
                   <button
-                    onClick={endWebcall}
+                    onClick={endCall}
                     className="rounded-2xl bg-red-500 hover:bg-red-600 text-white py-3.5 flex flex-col items-center gap-1.5 transition-all shadow-lg shadow-red-100"
                   >
                     <i className="fa-solid fa-phone-hangup text-lg" />
@@ -355,7 +244,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
               </div>
             )}
 
-            {webStatus === "ended" && (
+            {status === "ended" && (
               <div className="flex flex-col items-center py-10 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                   <i className="fa-solid fa-check text-2xl text-emerald-500" />
@@ -364,14 +253,11 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   Call Ended
                 </p>
                 <p className="text-sm text-[#7a8493] mb-5">
-                  Duration: {formatTime(webDuration)} · nothing was saved to
+                  Duration: {formatTime(duration)} · nothing was saved to
                   your leads or call history
                 </p>
                 <button
-                  onClick={() => {
-                    setWebStatus("idle");
-                    setCaptions([]);
-                  }}
+                  onClick={resetToIdle}
                   className="rounded-xl border border-slate-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#0F172A] hover:border-slate-300 transition-all"
                 >
                   Call Again
@@ -379,7 +265,7 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
               </div>
             )}
 
-            {webStatus === "error" && (
+            {status === "error" && (
               <div className="flex flex-col items-center py-10 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
                   <i className="fa-solid fa-triangle-exclamation text-2xl text-red-500" />
@@ -388,14 +274,10 @@ const CallSimulator: React.FC<CallSimulatorProps> = ({ agent, onClose }) => {
                   Couldn't Connect
                 </p>
                 <p className="text-sm text-[#7a8493] mb-5 max-w-sm">
-                  {webError?.message ||
-                    "Something went wrong starting the call."}
+                  {error?.message || "Something went wrong starting the call."}
                 </p>
                 <button
-                  onClick={() => {
-                    setWebStatus("idle");
-                    setWebError(null);
-                  }}
+                  onClick={resetToIdle}
                   className="rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all"
                 >
                   Try Again

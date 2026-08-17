@@ -54,52 +54,19 @@ const STATUS_STYLE: Record<string, string> = {
   skipped: "bg-slate-100 text-slate-400",
 };
 
-/** Per-card dial. Issue 4(d). */
-const ProgressRing: React.FC<{ percent: number; active: boolean }> = ({
+/** Compact numeric progress — no per-row SVG dial. */
+const ProgressPercent: React.FC<{ percent: number; active: boolean }> = ({
   percent,
   active,
-}) => {
-  const r = 14;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg
-      width="36"
-      height="36"
-      viewBox="0 0 36 36"
-      className={active ? "animate-pulse" : ""}
-    >
-      <circle
-        cx="18"
-        cy="18"
-        r={r}
-        fill="none"
-        stroke="#e2e8f0"
-        strokeWidth="4"
-      />
-      <circle
-        cx="18"
-        cy="18"
-        r={r}
-        fill="none"
-        stroke={percent >= 100 ? "#059669" : "#4f46e5"}
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c - (Math.max(0, Math.min(100, percent)) / 100) * c}
-        transform="rotate(-90 18 18)"
-        style={{ transition: "stroke-dashoffset 400ms ease" }}
-      />
-      <text
-        x="18"
-        y="22"
-        textAnchor="middle"
-        className="fill-slate-600 text-[9px] font-black"
-      >
-        {Math.round(percent)}
-      </text>
-    </svg>
-  );
-};
+}) => (
+  <span
+    className={`w-8 shrink-0 text-right text-[11px] font-bold tabular-nums ${
+      percent >= 100 ? "text-emerald-600" : active ? "text-indigo-600" : "text-slate-400"
+    }`}
+  >
+    {Math.round(percent)}%
+  </span>
+);
 
 const PageSelector: React.FC<Props> = ({
   knowledgeBaseId,
@@ -129,6 +96,7 @@ const PageSelector: React.FC<Props> = ({
   });
   const [filter, setFilter] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
+  const [listCollapsed, setListCollapsed] = useState(false);
   // Every insufficient-credit response on this page renders as a modal.
   const credit = useCreditGuard();
 
@@ -416,19 +384,17 @@ const PageSelector: React.FC<Props> = ({
 
   if (phase === "idle" || phase === "discovering") {
     return (
-      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 text-center shadow-card sm:p-8">
-        <div className="mb-3 text-4xl">🔎</div>
-        <h3 className="text-base font-black text-slate-900">Find your pages</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-          We'll look through{" "}
-          <span className="font-bold text-slate-700">{website}</span> and list
-          every page we can find. Nothing is read yet — you choose what your
-          agent learns.
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-center sm:p-5">
+        <h3 className="text-sm font-bold text-slate-900">Find your pages</h3>
+        <p className="mx-auto mt-1.5 max-w-md text-xs text-slate-500">
+          We'll list every page on{" "}
+          <span className="font-semibold text-slate-700">{website}</span>.
+          Nothing is read yet — you choose what your agent learns.
         </p>
         <button
           onClick={() => void handleDiscover()}
           disabled={busy === "discover"}
-          className="mt-6 rounded-2xl bg-slate-900 px-8 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
+          className="mt-4 rounded-xl bg-slate-900 px-6 py-2 text-[10px] font-bold uppercase tracking-widest text-white transition-all hover:bg-amber-600 disabled:opacity-50"
         >
           {phase === "discovering"
             ? "Looking through your site…"
@@ -442,140 +408,142 @@ const PageSelector: React.FC<Props> = ({
   const isPaused = job?.status === "paused";
 
   return (
-    <div className="min-w-0 space-y-4 overflow-x-hidden">
-      {/* Header + counts */}
-      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-black text-slate-900">
+    // One card instead of two stacked ones — merged per feedback that the
+    // separate containers/charts were more visual weight than the content
+    // needed. Logic below (polling, handlers) is untouched.
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setListCollapsed((c) => !c)}
+          className="flex min-w-0 items-center gap-2 text-left"
+          aria-expanded={!listCollapsed}
+        >
+          <i
+            className={`fa-solid fa-chevron-down shrink-0 text-[10px] text-slate-400 transition-transform ${listCollapsed ? "-rotate-90" : ""}`}
+          />
+          <span className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900">
               {pages.length} pages discovered
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">
               {selected.size} selected · estimated {money(selectedEstimate)}
             </p>
-          </div>
-          {phase === "selecting" && (
-            <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:w-auto sm:flex sm:flex-wrap sm:gap-2">
-              <button
-                onClick={() => void handleDiscover()}
-                disabled={busy === "discover"}
-                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 disabled:opacity-50 sm:px-3 sm:text-[10px] sm:tracking-widest"
-              >
-                Refresh list
-              </button>
-              <button
-                onClick={selectRecommended}
-                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
-              >
-                Recommended
-              </button>
-              <button
-                onClick={selectAll}
-                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
-              >
-                Select all
-              </button>
-              <button
-                onClick={selectNone}
-                className="min-w-0 rounded-xl border border-slate-200 px-1.5 py-1.5 text-[9px] font-black uppercase tracking-tight text-slate-600 hover:border-amber-300 sm:px-3 sm:text-[10px] sm:tracking-widest"
-              >
-                Clear
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Issue 4: the burn-rate warning. */}
-        {phase === "selecting" && (
-          <div className="mt-4 flex min-w-0 gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:gap-3 sm:p-4">
-            <span className="text-lg">⚡</span>
-            <div>
-              <p className="text-xs font-bold text-amber-900">
-                {creditWarning}
-              </p>
-              <p className="mt-1 text-[11px] text-amber-700">
-                All {pages.length} pages would cost about {money(estimates.all)}
-                .
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Live job bar */}
-        {job && phase === "scraping" && (
-          <div className="mt-4 min-w-0 rounded-2xl border border-indigo-200 bg-indigo-50 p-3 sm:p-4">
-            <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-black text-indigo-900">
-                {isPaused ? "Paused" : "Reading your pages"} —{" "}
-                {job.completedPages}/{job.totalPages}
-              </p>
-              <div className="flex min-w-0 flex-wrap gap-1.5 sm:gap-2">
-                {isRunning && (
-                  <button
-                    onClick={() => void handlePauseResume("pause")}
-                    disabled={!!busy}
-                    className="rounded-lg bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 disabled:opacity-50"
-                  >
-                    Pause
-                  </button>
-                )}
-                {isPaused && (
-                  <button
-                    onClick={() => void handlePauseResume("resume")}
-                    disabled={!!busy}
-                    className="rounded-lg bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
-                  >
-                    Resume
-                  </button>
-                )}
-                <button
-                  onClick={() => void requestStop()}
-                  disabled={!!busy}
-                  className="rounded-lg bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-rose-600 disabled:opacity-50"
-                >
-                  Stop
-                </button>
-              </div>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-indigo-100">
-              <div
-                className="h-full rounded-full bg-indigo-600 transition-all duration-500"
-                style={{ width: `${job.progressPercent}%` }}
-              />
-            </div>
-            {job.currentPageUrl && !isPaused && (
-              <p className="mt-2 truncate text-[11px] text-indigo-700">
-                Currently reading {job.currentPageUrl}
-              </p>
-            )}
-            <p className="mt-2 text-[11px] text-indigo-600">
-              You can leave this page — we'll notify you when it's finished.
-            </p>
+          </span>
+        </button>
+        {!listCollapsed && phase === "selecting" && (
+          <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:w-auto sm:flex sm:flex-wrap sm:gap-1.5">
+            <button
+              onClick={() => void handleDiscover()}
+              disabled={busy === "discover"}
+              className="min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-bold uppercase tracking-tight text-slate-600 hover:border-amber-300 disabled:opacity-50"
+            >
+              Refresh list
+            </button>
+            <button
+              onClick={selectRecommended}
+              className="min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-bold uppercase tracking-tight text-slate-600 hover:border-amber-300"
+            >
+              Recommended
+            </button>
+            <button
+              onClick={selectAll}
+              className="min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-bold uppercase tracking-tight text-slate-600 hover:border-amber-300"
+            >
+              Select all
+            </button>
+            <button
+              onClick={selectNone}
+              className="min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-bold uppercase tracking-tight text-slate-600 hover:border-amber-300"
+            >
+              Clear
+            </button>
           </div>
         )}
       </div>
 
-      {/* Page list */}
-      <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
+      {/* Burn-rate warning — a text line, not a colored callout box. */}
+      {!listCollapsed && phase === "selecting" && (
+        <p className="mt-2 text-xs text-amber-700">
+          {creditWarning} All {pages.length} pages would cost about{" "}
+          {money(estimates.all)}.
+        </p>
+      )}
+
+      {/* Live job bar */}
+      {!listCollapsed && job && phase === "scraping" && (
+        <div className="mt-3 min-w-0 rounded-xl bg-slate-50 p-2.5 sm:p-3">
+          <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-slate-700">
+              {isPaused ? "Paused" : "Reading your pages"} —{" "}
+              {job.completedPages}/{job.totalPages}
+            </p>
+            <div className="flex min-w-0 flex-wrap gap-1.5">
+              {isRunning && (
+                <button
+                  onClick={() => void handlePauseResume("pause")}
+                  disabled={!!busy}
+                  className="rounded-lg bg-white px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 shadow-sm disabled:opacity-50"
+                >
+                  Pause
+                </button>
+              )}
+              {isPaused && (
+                <button
+                  onClick={() => void handlePauseResume("resume")}
+                  disabled={!!busy}
+                  className="rounded-lg bg-slate-900 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-white disabled:opacity-50"
+                >
+                  Resume
+                </button>
+              )}
+              <button
+                onClick={() => void requestStop()}
+                disabled={!!busy}
+                className="rounded-lg bg-white px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-rose-600 shadow-sm disabled:opacity-50"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-slate-900 transition-all duration-500"
+              style={{ width: `${job.progressPercent}%` }}
+            />
+          </div>
+          {job.currentPageUrl && !isPaused && (
+            <p className="mt-1.5 truncate text-[10px] text-slate-500">
+              Currently reading {job.currentPageUrl}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!listCollapsed && (
+      <div className="mt-4 border-t border-slate-100 pt-4">
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter pages…"
-          className="mb-4 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-amber-300"
+          className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs outline-none focus:border-amber-300"
         />
-        <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+        {/* Table-style compact rows instead of individually padded cards —
+            each row is one thin line, so the same list occupies a fraction
+            of the vertical space on both desktop and mobile. */}
+        <div className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-100">
           {pagedPages.map((page) => {
             const isSelected = selected.has(page.id);
             const active = page.scrapeStatus === "scraping";
             return (
               <div
                 key={page.id}
-                className={`flex min-w-0 items-start gap-2 rounded-2xl border p-2.5 transition-all sm:items-center sm:gap-3 sm:p-3 ${
+                className={`flex min-w-0 items-center gap-2 px-2 py-1.5 transition-colors ${
                   active
-                    ? "border-indigo-300 bg-indigo-50/50 shadow-sm"
+                    ? "bg-indigo-50/50"
                     : isSelected
-                      ? "border-amber-200 bg-amber-50/30"
-                      : "border-slate-200 bg-white"
+                      ? "bg-amber-50/40"
+                      : "bg-white"
                 }`}
               >
                 {phase === "selecting" ? (
@@ -583,34 +551,34 @@ const PageSelector: React.FC<Props> = ({
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => toggle(page.id)}
-                    className="h-4 w-4 shrink-0 rounded border-slate-300 accent-amber-600"
+                    className="h-3.5 w-3.5 shrink-0 rounded border-slate-300 accent-amber-600"
                   />
                 ) : (
-                  <ProgressRing percent={page.scrapeProgress} active={active} />
+                  <ProgressPercent percent={page.scrapeProgress} active={active} />
                 )}
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-slate-900">
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="truncate text-xs font-bold text-slate-900">
                     {page.title || page.path}
-                  </p>
-                  <p className="truncate font-mono text-[10px] text-slate-400">
+                  </span>
+                  <span className="ml-1.5 truncate font-mono text-[10px] text-slate-400">
                     {page.path}
-                  </p>
+                  </span>
                   {page.lastError && (
-                    <p className="mt-0.5 truncate text-[10px] text-rose-600">
+                    <span className="ml-1.5 truncate text-[10px] text-rose-600">
                       {page.lastError}
-                    </p>
+                    </span>
                   )}
                 </div>
 
                 {page.priorityScore >= 80 && phase === "selecting" && (
-                  <span className="hidden shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700 sm:inline-flex">
-                    Key page
+                  <span className="hidden shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-emerald-700 sm:inline-flex">
+                    Key
                   </span>
                 )}
                 {phase !== "selecting" && (
                   <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${STATUS_STYLE[page.scrapeStatus] || STATUS_STYLE.pending}`}
+                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${STATUS_STYLE[page.scrapeStatus] || STATUS_STYLE.pending}`}
                   >
                     {page.scrapeStatus}
                   </span>
@@ -665,6 +633,7 @@ const PageSelector: React.FC<Props> = ({
           </button>
         )}
       </div>
+      )}
 
       {/* Issue 4(g): abrupt-stop warning. */}
       <CreditModal {...credit.modalProps} />

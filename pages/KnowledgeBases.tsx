@@ -50,6 +50,9 @@ import {
 import { api } from "../services/api";
 import AppModal from "../components/AppModal";
 import PageSelector from "../components/PageSelector";
+import KnowledgeFileUpload, {
+  KnowledgeUploadTrigger,
+} from "../components/KnowledgeFileUpload";
 import MonitoringToggle from "../components/MonitoringToggle";
 import SettingsTabs from "../components/SettingsTabs";
 
@@ -237,6 +240,9 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
   const [deleteCheck, setDeleteCheck] = useState<DeleteCheck | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const toastTimerRef = useRef<number | null>(null);
+  const kbScrollRef = useRef<HTMLDivElement | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadRefreshTick, setUploadRefreshTick] = useState(0);
 
   const agents = useMemo<AgentConfig[]>(
     () => org.voiceAgents || [],
@@ -440,9 +446,13 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
       )}
 
-      <header className="ag-kb-page-header flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-4 sm:gap-3 sm:pb-5">
+      {/* Same title size / padding / button height as the Profile, Team, and
+          Billing tabs (all share text-2xl sm:text-3xl + pb-5 + h-11 mobile
+          buttons) — this header used to be visibly shorter, causing the page
+          to jump when switching sibling Settings tabs. */}
+      <header className="ag-kb-page-header flex min-w-0 items-start justify-between gap-3 border-b border-slate-200 pb-5">
         <div className="min-w-0 flex-1">
-          <h2 className="ag-kb-page-title truncate text-[17px] font-black tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
+          <h2 className="ag-kb-page-title truncate text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
             Knowledge Bases
           </h2>
           <p className="mt-2 hidden max-w-3xl text-sm leading-relaxed text-slate-500 sm:block">
@@ -452,7 +462,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="ag-kb-new-button inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-amber-600 sm:h-auto sm:rounded-2xl sm:px-5 sm:py-2.5 sm:text-[10px] sm:uppercase sm:tracking-widest"
+          className="ag-kb-new-button inline-flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-amber-600 sm:h-10 sm:rounded-xl sm:px-5 sm:py-2.5 sm:text-[10px] sm:uppercase sm:tracking-widest"
         >
           <span>+ New knowledge base</span>
         </button>
@@ -481,39 +491,73 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         // The knowledge base list is now CARDS ACROSS THE TOP - like the
         // chatbot and voice-agent cards - with the detail underneath using the
         // full width. It was a narrow left column wasting most of the row.
+        // A true horizontal scroll-snap carousel — single row, swipe/scroll
+        // through it, never wraps into a growing multi-row grid. (Note: the
+        // actual voice-agent fleet cards are a fixed-size PAGINATED grid, not
+        // a continuous scroll strip — this is a different, simpler pattern
+        // built to match what was asked for here specifically.)
         <div className="space-y-5">
-          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
-            {bases.map((kb) => {
-              const isActive = kb.id === activeId;
-              const pending = (kb as any).pendingChangeCount || 0;
-              return (
-                <button
-                  key={kb.id}
-                  onClick={() => setActiveId(kb.id)}
-                  className={`min-w-0 rounded-2xl border p-3 text-left transition-all sm:p-4 ${
-                    isActive
-                      ? "border-amber-400 bg-amber-50 shadow-sm ring-2 ring-amber-200"
-                      : "border-slate-200 bg-white hover:border-amber-300"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {kb.name}
-                    </p>
-                    {pending > 0 && (
-                      <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-black text-white">
-                        {pending}
-                      </span>
+          <div className="relative">
+            <div
+              ref={kbScrollRef}
+              className="ag-kb-carousel flex min-w-0 snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth pb-1 sm:gap-3"
+            >
+              {bases.map((kb) => {
+                const isActive = kb.id === activeId;
+                const pending = (kb as any).pendingChangeCount || 0;
+                return (
+                  <button
+                    key={kb.id}
+                    onClick={() => setActiveId(kb.id)}
+                    className={`w-[42vw] shrink-0 snap-start rounded-2xl border p-3 text-left transition-all sm:w-52 sm:p-4 ${
+                      isActive
+                        ? "border-amber-400 bg-amber-50 shadow-sm ring-2 ring-amber-200"
+                        : "border-slate-200 bg-white hover:border-amber-300"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-sm font-black text-slate-900">
+                        {kb.name}
+                      </p>
+                      {pending > 0 && (
+                        <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-black text-white">
+                          {pending}
+                        </span>
+                      )}
+                    </div>
+                    {(kb as any).website && (
+                      <p className="mt-1 truncate font-mono text-[10px] text-slate-400">
+                        {(kb as any).website}
+                      </p>
                     )}
-                  </div>
-                  {(kb as any).website && (
-                    <p className="mt-1 truncate font-mono text-[10px] text-slate-400">
-                      {(kb as any).website}
-                    </p>
-                  )}
+                  </button>
+                );
+              })}
+            </div>
+            {bases.length > 3 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Scroll knowledge bases left"
+                  onClick={() =>
+                    kbScrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
+                  }
+                  className="ag-agent-fleet-nav ag-agent-fleet-nav-left"
+                >
+                  <i className="fa-solid fa-chevron-left text-xs" />
                 </button>
-              );
-            })}
+                <button
+                  type="button"
+                  aria-label="Scroll knowledge bases right"
+                  onClick={() =>
+                    kbScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
+                  }
+                  className="ag-agent-fleet-nav ag-agent-fleet-nav-right"
+                >
+                  <i className="fa-solid fa-chevron-right text-xs" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Detail - now the full width of the page */}
@@ -532,12 +576,21 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => void openDelete(active)}
-                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:border-rose-300"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <KnowledgeUploadTrigger
+                        knowledgeBaseId={active.id}
+                        onToast={showToast}
+                        onQueued={() => setUploadRefreshTick((t) => t + 1)}
+                        uploading={uploadingFile}
+                        setUploading={setUploadingFile}
+                      />
+                      <button
+                        onClick={() => void openDelete(active)}
+                        className="shrink-0 whitespace-nowrap rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:border-rose-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
 
                   {/*
@@ -606,6 +659,14 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
                   `key` pins the child to the knowledge base, so switching KBs
                   tears down the old poller cleanly instead of leaking it.
                 */}
+                <KnowledgeFileUpload
+                  key={`upload-${active.id}`}
+                  knowledgeBaseId={active.id}
+                  onToast={showToast}
+                  onIndexed={() => void loadAll()}
+                  refreshSignal={uploadRefreshTick}
+                />
+
                 <PageSelector
                   key={active.id}
                   knowledgeBaseId={active.id}

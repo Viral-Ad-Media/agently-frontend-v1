@@ -20,6 +20,9 @@ import StableHashRouter, {
   RouteCommitBoundary,
 } from "./components/StableHashRouter";
 import AgentSettings from "./pages/AgentSettings";
+import CallSimulator from "./components/CallSimulator";
+import WebcallBadge from "./components/WebcallBadge";
+import { WebcallProvider } from "./contexts/WebcallContext";
 import Billing from "./pages/Billing";
 import Dashboard from "./pages/Dashboard";
 import KnowledgeBases from "./pages/KnowledgeBases";
@@ -792,9 +795,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <StableHashRouter>
-      <RouteCommitBoundary fallback={<AppLoading />}>
-        <Routes>
+    // WebcallProvider wraps the router (not the other way around) precisely
+    // because every route below independently remounts MainLayout on
+    // navigation (see contexts/WebcallContext.tsx) — anything owning live
+    // call state has to live outside that remount boundary to survive it.
+    <WebcallProvider>
+      <StableHashRouter>
+        <RouteCommitBoundary fallback={<AppLoading />}>
+          <Routes>
           <Route
             path="/"
             element={
@@ -1185,7 +1193,10 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-    </StableHashRouter>
+      </StableHashRouter>
+      <CallSimulator />
+      <WebcallBadge />
+    </WebcallProvider>
   );
 };
 

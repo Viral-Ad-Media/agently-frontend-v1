@@ -90,6 +90,17 @@ export class WebcallClient {
   private muted = false;
   private stopped = false;
   private agentSpeaking = false;
+  // The server (agently-ws-server/lib/webcall-stream.js) always sends a
+  // specific session.error or session.ended message BEFORE it closes the
+  // socket — every rejection reason (invalid token, insufficient credit,
+  // agent not found, concurrency limit, missing provider key, context load
+  // failure, normal hangup) is reported this way. This flag remembers that
+  // a real, specific reason already arrived, so the close event below never
+  // overwrites it with a generic status. Without this guard every one of
+  // those specific failures was invisible: the UI briefly showed the real
+  // reason, then the close event a moment later silently flipped it to a
+  // blank "Call Ended, 0:00" no matter what actually went wrong.
+  private terminalReported = false;
   private speakingResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -177,10 +188,16 @@ export class WebcallClient {
     };
 
     this.ws.onclose = () => {
-      if (!this.stopped) {
-        this.callbacks.onStatusChange?.("ended");
-        this.callbacks.onEnded?.("connection_closed");
-      }
+      if (this.stopped || this.terminalReported) return;
+      // The socket closed without the server ever sending session.error or
+      // session.ended first — a genuine unexpected disconnect (network drop,
+      // server crash), not one of the reported rejection reasons. Surface it
+      // honestly rather than as a blank "Call Ended".
+      this.callbacks.onStatusChange?.("error");
+      this.callbacks.onError?.(
+        "CONNECTION_CLOSED_UNEXPECTEDLY",
+        "The call disconnected unexpectedly. Please try again.",
+      );
     };
   }
 
@@ -204,10 +221,16 @@ export class WebcallClient {
         if (msg.text) this.callbacks.onTranscriptAgent?.(msg.text, Boolean(msg.partial));
         break;
       case "session.error":
+        // The server always sends this with the real rejection reason
+        // (bad token, no credit, agent not found, concurrency limit, missing
+        // provider key, context load failure) right before closing the
+        // socket. Mark it reported so the close event doesn't clobber it.
+        this.terminalReported = true;
         this.callbacks.onStatusChange?.("error");
         this.callbacks.onError?.(msg.code || "UNKNOWN", msg.message || "Something went wrong.");
         break;
       case "session.ended":
+        this.terminalReported = true;
         this.callbacks.onStatusChange?.("ended");
         this.callbacks.onEnded?.(msg.reason || "ended");
         break;

@@ -19,8 +19,8 @@ import {
   VoiceSettings,
 } from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
-import CallSimulator from "../components/CallSimulator";
 import { formatTimezoneOptionLabel } from "@/utils/timezones";
+import { useWebcall } from "../contexts/WebcallContext";
 
 // Voice display must come from saved provider config, not legacy seeded voice names.
 const TONES = ["Professional", "Friendly", "Empathetic"] as const;
@@ -328,7 +328,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
   const [agentSchedules, setAgentSchedules] = useState<Schedule[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
-  const [showTalkToAgent, setShowTalkToAgent] = useState(false);
+  // The call itself is owned by WebcallContext (mounted above the router so
+  // it survives navigation) — this page only ever triggers it.
+  const {
+    startCall: startWebcall,
+    openModal: openWebcallModal,
+    isCallLive: isWebcallLive,
+  } = useWebcall();
 
   /* knowledge-base state */
   const [scrapeUrl, setScrapeUrl] = useState(org.profile.website || "");
@@ -1905,10 +1911,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setShowTalkToAgent(true)}
+            onClick={() => {
+              // Reopen the existing live modal rather than restarting a call
+              // already in progress (e.g. the tenant switched agent tabs
+              // mid-call and clicked back into this one).
+              if (isWebcallLive) openWebcallModal();
+              else void startWebcall(draft, org);
+            }}
             className="ag-button-soft"
           >
-            Talk to Your Agent
+            Call Your AI Workforce Now
           </button>
           <button
             type="button"
@@ -2227,7 +2239,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   ))}
                 </Sel>
               </div>
-              <div className="min-w-0">
+              {/* Full width on phones: half of a 2-col grid cannot hold an
+                  icon, an E.164 number and the Manage button, so the number
+                  itself truncated away to nothing. Same span pattern as the
+                  ElevenLabs voice cell above. */}
+              <div className="col-span-2 min-w-0 sm:col-span-1">
                 <Label>Assigned Number</Label>
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 font-medium text-sm text-[#687386] flex items-center gap-2">
@@ -2441,9 +2457,15 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       font-size: 11px; font-weight: 700; color: #0F172A;
                       font-variant-numeric: tabular-nums;
                     }
-                    .agwc-range {
+                    /* Tag-qualified on purpose. index.css carries blanket
+                       element rules for form controls (a 44px min-height touch
+                       floor, a white background skin) whose selectors outrank a
+                       bare class. Matching their specificity and relying on
+                       this block coming later in document order keeps the dial
+                       looking like a dial without an !important arms race. */
+                    input.agwc-range {
                       -webkit-appearance: none; appearance: none;
-                      width: 100%; height: 6px; border-radius: 999px; outline: none;
+                      width: 100%; height: 6px; min-height: 0; border-radius: 999px; outline: none;
                       cursor: pointer; margin: 0; padding: 0; border: 0;
                       background: linear-gradient(90deg,#F59E0B 0%,#F59E0B var(--agwc-fill,0%),#E2E8F0 var(--agwc-fill,0%),#E2E8F0 100%);
                     }
@@ -2476,13 +2498,16 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     .agwc-boost-title { font-size: 13px; font-weight: 500; color: #232f3e; margin: 0; }
                     .agwc-boost-sub { font-size: 12px; color: #7a8493; margin: 0.1rem 0 0; }
                     @media (max-width: 480px) { .agwc-boost-sub { display: none; } }
-                    .agwc-toggle {
+                    /* Tag-qualified for the same reason as .agwc-range: the
+                       global 44px min-height floor for buttons would otherwise
+                       stretch this switch into a circle. */
+                    button.agwc-toggle {
                       position: relative; flex: 0 0 auto; display: inline-flex; align-items: center;
-                      width: 2.4rem; height: 1.4rem; border-radius: 999px; border: 0;
+                      width: 2.4rem; height: 1.4rem; min-height: 0; border-radius: 999px; border: 0;
                       padding: 0 0.15rem; cursor: pointer; background: #E2E8F0;
                       transition: background 160ms ease;
                     }
-                    .agwc-toggle.is-on { background: #F59E0B; }
+                    button.agwc-toggle.is-on { background: #F59E0B; }
                     .agwc-toggle-knob {
                       width: 1.05rem; height: 1.05rem; border-radius: 999px; background: #fff;
                       box-shadow: 0 1px 3px rgba(15,23,42,0.2); transition: transform 160ms ease;
@@ -2758,8 +2783,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
           </div>
           <div className="bg-white rounded-3xl border border-slate-200 shadow-card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div>
+            {/* Stacks on phones. Side by side, the three buttons had to wrap
+                one per line against the title and came out as a staircase. */}
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <h3 className="text-base font-medium text-[#232f3e]">
                   FAQ Knowledge Entries
                 </h3>
@@ -2767,7 +2794,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   Q&A pairs the AI uses to answer callers.
                 </p>
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
                 <button
                   type="button"
                   onClick={() => void saveAllAgentChanges()}
@@ -2944,9 +2971,11 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             ).map((r) => (
               <div
                 key={r.key}
-                className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all"
+                className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all"
               >
-                <div>
+                {/* min-w-0 so a long description wraps instead of running
+                    underneath the switch on a narrow screen. */}
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-[#232f3e]">
                     {r.label}
                   </p>
@@ -2962,10 +2991,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       },
                     }))
                   }
-                  className={`w-11 h-6 rounded-full relative transition-all flex items-center px-0.5 ${draft.rules[r.key] ? "bg-amber-500" : "bg-slate-200"}`}
+                  className={`w-11 h-6 shrink-0 rounded-full relative transition-all flex items-center px-0.5 ${draft.rules[r.key] ? "bg-amber-500" : "bg-slate-200"}`}
                 >
                   <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all ${draft.rules[r.key] ? "translate-x-5" : "translate-x-0"}`}
+                    className={`w-5 h-5 shrink-0 bg-white rounded-full shadow-sm transition-all ${draft.rules[r.key] ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </button>
               </div>
@@ -3517,14 +3546,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             </div>
           </div>
         </AppModal>
-      )}
-
-      {showTalkToAgent && draft?.id && (
-        <CallSimulator
-          agent={draft}
-          org={org}
-          onClose={() => setShowTalkToAgent(false)}
-        />
       )}
     </div>
   );

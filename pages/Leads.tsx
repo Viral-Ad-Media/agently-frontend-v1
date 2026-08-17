@@ -1231,16 +1231,17 @@ const Leads: React.FC<LeadsProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      {/* Header — actions stay top-right on every screen size, never drop
+          below the title into their own row. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-xl font-black text-slate-900">Lead CRM</h2>
           <p className="mt-0.5 text-xs text-slate-400">
             {localLeads.length} total · tag leads to assign and schedule
             outreach
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex h-10 items-center justify-center rounded-xl bg-amber-500 px-4 text-xs font-bold text-white transition-colors hover:bg-amber-600"
@@ -1383,8 +1384,10 @@ const Leads: React.FC<LeadsProps> = ({
         {/* LEFT */}
         <div className="space-y-4">
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-              <div className="relative min-w-0">
+            {/* Single row at every width: search flexes, status + select-page
+                are compact and shrink-0 so they always fit alongside it. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[9rem] flex-1">
                 <svg
                   className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                   width="13"
@@ -1401,13 +1404,13 @@ const Leads: React.FC<LeadsProps> = ({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search name, phone, email or tag…"
-                  className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:pl-10 sm:pr-4 sm:text-sm"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:w-auto"
+                className="h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:px-4 sm:text-xs"
               >
                 <option value="all">All statuses</option>
                 <option value="new">New</option>
@@ -1416,7 +1419,7 @@ const Leads: React.FC<LeadsProps> = ({
               </select>
               <button
                 onClick={toggleAll}
-                className="h-11 w-full whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
+                className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-2.5 text-[9px] font-black uppercase tracking-widest text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 sm:h-11 sm:px-4 sm:text-[10px]"
               >
                 {selectedIds.size === pagedLeads.length && pagedLeads.length > 0
                   ? "Clear"
@@ -1499,9 +1502,12 @@ const Leads: React.FC<LeadsProps> = ({
                 </div>
               ) : (
                 pagedLeads.map((lead) => (
+                  // Single row at every width: checkbox, name+status, tags
+                  // (hidden below sm — secondary info, not worth the space),
+                  // and a compact icon-only delete button, never stacked.
                   <div
                     key={lead.id}
-                    className="flex flex-col gap-2.5 px-3 py-2.5 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center"
+                    className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-slate-50"
                   >
                     <button
                       onClick={() => toggleSel(lead.id)}
@@ -1521,38 +1527,30 @@ const Leads: React.FC<LeadsProps> = ({
                     </button>
                     <button
                       onClick={() => setActiveLead(lead)}
-                      className="flex w-full min-w-0 flex-1 flex-col items-start gap-1 text-left sm:w-auto"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-black text-slate-900">
-                          {lead.name}
-                        </span>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${STATUS_STYLES[lead.status]}`}
-                        >
-                          {lead.status}
-                        </span>
-                      </div>
+                      <span className="truncate text-xs font-black text-slate-900 sm:text-sm">
+                        {lead.name}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest sm:px-2 sm:text-[10px] ${STATUS_STYLES[lead.status]}`}
+                      >
+                        {lead.status}
+                      </span>
                       {(lead.tags || []).length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {(lead.tags || []).map((t) => (
-                            <span
-                              key={t}
-                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-500"
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
+                        <span className="hidden min-w-0 shrink truncate text-[9px] font-bold uppercase tracking-wider text-slate-400 sm:inline">
+                          {(lead.tags || []).map((t) => `#${t}`).join(" ")}
+                        </span>
                       )}
                     </button>
                     <button
                       onClick={() =>
                         setDeleteTarget({ ids: [lead.id], label: lead.name })
                       }
-                      className="w-full shrink-0 rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 sm:w-auto sm:py-1.5"
+                      aria-label={`Delete ${lead.name}`}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50"
                     >
-                      Delete
+                      <i className="fa-sharp fa-solid fa-trash-can text-xs" />
                     </button>
                   </div>
                 ))

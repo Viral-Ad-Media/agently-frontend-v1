@@ -249,7 +249,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
         {[
           ["Total", metrics.total],
           ["Owners", metrics.owners],
@@ -258,12 +258,14 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         ].map(([label, value]) => (
           <div
             key={String(label)}
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+            className="min-w-0 rounded-xl border border-slate-200 bg-white p-2 shadow-sm sm:rounded-3xl sm:p-4"
           >
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="truncate text-[8px] font-black uppercase tracking-widest text-slate-400 sm:text-[10px]">
               {label}
             </p>
-            <p className="text-2xl font-black text-slate-900">{value}</p>
+            <p className="text-base font-black text-slate-900 sm:text-2xl">
+              {value}
+            </p>
           </div>
         ))}
       </div>

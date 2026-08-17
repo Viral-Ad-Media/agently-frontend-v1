@@ -920,7 +920,7 @@ main {
   opacity: 1;
 }
 
-.agently-agent-settings-page input,
+.agently-agent-settings-page input:not([type="range"]),
 .agently-agent-settings-page textarea,
 .agently-agent-settings-page select {
   border-color: rgba(35, 47, 62, 0.12);
@@ -1028,35 +1028,13 @@ main {
   box-shadow: inset 0 0 0 1px rgba(35, 47, 62, 0.07);
 }
 
-.ag-range-slider {
-  height: 0.45rem;
-  width: 100%;
-  cursor: pointer;
-  appearance: none;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ff5527 0%, #ff9f43 48%, #232f3e 100%);
-  outline: none;
-}
-
-.ag-range-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 3px solid #ff5527;
-  box-shadow: 0 6px 18px rgba(35, 47, 62, 0.18);
-}
-
-.ag-range-slider::-moz-range-thumb {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 3px solid #ff5527;
-  box-shadow: 0 6px 18px rgba(35, 47, 62, 0.18);
-}
-
+/* NOTE: the voice tuning dials are styled by the self-contained `agwc-*` block
+   in pages/AgentSettings.tsx. The `.ag-range-slider` / `.ag-voice-dials-grid` /
+   `.ag-voice-control-*` / `.ag-speaker-boost-row` rules that used to live here
+   and in several later mobile blocks were removed: no markup has referenced
+   those classes since the dials were rewritten, so every one of those layered
+   !important overrides was dead weight that made the real cascade impossible
+   to read. Do not reintroduce them. */
 
 .ag-knowledge-engine-strip {
   border-radius: 1.35rem;
@@ -1375,7 +1353,10 @@ main {
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.055);
 }
 
-.ag-identity-language-card input,
+/* Range inputs excluded: this is a text-field skin, and the `background`
+   shorthand here (specificity 0,2,1) was overwriting the gradient fill that
+   the sliders paint on themselves, leaving a blank white track. */
+.ag-identity-language-card input:not([type="range"]),
 .ag-identity-language-card select,
 .ag-identity-language-card textarea {
   border-color: #dbe4ef;
@@ -1515,6 +1496,14 @@ main {
 }
 
 .ag-agent-page-dot {
+  /* !important, not just a plain override: the global mobile touch-target
+     floor is `button:not([class*="h-"]) { min-height: 44px }`, specificity
+     (0,1,1) vs. this class's (0,1,0), and it sits later in the file — a bare
+     `min-height: 0` here loses on both counts and the dot renders as a 44px
+     pill instead of a dot. Caught on the real Voice Agent Studio page, where
+     3 fleet cards trigger a 3rd page dot the 2-agent test fixture never
+     exercised. */
+  min-height: 0 !important;
   height: 0.42rem;
   width: 0.42rem;
   border: 0;
@@ -1533,11 +1522,33 @@ main {
   .ag-page-inline-actions.ag-voice-toolbar {
     flex-direction: column;
     align-items: stretch;
+    /* A flex container is only as narrow as its widest line. Without this the
+       nowrap button row below sets the line width and drags the whole app
+       shell past the viewport. */
+    min-width: 0;
+  }
+
+  /* Both rails are intended to scroll sideways on a phone. `overflow-x: auto`
+     alone cannot do that: a flex item defaults to min-width:auto, so it is
+     sized to its content and there is nothing left to scroll — the overflow
+     is pushed onto the ancestors instead, where the shell clips it. */
+  .ag-voice-tabs,
+  .ag-voice-toolbar-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .ag-voice-tabs::-webkit-scrollbar,
+  .ag-voice-toolbar-actions::-webkit-scrollbar {
+    display: none;
   }
 
   .ag-voice-toolbar-actions {
     justify-content: flex-start;
-    overflow-x: auto;
     padding-bottom: 0.15rem;
   }
 
@@ -1728,70 +1739,11 @@ main {
   margin-top: 1rem !important;
 }
 
-.ag-voice-control-row {
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
 .ag-voice-control-card {
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-}
-
-.ag-range-slider {
-  accent-color: #f59e0b;
-  height: 0.45rem !important;
-  width: 100% !important;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f59e0b 0%, #f59e0b 58%, #e2e8f0 58%, #e2e8f0 100%) !important;
-  outline: none;
-}
-
-.ag-range-slider::-webkit-slider-runnable-track {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: transparent;
-}
-
-.ag-range-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 1rem;
-  height: 1rem;
-  margin-top: -0.275rem;
-  border-radius: 999px;
-  background: #ffffff !important;
-  border: 3px solid #f59e0b !important;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16) !important;
-}
-
-.ag-range-slider::-moz-range-track {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-
-.ag-range-slider::-moz-range-progress {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: #f59e0b;
-}
-
-.ag-range-slider::-moz-range-thumb {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  background: #ffffff !important;
-  border: 3px solid #f59e0b !important;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16) !important;
 }
 
 @media (max-width: 767px) {
@@ -1803,61 +1755,6 @@ main {
 /* V34 focused fix: synced voice tuning sliders + larger fleet pagination gap */
 .ag-agent-page-indicator {
   margin-top: 1.85rem !important;
-}
-
-.ag-range-slider {
-  --ag-range-progress: 0%;
-  height: 0.45rem !important;
-  width: 100% !important;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  border-radius: 999px;
-  background: linear-gradient(90deg,
-      #f59e0b 0%,
-      #f59e0b var(--ag-range-progress),
-      #e2e8f0 var(--ag-range-progress),
-      #e2e8f0 100%) !important;
-  outline: none;
-}
-
-.ag-range-slider::-webkit-slider-runnable-track {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: transparent !important;
-}
-
-.ag-range-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 1rem;
-  height: 1rem;
-  margin-top: -0.275rem;
-  border-radius: 999px;
-  background: #ffffff !important;
-  border: 3px solid #f59e0b !important;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.14) !important;
-}
-
-.ag-range-slider::-moz-range-track {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: #e2e8f0 !important;
-}
-
-.ag-range-slider::-moz-range-progress {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: #f59e0b !important;
-}
-
-.ag-range-slider::-moz-range-thumb {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  background: #ffffff !important;
-  border: 3px solid #f59e0b !important;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.14) !important;
 }
 
 @media (max-width: 767px) {
@@ -2459,7 +2356,12 @@ textarea,
     min-height: 44px;
   }
 
-  input,
+  /* Range sliders are exempt. A range input is a decorative track, not a text
+     field: `min-height` outranks any `height` a component sets on itself, so
+     this rule silently inflated every slider on the site to 44px no matter
+     what the component asked for. The slider's own thumb is the touch target
+     and is sized for it. */
+  input:not([type="range"]),
   select,
   textarea {
     min-height: 44px;
@@ -2583,50 +2485,6 @@ textarea,
 }
 
 /* V35 mobile voice controls and compact fleet pagination */
-@media (max-width: 767px) {
-  .ag-voice-engine-card {
-    padding: 1rem !important;
-  }
-
-  .ag-voice-dials-grid {
-    gap: 0.85rem 0.75rem !important;
-  }
-
-  .ag-voice-dials-grid .ag-voice-control-row {
-    min-width: 0;
-  }
-
-  .ag-voice-dials-grid .ag-voice-control-row p {
-    margin-bottom: 0.25rem !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 9px !important;
-    letter-spacing: 0.08em !important;
-  }
-
-  .ag-range-slider,
-  .ag-range-slider::-webkit-slider-runnable-track,
-  .ag-range-slider::-moz-range-track,
-  .ag-range-slider::-moz-range-progress {
-    height: 0.32rem !important;
-  }
-
-  .ag-range-slider::-webkit-slider-thumb {
-    width: 0.82rem !important;
-    height: 0.82rem !important;
-    margin-top: -0.25rem !important;
-    border-width: 2px !important;
-  }
-
-  .ag-range-slider::-moz-range-thumb {
-    width: 0.82rem !important;
-    height: 0.82rem !important;
-    border-width: 2px !important;
-  }
-}
-
-
 /* V37 paginator: plain equal-size circular dots with no pill/bar state. */
 .ag-fleet-pagination {
   margin: 0.3rem 0 0;
@@ -2750,11 +2608,6 @@ textarea,
     transform: none !important;
   }
 
-  .ag-voice-engine-card {
-    padding: 0.75rem !important;
-    border-radius: 1rem !important;
-  }
-
   .ag-voice-engine-header {
     margin-bottom: 0.1rem;
   }
@@ -2770,48 +2623,6 @@ textarea,
   .ag-voice-engine-actions>button {
     min-height: 1.85rem !important;
     flex: 1 1 0%;
-  }
-
-  .ag-voice-dials-grid {
-    gap: 0.48rem 0.65rem !important;
-  }
-
-  .ag-voice-control-heading {
-    margin-bottom: 0.18rem !important;
-  }
-
-  .ag-voice-dials-grid .ag-voice-control-row label,
-  .ag-voice-dials-grid .ag-voice-control-row p,
-  .ag-voice-control-value {
-    font-size: 8px !important;
-    line-height: 1 !important;
-  }
-
-  .ag-range-slider,
-  .ag-range-slider::-webkit-slider-runnable-track,
-  .ag-range-slider::-moz-range-track,
-  .ag-range-slider::-moz-range-progress {
-    height: 0.2rem !important;
-  }
-
-  .ag-range-slider::-webkit-slider-thumb {
-    width: 0.62rem !important;
-    height: 0.62rem !important;
-    margin-top: -0.21rem !important;
-    border-width: 1.5px !important;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14) !important;
-  }
-
-  .ag-range-slider::-moz-range-thumb {
-    width: 0.62rem !important;
-    height: 0.62rem !important;
-    border-width: 1.5px !important;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14) !important;
-  }
-
-  .ag-speaker-boost-row {
-    min-height: 2.15rem;
-    padding: 0.45rem 0.6rem !important;
   }
 }
 
@@ -2831,75 +2642,44 @@ textarea,
   .ag-chatbot-fleet-card {
     padding: 0.32rem !important;
   }
+}
 
-  .ag-voice-dials-grid {
-    grid-template-columns: 1fr !important;
-  }
+/* Knowledge Bases: horizontal scroll-snap card carousel. Hide the scrollbar
+   at every width — it's a permanent swipe/scroll strip, not a mobile-only
+   overflow escape hatch. */
+.ag-kb-carousel {
+  scrollbar-width: none;
+}
 
-  .ag-speaker-boost-row {
-    grid-column: 1 / -1 !important;
-  }
+.ag-kb-carousel::-webkit-scrollbar {
+  display: none;
 }
 
 /* ============================================================
-   ROUND 4 — authoritative mobile pass for Voice Agent Studio.
-   Appended last so it wins the cascade over the many earlier,
-   layered redefinitions of these same selectors. Scoped to
-   <=767px so desktop is untouched.
+   Voice Agent Studio — single mobile block for this page.
+   Everything the phone layout needs for the studio lives here;
+   the dials themselves are owned by the `agwc-*` block in
+   pages/AgentSettings.tsx and are deliberately not touched.
    ============================================================ */
 @media (max-width: 767px) {
 
-  /* Identity + voice selects must never force horizontal overflow.
-     Belt-and-suspenders with the min-w-0 utilities added in the TSX. */
+  /* The card clips, and its select/input children get min-width:0, so a long
+     voice name (ElevenLabs names run to 40+ characters) can ellipsis instead
+     of setting the min-content width of the whole page. */
   .ag-identity-language-card {
     padding: 1rem !important;
     overflow: hidden;
   }
 
   .ag-identity-language-card select,
-  .ag-identity-language-card input {
+  .ag-identity-language-card input:not([type="range"]) {
     min-width: 0 !important;
     width: 100% !important;
     text-overflow: ellipsis;
   }
 
-  /* Voice Engine card: calmer padding, sliders comfortable not giant */
   .ag-voice-engine-card {
     padding: 0.9rem !important;
     border-radius: 1rem !important;
-  }
-
-  .ag-voice-dials-grid {
-    gap: 0.9rem 0.75rem !important;
-  }
-
-  .ag-range-slider {
-    height: 0.35rem !important;
-  }
-
-  .ag-range-slider::-webkit-slider-runnable-track,
-  .ag-range-slider::-moz-range-track,
-  .ag-range-slider::-moz-range-progress {
-    height: 0.35rem !important;
-  }
-
-  .ag-range-slider::-webkit-slider-thumb {
-    width: 0.85rem !important;
-    height: 0.85rem !important;
-    margin-top: -0.25rem !important;
-    border-width: 2px !important;
-  }
-
-  .ag-range-slider::-moz-range-thumb {
-    width: 0.85rem !important;
-    height: 0.85rem !important;
-    border-width: 2px !important;
-  }
-
-  .ag-voice-dials-grid .ag-voice-control-row label,
-  .ag-voice-dials-grid .ag-voice-control-row p,
-  .ag-voice-control-value {
-    font-size: 10px !important;
-    line-height: 1.2 !important;
   }
 }

@@ -879,7 +879,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </aside>
 
-        <div className="flex h-full min-h-0 flex-1 flex-col md:ml-[16.25rem] md:min-w-0">
+        {/* min-w-0 must apply at every width, not just md+. This column is a
+            flex item in a row container that is `overflow-hidden`; without the
+            reset it keeps its automatic min-width (its own min-content width),
+            so any nowrap content stretches it past the viewport and the excess
+            is clipped rather than scrolled. */}
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col md:ml-[16.25rem]">
           <div className="flex h-full min-h-0 w-full flex-col">
             <header className="agently-app-topbar sticky top-0 z-[24] flex-shrink-0 overflow-visible border-b border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_rgba(15,23,42,0.025)]">
               <div className="agently-app-topbar-inner flex min-h-[68px] w-full flex-col gap-2 overflow-visible px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 xl:px-8">

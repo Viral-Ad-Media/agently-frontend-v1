@@ -672,17 +672,21 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
               service deductions.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {usageRanges.map((range) => (
-              <button
-                key={range.key}
-                type="button"
-                onClick={() => setUsageRange(range.key)}
-                className={`rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition ${usageRange === range.key ? "bg-[#0F172A] text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-              >
-                {range.label}
-              </button>
-            ))}
+          {/* One dropdown instead of five pill buttons — same pattern as the
+              log time-range picker on platforms like Vercel. */}
+          <div className="relative shrink-0">
+            <select
+              value={usageRange}
+              onChange={(e) => setUsageRange(e.target.value as UsageRange)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-xs font-bold text-[#0F172A] outline-none transition hover:border-slate-300 focus:border-amber-400 sm:w-auto"
+            >
+              {usageRanges.map((range) => (
+                <option key={range.key} value={range.key}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
+            <i className="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400" />
           </div>
         </div>
 
