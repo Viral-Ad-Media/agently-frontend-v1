@@ -192,6 +192,10 @@ export const knowledgeScrapeApi = {
   startJob: (payload: {
     knowledgeBaseId: string;
     discoveryId: string;
+    /** Page ids the operator explicitly asked to read a second time. Pages
+     *  already completed are otherwise skipped, so a new selection does not
+     *  re-bill every page that was already read. */
+    rescrapePageIds?: string[];
   }): Promise<StartJobResponse> =>
     call<StartJobResponse>('/jobs', {
       method: 'POST',

@@ -83,6 +83,7 @@ const PageSelector: React.FC<Props> = ({
   );
   const [pages, setPages] = useState<DiscoveredPage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [rescrape, setRescrape] = useState<Set<string>>(new Set());
   const [job, setJob] = useState<ScrapeJob | null>(null);
   const [estimates, setEstimates] = useState({ selected: 0, all: 0 });
   const [creditWarning, setCreditWarning] = useState("");
@@ -174,6 +175,17 @@ const PageSelector: React.FC<Props> = ({
     });
   };
 
+  // Pages explicitly marked for a second read. Kept separate from `selected`
+  // so an already-read page is never re-billed just because it is still part
+  // of the selection.
+  const toggleRescrape = (pageId: string) => {
+    setRescrape((current) => {
+      const next = new Set(current);
+      next.has(pageId) ? next.delete(pageId) : next.add(pageId);
+      return next;
+    });
+  };
+
   const visiblePages = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return pages;
@@ -219,7 +231,9 @@ const PageSelector: React.FC<Props> = ({
       const result = await knowledgeScrapeApi.startJob({
         knowledgeBaseId,
         discoveryId,
+        rescrapePageIds: [...rescrape],
       });
+      setRescrape(new Set());
       setPhase("scraping");
       onToast?.(result.message);
       startPolling(result.job.id);
@@ -548,18 +562,38 @@ const PageSelector: React.FC<Props> = ({
           {pagedPages.map((page) => {
             const isSelected = selected.has(page.id);
             const active = page.scrapeStatus === "scraping";
+            // Already read. Shown muted with a "Read" marker rather than an
+            // armed checkbox, because re-selecting it costs another page read
+            // for content that has not changed. Clicking "Re-scrape" opts in
+            // deliberately.
+            const isRead = page.scrapeStatus === "completed";
             return (
               <div
                 key={page.id}
                 className={`flex min-w-0 items-center gap-2 px-2 py-1.5 transition-colors ${
                   active
                     ? "bg-indigo-50/50"
-                    : isSelected
-                      ? "bg-amber-50/40"
-                      : "bg-white"
+                    : isRead
+                      ? "bg-slate-50/60"
+                      : isSelected
+                        ? "bg-amber-50/40"
+                        : "bg-white"
                 }`}
               >
-                {phase === "selecting" ? (
+                {phase === "selecting" && isRead ? (
+                  <button
+                    type="button"
+                    title="Already read. Click to read this page again."
+                    onClick={() => toggleRescrape(page.id)}
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors ${
+                      rescrape.has(page.id)
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700 hover:bg-amber-100 hover:text-amber-700"
+                    }`}
+                  >
+                    {rescrape.has(page.id) ? "Re-scrape" : "Read"}
+                  </button>
+                ) : phase === "selecting" ? (
                   <input
                     type="checkbox"
                     checked={isSelected}
