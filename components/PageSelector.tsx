@@ -279,10 +279,23 @@ const PageSelector: React.FC<Props> = ({
         if (["completed", "failed", "cancelled"].includes(fresh.status)) {
           if (pollRef.current) window.clearInterval(pollRef.current);
           pollRef.current = null;
-          setPhase("done");
+
+          // Return to the selectable list instead of a dead "done" state.
+          //
+          // The page list and its checkboxes only render while phase is
+          // "selecting". Ending on "done" tore the selector down, so after
+          // scraping pages 1-3 the remaining discovered pages were visible
+          // nowhere and the only way to add a fourth was to re-run discovery
+          // over the whole site. Reloading first refreshes each row's status,
+          // so completed pages read as completed and the rest stay pickable.
+          if (discoveryId) {
+            await loadPages(discoveryId).catch(() => {});
+          }
+          setPhase(fresh.status === "completed" ? "selecting" : "done");
+
           if (fresh.status === "completed") {
             onToast?.(
-              `Knowledge base ready. ${fresh.completedPages} page${fresh.completedPages === 1 ? "" : "s"} added.`,
+              `${fresh.completedPages} page${fresh.completedPages === 1 ? "" : "s"} added. Select more below to keep building this knowledge base.`,
             );
             // Parent refresh happens ONCE, at the end — never on a tick.
             onCompleted?.();
