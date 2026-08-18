@@ -1575,7 +1575,11 @@ const Messenger: React.FC<MessengerProps> = ({
               <code className="text-indigo-300">&lt;/body&gt;</code> on any
               site. Voice & language settings are embedded automatically.
             </p>
-            <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all">
+            {/* Capped height: the embed script grows as widget settings are
+                added, and an uncapped <pre> pushed every section below it off
+                the fold. It now holds a fixed slot in the layout and scrolls
+                its own content instead. */}
+            <pre className="max-h-56 overflow-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all custom-scrollbar">
               {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
             {/* Widget Languages */}
