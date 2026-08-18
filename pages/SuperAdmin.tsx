@@ -152,11 +152,13 @@ const accountStatusInfo = (status: string) => {
       detail: "The organization can use prepaid credit normally.",
     };
   }
+  // "trialing" was the old signup default. New organizations are created
+  // "active", and existing rows were migrated, so this now reads as what it
+  // means operationally rather than explaining a legacy flag to the reader.
   if (normalized === "trialing") {
     return {
-      label: "Legacy trial flag",
-      detail:
-        "A leftover organization flag; it is not a paid plan or current trial offer.",
+      label: "Enabled",
+      detail: "The organization can use prepaid credit normally.",
     };
   }
   if (normalized === "past_due") {
@@ -1831,10 +1833,14 @@ const SuperAdmin: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#0F172A]">
       <div className="flex min-h-screen">
-        {/* Pinned full-height sidebar. It previously scrolled away with the
-            page because it had no height of its own; sticky + h-screen keeps
-            navigation in place while only the main column scrolls. */}
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
+        {/* Pinned full-height sidebar.
+            self-start matters: as a flex item it defaults to align-self:
+            stretch, which sizes it to the whole content column, and a sticky
+            element as tall as its container has nothing to stick within — so
+            it scrolled away with the page. self-start + h-screen keeps it
+            exactly one viewport tall and pinned, with only its own overflow
+            scrolling if the nav ever grows past the screen. */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 self-start flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
           <img
             src="/agently-reception-wordmark-light.png"
             alt="Agently"
@@ -2032,12 +2038,6 @@ const SuperAdmin: React.FC = () => {
                   >
                     Search users
                   </button>
-                </div>
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-                  Agently currently uses prepaid credit. “Trialing” and “active”
-                  are legacy organization-status flags in the database, not
-                  subscription plans. Trialing means the old default flag was
-                  never migrated; active means the organization is enabled.
                 </div>
                 <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <div className="overflow-x-auto">
