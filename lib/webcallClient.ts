@@ -12,6 +12,8 @@
 //   <- { type: "output_audio", audio: "<base64 PCM16 24kHz mono>" }
 //   <- { type: "transcript.user", text }
 //   <- { type: "transcript.agent", text, partial?: boolean }
+//   <- { type: "agent.interrupted", source }   caller barged in: flush playback
+//   <- { type: "user.speaking", speaking }     from the server's VAD
 //   <- { type: "session.error", code, message }
 //   <- { type: "session.ended", reason }
 
@@ -26,7 +28,15 @@ export type WebcallStatus =
 
 export interface WebcallCallbacks {
   onStatusChange?: (status: WebcallStatus) => void;
-  onReady?: (info: { agentName: string; greeting: string; voiceProvider: string }) => void;
+  onReady?: (info: {
+    agentName: string;
+    greeting: string;
+    voiceProvider: string;
+    voiceConfigured: string | null;
+    voiceUsed: string | null;
+    voiceHonoured: boolean;
+    voiceFallbackReason: string | null;
+  }) => void;
   onTranscriptUser?: (text: string) => void;
   onTranscriptAgent?: (text: string, partial: boolean) => void;
   onAgentSpeakingChange?: (speaking: boolean) => void;
@@ -39,7 +49,14 @@ function base64ToInt16Array(base64: string): Int16Array {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Int16Array(bytes.buffer);
+  // 16-bit PCM is two bytes per sample. `new Int16Array(buffer)` throws on an
+  // odd byte length, which silently killed the whole chunk. The server now
+  // guarantees even, sample-aligned chunks; this stays as a belt-and-braces
+  // guard so a stray odd payload degrades to one dropped sample instead of
+  // dropping the entire chunk.
+  const usable = bytes.length - (bytes.length % 2);
+  if (!usable) return new Int16Array(0);
+  return new Int16Array(bytes.buffer, 0, usable / 2);
 }
 
 function int16ArrayToBase64(int16: Int16Array): string {
@@ -87,6 +104,12 @@ export class WebcallClient {
   private micSource: MediaStreamAudioSourceNode | null = null;
   private playbackContext: AudioContext | null = null;
   private playbackCursor = 0;
+  // Every chunk is scheduled ahead on the WebAudio timeline, so at any moment
+  // there can be seconds of agent speech already queued. Nothing used to hold
+  // a reference to those nodes, which meant they ALWAYS played to completion —
+  // that, not the TTS model, is why the agent could not be interrupted. Keep
+  // them so flushPlayback() can actually stop them.
+  private activeSources = new Set<AudioBufferSourceNode>();
   private muted = false;
   private stopped = false;
   private agentSpeaking = false;
@@ -155,7 +178,6 @@ export class WebcallClient {
         const input = event.inputBuffer.getChannelData(0);
         const pcm16 = downsampleTo24k(input, this.captureContext!.sampleRate);
         if (!pcm16.length) return;
-        this.callbacks.onUserSpeakingChange?.(true);
         this.ws.send(
           JSON.stringify({ type: "input_audio", audio: int16ArrayToBase64(pcm16) }),
         );
@@ -209,10 +231,25 @@ export class WebcallClient {
           agentName: msg.agentName || "Your Agent",
           greeting: msg.greeting || "",
           voiceProvider: msg.voiceProvider || "openai",
+          voiceConfigured: msg.voiceConfigured ?? null,
+          voiceUsed: msg.voiceUsed ?? null,
+          // Absent field means an older server; assume nothing is wrong
+          // rather than showing a spurious warning.
+          voiceHonoured: msg.voiceHonoured !== false,
+          voiceFallbackReason: msg.voiceFallbackReason ?? null,
         });
         break;
       case "output_audio":
         if (msg.audio) this.playAudioChunk(msg.audio);
+        break;
+      case "agent.interrupted":
+        this.flushPlayback();
+        break;
+      case "user.speaking":
+        // Authoritative, from the server's VAD. The capture callback below
+        // used to report "speaking" on every single audio frame, so the
+        // indicator was on permanently and meant nothing.
+        this.callbacks.onUserSpeakingChange?.(Boolean(msg.speaking));
         break;
       case "transcript.user":
         if (msg.text) this.callbacks.onTranscriptUser?.(msg.text);
@@ -258,9 +295,11 @@ export class WebcallClient {
     const startAt = Math.max(now, this.playbackCursor);
     source.start(startAt);
     this.playbackCursor = startAt + buffer.duration;
+    this.activeSources.add(source);
 
     this.setAgentSpeaking(true);
     source.onended = () => {
+      this.activeSources.delete(source);
       if (this.speakingResetTimer) clearTimeout(this.speakingResetTimer);
       this.speakingResetTimer = setTimeout(() => {
         if (this.playbackContext && this.playbackCursor <= this.playbackContext.currentTime + 0.05) {
@@ -268,6 +307,28 @@ export class WebcallClient {
         }
       }, 120);
     };
+  }
+
+  /**
+   * Barge-in: drop everything the agent has queued so the caller is heard
+   * immediately. Called when the server reports the caller started speaking.
+   */
+  private flushPlayback() {
+    for (const source of this.activeSources) {
+      try {
+        source.onended = null;
+        source.stop();
+        source.disconnect();
+      } catch {
+        /* already finished — fine */
+      }
+    }
+    this.activeSources.clear();
+    if (this.playbackContext) {
+      this.playbackCursor = this.playbackContext.currentTime;
+    }
+    if (this.speakingResetTimer) clearTimeout(this.speakingResetTimer);
+    this.setAgentSpeaking(false);
   }
 
   private setAgentSpeaking(speaking: boolean) {
@@ -291,6 +352,7 @@ export class WebcallClient {
     if (this.stopped) return;
     this.stopped = true;
     if (this.speakingResetTimer) clearTimeout(this.speakingResetTimer);
+    this.flushPlayback();
 
     try {
       this.captureNode?.disconnect();

@@ -20,6 +20,7 @@ const CallSimulator: React.FC = () => {
     muted,
     maxSessionSeconds,
     agentName,
+    voiceNotice,
     isModalOpen,
     isCallLive,
     endCall,
@@ -29,13 +30,19 @@ const CallSimulator: React.FC = () => {
     restartCall,
   } = useWebcall();
 
-  const captionsEndRef = useRef<HTMLDivElement | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Scroll the transcript pane itself rather than calling scrollIntoView on a
+  // sentinel — the latter walks up to the nearest scrollable ancestor, which
+  // used to drag the whole modal around now that the transcript owns its own
+  // scroll region.
   useEffect(() => {
-    captionsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [captions]);
 
   useEffect(() => {
@@ -60,7 +67,12 @@ const CallSimulator: React.FC = () => {
     >
       <div
         className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
-        style={{ maxHeight: "min(700px, 92vh)" }}
+        style={{
+          maxHeight: "min(760px, 92vh)",
+          // A live call claims the full allowance so the transcript gets a
+          // stable, generous pane instead of collapsing to its content height.
+          height: status === "ready" ? "min(760px, 92vh)" : undefined,
+        }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -88,8 +100,166 @@ const CallSimulator: React.FC = () => {
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto max-h-[calc(min(700px,92vh)-90px)]">
+        {/* ── Live call ──────────────────────────────────────────────
+            Dedicated full-height layout. Previously this shared the generic
+            padded/scrollable body, which gave the status block ~200px and
+            capped the transcript at max-h-44 (~176px) inside a nested scroll
+            container — roughly a quarter of the modal. Now: a compact status
+            strip, a transcript that takes every remaining pixel, and docked
+            controls. Only the transcript scrolls. */}
+        {status === "ready" && (
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Status strip */}
+            <div className="px-6 py-4 flex items-center gap-4 border-b border-slate-100 flex-shrink-0">
+              <div className="relative flex items-center justify-center w-14 h-14 flex-shrink-0">
+                {(agentSpeaking || userSpeaking) && (
+                  <>
+                    <span
+                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#F59E0B]" : "bg-emerald-500"}`}
+                      style={{ animation: "webcall-ring 1.6s ease-out infinite" }}
+                    />
+                    <span
+                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#F59E0B]" : "bg-emerald-500"}`}
+                      style={{ animation: "webcall-ring 1.6s ease-out 0.55s infinite" }}
+                    />
+                  </>
+                )}
+                <div
+                  className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 ${agentSpeaking ? "bg-[#F59E0B]" : userSpeaking ? "bg-emerald-500" : "bg-[#0F172A]"}`}
+                  style={{
+                    animation:
+                      !agentSpeaking && !userSpeaking
+                        ? "webcall-breathe 3.2s ease-in-out infinite"
+                        : undefined,
+                  }}
+                >
+                  <div className="flex items-end gap-[3px] h-5">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <span
+                        key={i}
+                        className="w-[3px] rounded-full bg-white"
+                        style={{
+                          height:
+                            agentSpeaking || userSpeaking ? undefined : 5,
+                          animation:
+                            agentSpeaking || userSpeaking
+                              ? `webcall-eq 0.85s ease-in-out ${i * 0.12}s infinite`
+                              : "none",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                    Live · Connected
+                  </p>
+                </div>
+                <p className="text-sm font-bold text-[#0F172A] mt-0.5 truncate">
+                  {agentSpeaking
+                    ? `${agentName} is speaking…`
+                    : userSpeaking
+                      ? "Listening to you…"
+                      : `${agentName} is listening`}
+                </p>
+                <p className="text-[11px] text-[#7a8493] truncate">
+                  Interrupt any time — just start talking
+                </p>
+              </div>
+
+              <p className="text-2xl font-black text-[#0F172A] tabular-nums flex-shrink-0">
+                {formatTime(duration)}
+              </p>
+            </div>
+
+            {/* The configured voice could not be used — say so rather than
+                letting it sound subtly wrong for no visible reason. */}
+            {voiceNotice && (
+              <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-100 flex items-start gap-2 flex-shrink-0">
+                <i className="fa-solid fa-triangle-exclamation text-[#F59E0B] text-xs mt-0.5 flex-shrink-0" />
+                <p className="text-[11px] text-[#92400e] leading-snug">
+                  Voice <strong>{voiceNotice.configured}</strong> isn't
+                  available for this agent's provider — speaking as{" "}
+                  <strong>{voiceNotice.used}</strong>. Update the agent's voice
+                  to fix this.
+                </p>
+              </div>
+            )}
+
+            {/* Transcript — the dominant region */}
+            <div
+              ref={transcriptRef}
+              className="flex-1 min-h-0 overflow-y-auto bg-[#0F172A] px-5 py-4 space-y-3"
+            >
+              {captions.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                  <div className="flex items-end gap-1 h-6 mb-4 opacity-40">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <span
+                        key={i}
+                        className="w-1 rounded-full bg-white/50"
+                        style={{
+                          animation: `webcall-eq 1.4s ease-in-out ${i * 0.18}s infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-white/40 text-sm">
+                    Say hello — the live transcript appears here
+                  </p>
+                </div>
+              ) : (
+                captions.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.speaker === "You" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed ${msg.speaker === "You" ? "bg-[#F59E0B] text-white" : "bg-white/10 text-white/90"} ${msg.partial ? "opacity-60" : ""}`}
+                    >
+                      <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">
+                        {msg.speaker}
+                      </p>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Docked controls */}
+            <div className="p-4 border-t border-slate-100 grid grid-cols-2 gap-3 flex-shrink-0 bg-white">
+              <button
+                onClick={toggleMute}
+                className={`rounded-2xl border py-3.5 flex items-center justify-center gap-2 transition-all ${muted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
+              >
+                <i
+                  className={`fa-solid ${muted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
+                />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  {muted ? "Unmute" : "Mute"}
+                </span>
+              </button>
+              <button
+                onClick={endCall}
+                className="rounded-2xl bg-red-500 hover:bg-red-600 text-white py-3.5 flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-100"
+              >
+                <i className="fa-solid fa-phone-hangup text-lg" />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  End Call
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Every other state keeps the simple padded, scrollable card. */}
+        {status !== "ready" && (
+        <div className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-5">
             {status === "idle" && (
               <>
@@ -141,109 +311,6 @@ const CallSimulator: React.FC = () => {
               </div>
             )}
 
-            {status === "ready" && (
-              <div className="space-y-4">
-                <div className="flex flex-col items-center py-4 text-center">
-                  <div className="relative mb-4 flex items-center justify-center h-20">
-                    <div
-                      className={`absolute inset-0 rounded-full bg-[#F59E0B] transition-opacity duration-200 ${agentSpeaking ? "opacity-20 animate-ping" : "opacity-0"}`}
-                      style={{ margin: "auto", width: 80, height: 80 }}
-                    />
-                    <div className="relative w-20 h-20 rounded-full bg-[#0F172A] flex items-center justify-center shadow-2xl">
-                      <i
-                        className={`fa-solid ${agentSpeaking ? "fa-volume-high" : "fa-microphone"} text-2xl text-white`}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    <p className="text-emerald-600 font-black text-[10px] uppercase tracking-widest">
-                      Live Call · Connected
-                    </p>
-                  </div>
-                  <p className="text-3xl font-black text-[#0F172A] tracking-tight">
-                    {formatTime(duration)}
-                  </p>
-                  <p className="text-xs text-[#7a8493] mt-1">
-                    {agentSpeaking
-                      ? `${agentName} is speaking…`
-                      : userSpeaking
-                        ? "Listening…"
-                        : `${agentName} is listening`}
-                  </p>
-                </div>
-
-                {/* Live captions */}
-                <div className="rounded-2xl bg-[#0F172A] p-4 space-y-2 max-h-44 overflow-y-auto">
-                  {captions.length === 0 && (
-                    <p className="text-white/30 text-xs text-center py-4">
-                      Live captions will appear here as you talk
-                    </p>
-                  )}
-                  {captions.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${msg.speaker === "You" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[80%] px-3 py-2 rounded-xl text-sm font-medium ${msg.speaker === "You" ? "bg-[#F59E0B] text-white" : "bg-white/10 text-white/90"} ${msg.partial ? "opacity-60" : ""}`}
-                      >
-                        <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">
-                          {msg.speaker}
-                        </p>
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={captionsEndRef} />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={toggleMute}
-                    className={`rounded-2xl border py-3.5 flex flex-col items-center gap-1.5 transition-all ${muted ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
-                  >
-                    <i
-                      className={`fa-solid ${muted ? "fa-microphone-slash" : "fa-microphone"} text-lg`}
-                    />
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      {muted ? "Unmute" : "Mute"}
-                    </span>
-                  </button>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 py-3.5 flex flex-col items-center justify-center gap-1.5">
-                    <div className="flex items-end gap-0.5 h-4">
-                      {[0, 1, 2].map((i) => (
-                        <span
-                          key={i}
-                          className="w-1 bg-[#F59E0B] rounded-full"
-                          style={{
-                            height:
-                              agentSpeaking || userSpeaking ? undefined : 4,
-                            animation:
-                              agentSpeaking || userSpeaking
-                                ? `webcall-eq 0.9s ease-in-out ${i * 0.15}s infinite`
-                                : "none",
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      Live
-                    </span>
-                  </div>
-                  <button
-                    onClick={endCall}
-                    className="rounded-2xl bg-red-500 hover:bg-red-600 text-white py-3.5 flex flex-col items-center gap-1.5 transition-all shadow-lg shadow-red-100"
-                  >
-                    <i className="fa-solid fa-phone-hangup text-lg" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      End Call
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {status === "ended" && (
               <div className="flex flex-col items-center py-10 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
@@ -286,11 +353,22 @@ const CallSimulator: React.FC = () => {
             )}
           </div>
         </div>
+        )}
       </div>
       <style>{`
         @keyframes webcall-eq {
-          0%, 100% { height: 4px; }
-          50% { height: 16px; }
+          0%, 100% { height: 5px; }
+          50% { height: 20px; }
+        }
+        /* Outward "humming" ring pulse behind the voice orb. */
+        @keyframes webcall-ring {
+          0%   { transform: scale(1);   opacity: 0.35; }
+          100% { transform: scale(1.9); opacity: 0; }
+        }
+        /* Idle breathing so the orb never looks frozen while listening. */
+        @keyframes webcall-breathe {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.06); }
         }
       `}</style>
     </div>,

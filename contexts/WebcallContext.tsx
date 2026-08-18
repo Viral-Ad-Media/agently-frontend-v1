@@ -41,6 +41,9 @@ interface WebcallState {
   maxSessionSeconds: number;
   agentName: string;
   isModalOpen: boolean;
+  /** Set when the agent's configured voice could not be used, so the modal can
+   * say so instead of the operator wondering why it sounds wrong. */
+  voiceNotice: { configured: string; used: string } | null;
 }
 
 interface WebcallContextValue extends WebcallState {
@@ -68,6 +71,7 @@ const initialState: WebcallState = {
   maxSessionSeconds: 300,
   agentName: "Your Agent",
   isModalOpen: false,
+  voiceNotice: null,
 };
 
 const WebcallContext = createContext<WebcallContextValue | null>(null);
@@ -137,8 +141,18 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const client = new WebcallClient(data.wsUrl, {
           onStatusChange: (status) => setState((s) => ({ ...s, status })),
-          onReady: () => {
-            setState((s) => ({ ...s, duration: 0 }));
+          onReady: (info) => {
+            setState((s) => ({
+              ...s,
+              duration: 0,
+              voiceNotice:
+                info.voiceHonoured || !info.voiceConfigured
+                  ? null
+                  : {
+                      configured: info.voiceConfigured,
+                      used: info.voiceUsed || "the default voice",
+                    },
+            }));
             clearTimer();
             timerRef.current = setInterval(
               () => setState((s) => ({ ...s, duration: s.duration + 1 })),
