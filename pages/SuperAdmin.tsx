@@ -1811,17 +1811,18 @@ const SuperAdmin: React.FC = () => {
 
       await Promise.all([loadUsers(1, userSearch), loadOverview()]);
     } catch (err) {
-      // FIX (2c/2d): the "column reference table_name is ambiguous" error came
-      // from the Supabase RPC and is fixed in 003_fix_delete_rpc_and_balance.sql.
       // Keep the modal OPEN on failure so the admin can read what happened and
       // retry, rather than losing the confirmation they just typed.
+      //
+      // This used to rewrite any error containing "ambiguous" into "run
+      // sql/003_fix_delete_rpc_and_balance.sql". That file does not exist in
+      // this repository, and the deployed RPC already qualifies every
+      // table_name reference — so the instruction was impossible to follow and
+      // hid whatever actually failed (a Twilio release, a closed subaccount, a
+      // permission error). Show the real message.
       const message =
         err instanceof Error ? err.message : "Unable to delete this account.";
-      setError(
-        /ambiguous/i.test(message)
-          ? "The deletion routine needs migration 003 applied. Run sql/003_fix_delete_rpc_and_balance.sql, then try again."
-          : message,
-      );
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -1830,7 +1831,10 @@ const SuperAdmin: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-[#0F172A]">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 flex-col bg-[#0F172A] px-5 py-6 text-white lg:flex">
+        {/* Pinned full-height sidebar. It previously scrolled away with the
+            page because it had no height of its own; sticky + h-screen keeps
+            navigation in place while only the main column scrolls. */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
           <img
             src="/agently-reception-wordmark-light.png"
             alt="Agently"
