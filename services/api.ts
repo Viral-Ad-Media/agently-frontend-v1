@@ -872,12 +872,6 @@ export const api = {
     }>(`/api/billing/stripe/sessions/${encodeURIComponent(sessionId)}`);
   },
 
-  async demoTopUpWallet(amountUsd = 10) {
-    return request('/api/billing/wallet/demo-top-up', {
-      method: 'POST',
-      body: { amountUsd },
-    });
-  },
 
   async updatePlan(plan: Extract<Organization['subscription']['plan'], 'Starter' | 'Pro'>) {
     return request<Organization['subscription']>('/api/billing/plan', {

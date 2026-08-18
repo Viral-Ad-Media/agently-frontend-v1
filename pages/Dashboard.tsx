@@ -1310,32 +1310,11 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
       </div>
 
-      <div className="ag-panel p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
-              Minute usage
-            </p>
-            <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
-              {org.subscription.plan} plan
-            </h2>
-          </div>
-          <span className="text-xs font-black text-slate-500">
-            {formatUsageMinutes(live.totalCallMinutes)} /{" "}
-            {formatUsageMinutes(live.minuteLimit)}
-          </span>
-        </div>
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[#ff5527] via-[#ff9f43] to-[#232f3e] transition-[width] duration-700"
-            style={{ width: `${live.usagePercent}%` }}
-          />
-        </div>
-        <div className="mt-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          <span>{formatUsageMinutes(live.totalCallMinutes)} used</span>
-          <span>{formatUsageMinutes(live.remainingMinutes)} remaining</span>
-        </div>
-      </div>
+      {/* The "Minute usage / Starter plan — 84m / 500m" panel was removed.
+          Billing is usage-based against a wallet balance, not a plan with a
+          monthly minute allowance, so a progress bar toward a 500-minute cap
+          described a product we do not sell and implied a limit that does not
+          exist. Wallet balance and spend are shown on the Billing page. */}
     </div>
   );
 };

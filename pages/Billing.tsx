@@ -404,18 +404,9 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         return;
       }
 
-      if (wallet.demoTopUpEnabled) {
-        const response = (await api.demoTopUpWallet(amount)) as {
-          wallet?: BillingWallet;
-        };
-        if (response?.wallet) {
-          setBilling((current) => ({ ...current, wallet: response.wallet }));
-        }
-        setSuccess(`Added ${money(amount)} test credit.`);
-        await loadBilling();
-        return;
-      }
-
+      // The unverified demo top-up path has been removed. Card checkout is
+      // the only way a tenant adds credit; internal testers are credited from
+      // the super-admin dashboard instead.
       throw new Error(
         "Card top-ups are not configured yet. Add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET on the backend.",
       );
@@ -603,7 +594,12 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
               Minimum top-up: {money(minimumRecharge)}. Agently never receives
               or stores your card number.
             </p>
-            {!wallet.stripeTopUpEnabled && !wallet.demoTopUpEnabled ? (
+            {/* Only claim Stripe is unconfigured once the backend has actually
+                answered. The wallet starts at status "loading" with the flag
+                defaulting to false, so rendering on the flag alone flashed
+                "not configured" on every page load before the real config
+                arrived. */}
+            {wallet.status !== "loading" && !wallet.stripeTopUpEnabled ? (
               <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
                 Stripe checkout is not configured on the backend yet.
               </p>

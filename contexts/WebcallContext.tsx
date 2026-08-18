@@ -186,12 +186,21 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
             setState((s) => ({ ...s, agentSpeaking: speaking })),
           onUserSpeakingChange: (speaking) =>
             setState((s) => ({ ...s, userSpeaking: speaking })),
+          // Release the microphone on EVERY terminal outcome, not just when
+          // the user presses End Call. These fire when the server ends or
+          // rejects the session, and previously only cleared the timer — the
+          // MediaStream tracks stayed open, so the browser kept showing the
+          // recording indicator in the tab long after the call was over.
           onError: (code, message) => {
             clearTimer();
+            clientRef.current?.stop();
+            clientRef.current = null;
             setState((s) => ({ ...s, error: { code, message } }));
           },
           onEnded: () => {
             clearTimer();
+            clientRef.current?.stop();
+            clientRef.current = null;
           },
         });
         clientRef.current = client;
