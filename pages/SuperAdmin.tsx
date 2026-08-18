@@ -1831,16 +1831,16 @@ const SuperAdmin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#0F172A]">
-      <div className="flex min-h-screen">
-        {/* Pinned full-height sidebar.
-            self-start matters: as a flex item it defaults to align-self:
-            stretch, which sizes it to the whole content column, and a sticky
-            element as tall as its container has nothing to stick within — so
-            it scrolled away with the page. self-start + h-screen keeps it
-            exactly one viewport tall and pinned, with only its own overflow
-            scrolling if the nav ever grows past the screen. */}
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 self-start flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
+    /* This page owns its own scrolling rather than scrolling the document.
+       position: sticky cannot work here: index.css sets overflow-x: hidden on
+       html, body and #root, which makes #root a scroll container and stops any
+       descendant sticking to the viewport. So instead of a sticky sidebar in a
+       document-scrolled page, the shell is fixed to the viewport height with
+       overflow hidden, and only the main column scrolls. The sidebar is then
+       simply always on screen — no sticky involved. */
+    <div className="h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
+      <div className="flex h-full">
+        <aside className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
           <img
             src="/agently-reception-wordmark-light.png"
             alt="Agently"
@@ -1898,7 +1898,10 @@ const SuperAdmin: React.FC = () => {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        {/* The only scrolling region on this page. min-h-0 is required or the
+            flex item refuses to shrink below its content and scrolls the
+            shell instead. */}
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
             <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
               <div>
