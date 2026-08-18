@@ -4,6 +4,7 @@ import BlogContent from "../components/BlogContent";
 import PlatformAssistantAdmin from "../components/admin/PlatformAssistantAdmin";
 import TourAdmin from "../components/admin/TourAdmin";
 import BillingPricingAdmin from "../components/admin/BillingPricingAdmin";
+import TenantEconomicsAdmin from "../components/admin/TenantEconomicsAdmin";
 import {
   adminApi,
   getAdminToken,
@@ -22,6 +23,7 @@ type AdminTab =
   | "overview"
   | "users"
   | "pricing"
+  | "economics"
   | "blog"
   | "assistant"
   | "tour";
@@ -1843,6 +1845,7 @@ const SuperAdmin: React.FC = () => {
                 "overview",
                 "users",
                 "pricing",
+                "economics",
                 "blog",
                 "assistant",
                 "tour",
@@ -1860,6 +1863,8 @@ const SuperAdmin: React.FC = () => {
                     ? "Users & credit"
                     : item === "pricing"
                       ? "Wallet & pricing"
+                      : item === "economics"
+                        ? "Tenant economics"
                       : item === "blog"
                         ? "Blog publishing"
                         : item === "assistant"
@@ -1893,6 +1898,8 @@ const SuperAdmin: React.FC = () => {
                 <h1 className="mt-1 text-2xl font-semibold capitalize tracking-[-0.045em]">
                   {tab === "pricing"
                     ? "Wallet & pricing"
+                    : tab === "economics"
+                      ? "Tenant economics"
                     : tab === "blog"
                       ? "Blog publishing"
                       : tab === "assistant"
@@ -1911,6 +1918,7 @@ const SuperAdmin: React.FC = () => {
                   <option value="overview">Overview</option>
                   <option value="users">Users & credit</option>
                   <option value="pricing">Wallet & pricing</option>
+                  <option value="economics">Tenant economics</option>
                   <option value="blog">Blog publishing</option>
                   <option value="assistant">Agently assistant</option>
                   <option value="tour">Product tour</option>
@@ -2166,6 +2174,7 @@ const SuperAdmin: React.FC = () => {
             ) : null}
 
             {tab === "pricing" ? <BillingPricingAdmin /> : null}
+            {tab === "economics" ? <TenantEconomicsAdmin /> : null}
             {tab === "assistant" ? <PlatformAssistantAdmin /> : null}
             {tab === "tour" ? <TourAdmin /> : null}
 

@@ -9,6 +9,52 @@ export type SuperAdminMetrics = {
   totalCustomerCreditUsd: number;
 };
 
+export type TenantEconomicsLine = {
+  line: string;
+  unit: string | null;
+  quantity: number;
+  cost: number;
+  charged: number;
+};
+
+export type TenantEconomicsRow = {
+  organizationId: string;
+  organizationName: string;
+  walletBalanceUsd: number | null;
+  providerCostUsd: number;
+  chargedUsd: number;
+  grossProfitUsd: number;
+  marginPercent: number | null;
+  multiple: number | null;
+  lines: TenantEconomicsLine[];
+};
+
+export type TenantEconomicsResponse = {
+  generatedAt: string;
+  totals: {
+    providerCostUsd: number;
+    chargedUsd: number;
+    grossProfitUsd: number;
+    marginPercent: number | null;
+    multiple: number | null;
+  };
+  tenants: TenantEconomicsRow[];
+};
+
+export type PricingMarginResponse = {
+  baseMarginPercent: number | null;
+  baseMultiple: number | null;
+  wildcardRuleId: string | null;
+  overrides: Array<{
+    id: string;
+    scope: string;
+    billingMode: string;
+    targetMarginPercent: number | null;
+    markupPercent: number | null;
+    unitPriceUsd: number | null;
+  }>;
+};
+
 export type SuperAdminUser = {
   id: string;
   name: string;
@@ -269,6 +315,55 @@ export const adminApi = {
       `/api/super-admin/wallets/${encodeURIComponent(organizationId)}/top-up`,
       { method: "POST", body: JSON.stringify({ amountUsd, note }) },
     );
+  },
+
+  async tenantEconomics() {
+    return request<TenantEconomicsResponse>(
+      "/api/super-admin/tenant-economics",
+    );
+  },
+
+  /**
+   * Downloads the per-tenant cost/charge/profit breakdown as CSV. Goes through
+   * fetch rather than a plain link so the super-admin bearer token is sent —
+   * this endpoint exposes internal cost and margin and is not public.
+   */
+  async downloadTenantEconomicsCsv() {
+    const token = getAdminToken();
+    const response = await fetch(
+      `${API_BASE_URL}/api/super-admin/tenant-economics?format=csv`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) throw new Error("Could not download the report.");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `agently-tenant-economics-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  async pricingMargin() {
+    return request<PricingMarginResponse>("/api/super-admin/pricing/margin");
+  },
+
+  async updatePricingMargin(marginPercent: number) {
+    return request<{
+      success: boolean;
+      previousMarginPercent: number;
+      marginPercent: number;
+      multiple: number;
+      note: string;
+    }>("/api/super-admin/pricing/margin", {
+      method: "PATCH",
+      body: JSON.stringify({ marginPercent }),
+    });
   },
 
   async billingPricing() {
