@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   platformAssistantApi,
+  MAX_SUPPORT_ATTACHMENTS,
+  MAX_ATTACHMENT_BYTES,
+  ALLOWED_ATTACHMENT_MIME,
   type AssistantConfig,
   type AssistantMessage,
 } from "../services/platformAssistantApi";
@@ -166,6 +169,12 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
   const [sending, setSending] = useState(false);
   const [escalating, setEscalating] = useState(false);
   const [escalationNote, setEscalationNote] = useState("");
+  const [attachments, setAttachments] = useState<
+    Array<{ path: string; mime: string; bytes: number; name: string }>
+  >([]);
+  const [uploading, setUploading] = useState(false);
+  const [attachError, setAttachError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [banner, setBanner] = useState("");
 
   const dragState = useRef<{ dx: number; dy: number; moved: number } | null>(
@@ -307,6 +316,53 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
     [config?.supportEmail, messages, sending],
   );
 
+  /**
+   * Adds screenshots to the pending report. Each uploads immediately to the
+   * private bucket so the send is instant; the report carries only the
+   * resulting paths.
+   */
+  const addScreenshots = useCallback(
+    async (files: FileList | null) => {
+      if (!files || !files.length) return;
+      const room = MAX_SUPPORT_ATTACHMENTS - attachments.length;
+      if (room <= 0) {
+        setAttachError(
+          `You can attach up to ${MAX_SUPPORT_ATTACHMENTS} screenshots.`,
+        );
+        return;
+      }
+
+      setAttachError("");
+      setUploading(true);
+      try {
+        for (const file of Array.from(files).slice(0, room)) {
+          if (!ALLOWED_ATTACHMENT_MIME.includes(file.type)) {
+            setAttachError("Screenshots must be PNG, JPEG or WebP.");
+            continue;
+          }
+          if (file.size > MAX_ATTACHMENT_BYTES) {
+            setAttachError(
+              `${file.name} is over ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB.`,
+            );
+            continue;
+          }
+          const uploaded = await platformAssistantApi.uploadScreenshot(file);
+          setAttachments((current) => [
+            ...current,
+            { ...uploaded, name: file.name },
+          ]);
+        }
+      } catch (err) {
+        setAttachError(
+          err instanceof Error ? err.message : "That screenshot didn't upload.",
+        );
+      } finally {
+        setUploading(false);
+      }
+    },
+    [attachments.length],
+  );
+
   const submitEscalation = useCallback(async () => {
     const body = escalationNote.trim();
     if (!body) return;
@@ -314,9 +370,16 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
       const result = await platformAssistantApi.escalate({
         body,
         history: messages,
+        attachments: attachments.map(({ path, mime, bytes }) => ({
+          path,
+          mime,
+          bytes,
+        })),
       });
       setBanner(result.message);
       setEscalationNote("");
+      setAttachments([]);
+      setAttachError("");
       setEscalating(false);
     } catch {
       setBanner(
@@ -325,7 +388,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
         } directly and the team will help.`,
       );
     }
-  }, [config?.supportEmail, escalationNote, messages]);
+  }, [attachments, config?.supportEmail, escalationNote, messages]);
 
   if (!config) return null;
 
@@ -564,17 +627,87 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                 placeholder="What's happening? Include anything you've already tried."
                 className="mt-2.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#F59E0B]"
               />
+              {/* Screenshots. A picture of the problem usually saves a whole
+                  round of questions, so this sits right next to the note
+                  rather than behind a menu. */}
+              <div className="mt-2.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ALLOWED_ATTACHMENT_MIME.join(",")}
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    void addScreenshots(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={
+                      uploading || attachments.length >= MAX_SUPPORT_ATTACHMENTS
+                    }
+                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B] disabled:opacity-40"
+                  >
+                    {uploading ? "Uploading…" : "Add screenshot"}
+                  </button>
+                  <span className="text-[10.5px] text-slate-400">
+                    {attachments.length}/{MAX_SUPPORT_ATTACHMENTS} · PNG, JPEG
+                    or WebP
+                  </span>
+                </div>
+
+                {attachments.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {attachments.map((file) => (
+                      <li
+                        key={file.path}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAttachments((current) =>
+                              current.filter((f) => f.path !== file.path),
+                            )
+                          }
+                          className="shrink-0 text-[11px] font-bold text-slate-400 hover:text-red-500"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {attachError && (
+                  <p className="mt-1.5 text-[11px] font-medium text-red-600">
+                    {attachError}
+                  </p>
+                )}
+              </div>
+
               <div className="mt-2.5 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setEscalating(false)}
+                  onClick={() => {
+                    setEscalating(false);
+                    setAttachments([]);
+                    setAttachError("");
+                  }}
                   className="h-9 flex-1 rounded-xl border border-slate-200 text-[12px] font-bold text-slate-600"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  disabled={!escalationNote.trim()}
+                  disabled={!escalationNote.trim() || uploading}
                   onClick={() => void submitEscalation()}
                   className="h-9 flex-1 rounded-xl bg-[#0F172A] text-[12px] font-bold text-white disabled:opacity-40"
                 >

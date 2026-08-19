@@ -61,6 +61,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+export type SupportAttachment = {
+  path: string;
+  mime: string;
+  bytes: number;
+};
+
+/** Matches the server and the bucket's own limits. */
+export const MAX_SUPPORT_ATTACHMENTS = 2;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_ATTACHMENT_MIME = ['image/png', 'image/jpeg', 'image/webp'];
+
 export const platformAssistantApi = {
   async config(): Promise<AssistantConfig> {
     return request<AssistantConfig>('/api/platform-assistant/config');
@@ -82,10 +93,46 @@ export const platformAssistantApi = {
     contactName?: string;
     contactEmail?: string;
     history: AssistantMessage[];
+    attachments?: SupportAttachment[];
   }): Promise<{ success: boolean; message: string; requestId: string }> {
     return request('/api/platform-assistant/escalate', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  /**
+   * Uploads one screenshot straight to storage.
+   *
+   * The API only mints a short-lived signed URL — the image bytes go directly
+   * from the browser to the private bucket and never through our server. The
+   * returned descriptor is what gets attached to the support request.
+   */
+  async uploadScreenshot(file: File): Promise<SupportAttachment> {
+    const signed = await request<{
+      path: string;
+      mime: string;
+      bytes: number;
+      uploadUrl: string;
+      token: string;
+    }>('/api/platform-assistant/attachments/upload-url', {
+      method: 'POST',
+      body: JSON.stringify({ mime: file.type, bytes: file.size }),
+    });
+
+    const put = await fetch(signed.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!put.ok) {
+      throw new Error('The screenshot could not be uploaded. Please try again.');
+    }
+
+    return {
+      path: signed.path,
+      mime: signed.mime,
+      bytes: signed.bytes,
+    };
   },
 };

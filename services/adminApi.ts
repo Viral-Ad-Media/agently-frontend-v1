@@ -135,6 +135,8 @@ export type PlatformSupportRequest = {
   status: "open" | "acknowledged" | "resolved";
   emailed_at: string | null;
   created_at: string;
+  /** Up to 2 screenshots. Paths only — viewing needs a signed URL. */
+  attachments?: Array<{ path: string; mime: string; bytes: number }>;
 };
 
 export type PlatformAssistantSnapshot = {
@@ -443,6 +445,28 @@ export const adminApi = {
     return request<{ success: boolean }>(
       `/api/super-admin/platform/sources/${encodeURIComponent(id)}`,
       { method: "DELETE" },
+    );
+  },
+
+  /**
+   * Screenshots sit in a private bucket with no tenant read access, so viewing
+   * one needs a signed URL minted server-side. They expire after 5 minutes —
+   * fetch on demand rather than caching the URLs.
+   */
+  async platformSupportAttachments(requestId: string) {
+    return request<{
+      requestId: string;
+      attachments: Array<{
+        path: string;
+        mime: string;
+        bytes: number;
+        uploadedAt: string;
+        url: string | null;
+        error: string | null;
+      }>;
+      expiresInSeconds: number;
+    }>(
+      `/api/super-admin/platform/support-requests/${encodeURIComponent(requestId)}/attachments`,
     );
   },
 

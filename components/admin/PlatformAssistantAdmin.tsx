@@ -47,6 +47,33 @@ const PlatformAssistantAdmin: React.FC = () => {
     null,
   );
   const [section, setSection] = useState<Section>("knowledge");
+
+  /** Signed screenshot URLs, keyed by support request id. Fetched on click
+   *  because the links expire after five minutes. */
+  const [shots, setShots] = useState<
+    Record<
+      string,
+      Array<{ path: string; url: string | null; error: string | null }>
+    >
+  >({});
+
+  const loadShots = useCallback(async (requestId: string) => {
+    try {
+      const result = await adminApi.platformSupportAttachments(requestId);
+      setShots((current) => ({ ...current, [requestId]: result.attachments }));
+    } catch (err) {
+      setShots((current) => ({
+        ...current,
+        [requestId]: [
+          {
+            path: "error",
+            url: null,
+            error: err instanceof Error ? err.message : "Could not load.",
+          },
+        ],
+      }));
+    }
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -642,6 +669,51 @@ const PlatformAssistantAdmin: React.FC = () => {
                   <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-slate-600">
                     {request.body}
                   </p>
+
+                  {/* Screenshots are fetched on demand rather than with the
+                      snapshot: the signed URLs expire in 5 minutes, so
+                      pre-loading them would hand the admin dead links. */}
+                  {request.attachments && request.attachments.length > 0 ? (
+                    <div className="mt-2">
+                      {shots[request.id] ? (
+                        <div className="flex flex-wrap gap-2">
+                          {shots[request.id].map((file) =>
+                            file.url ? (
+                              <a
+                                key={file.path}
+                                href={file.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block overflow-hidden rounded-lg border border-slate-200 transition hover:border-[#F59E0B]"
+                              >
+                                <img
+                                  src={file.url}
+                                  alt="Screenshot from the reporter"
+                                  className="h-28 w-auto object-cover"
+                                />
+                              </a>
+                            ) : (
+                              <span
+                                key={file.path}
+                                className="rounded-lg bg-red-50 px-2 py-1 text-[11px] text-red-600"
+                              >
+                                Couldn&rsquo;t load: {file.error || "unknown error"}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void loadShots(request.id)}
+                          className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
+                        >
+                          View {request.attachments.length} screenshot
+                          {request.attachments.length === 1 ? "" : "s"}
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex gap-3">
                     {(["acknowledged", "resolved"] as const).map((status) =>
                       request.status === status ? null : (
