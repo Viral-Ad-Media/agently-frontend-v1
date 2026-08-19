@@ -1340,6 +1340,18 @@ const SuperAdmin: React.FC = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Success notices used to stay on screen forever — "The selected account was
+  // permanently removed" was still sitting there long after the deletion had
+  // finished. A confirmation is only useful for a few seconds; after that it
+  // is stale UI that makes it unclear whether something is still happening.
+  // Errors are deliberately NOT auto-dismissed: those need reading and acting
+  // on, and they clear when the next action starts.
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
   const [blogWorkspaceTab, setBlogWorkspaceTab] =
     useState<BlogWorkspaceTab>("build");
   const [autosaveState, setAutosaveState] = useState<
