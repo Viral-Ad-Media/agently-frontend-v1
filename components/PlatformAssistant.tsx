@@ -611,6 +611,21 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
             ) : null}
           </div>
 
+          {/* Mounted unconditionally so the paperclip on the input row can
+              open it in the same click. Living inside the report form meant
+              the ref was null until that form had rendered. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_ATTACHMENT_MIME.join(",")}
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              void addScreenshots(event.target.files);
+              event.target.value = "";
+            }}
+          />
+
           {escalating ? (
             <div className="border-t border-slate-200 bg-white px-4 py-3.5">
               <p className="text-[12px] font-semibold text-slate-700">
@@ -631,17 +646,6 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                   round of questions, so this sits right next to the note
                   rather than behind a menu. */}
               <div className="mt-2.5">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ALLOWED_ATTACHMENT_MIME.join(",")}
-                  multiple
-                  className="sr-only"
-                  onChange={(event) => {
-                    void addScreenshots(event.target.files);
-                    event.target.value = "";
-                  }}
-                />
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -732,6 +736,35 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                   placeholder={config.placeholder}
                   className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] outline-none transition focus:border-[#F59E0B]"
                 />
+                {/* Attach sits on the main input row, not buried in the report
+                    form. Someone reporting a bug reaches for the paperclip
+                    first; making them find "Still stuck?" and then an upload
+                    control meant screenshots would simply never arrive. This
+                    opens the report form with the file picker already up. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEscalating(true);
+                    fileInputRef.current?.click();
+                  }}
+                  aria-label="Attach a screenshot and report a problem"
+                  title="Attach a screenshot"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   disabled={!input.trim() || sending}
@@ -758,9 +791,9 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
               <button
                 type="button"
                 onClick={() => setEscalating(true)}
-                className="mt-2 text-[11px] font-semibold text-slate-400 transition hover:text-[#0F172A]"
+                className="mt-2 text-[11px] font-semibold text-slate-500 transition hover:text-[#0F172A]"
               >
-                Still stuck? Send this to the Agently team
+                Report a problem &mdash; screenshots welcome
               </button>
             </div>
           )}
