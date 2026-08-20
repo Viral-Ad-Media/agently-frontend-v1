@@ -781,7 +781,6 @@ export const voiceCallsApi = {
         }
         throw error;
       }),
-    createBulkOutboundCall: (payload: unknown) => request('/api/calls/outbound/bulk', { method: 'POST', body: payload }),
     getCalls: (params?: Record<string, string | number | undefined>) => {
       const qs = new URLSearchParams();
       Object.entries(params || {}).forEach(([key, value]) => {
