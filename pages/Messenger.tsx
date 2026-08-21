@@ -287,8 +287,6 @@ const Messenger: React.FC<MessengerProps> = ({
   const [audioWave, setAudioWave] = useState<number[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  /** When the current recording began, so a too-short tap is caught locally. */
-  const recordingStartedAtRef = useRef<number>(0);
   const waveAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Voice preview state
@@ -592,7 +590,6 @@ const Messenger: React.FC<MessengerProps> = ({
         : new MediaRecorder(stream);
 
       audioChunksRef.current = [];
-      recordingStartedAtRef.current = Date.now();
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
@@ -611,12 +608,17 @@ const Messenger: React.FC<MessengerProps> = ({
           type: recorder.mimeType || supported || "audio/webm",
         });
 
-        // The API rejects anything under 0.1s. Catching it here means a
-        // fumbled tap says something useful instead of surfacing a raw API
-        // error, and saves a pointless round trip.
-        const heldMs = Date.now() - (recordingStartedAtRef.current || 0);
-        if (heldMs < 600 || blob.size < 1200) {
-          setError("That recording was too short — hold the mic button while you speak.");
+        // Only refuse when there is genuinely nothing to send.
+        //
+        // A previous version rejected anything under 600ms or 1200 bytes,
+        // which was my invention rather than a real limit — the API's actual
+        // floor is 0.1s. That threw away perfectly transcribable half-second
+        // recordings. If audio was captured, it gets transcribed; the server
+        // reports the real reason on the rare occasion the API still refuses.
+        if (!blob.size) {
+          setError(
+            "No audio was captured — check the microphone is allowed for this site, then try again.",
+          );
           return;
         }
 
@@ -638,12 +640,20 @@ const Messenger: React.FC<MessengerProps> = ({
   };
 
   const stopRecording = () => {
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop();
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+
+    // Flush whatever is buffered before stopping. With a 100ms timeslice a
+    // very short press can end between slices, leaving little more than
+    // container headers — which is what produced "Audio file is too short"
+    // on recordings that clearly contained speech. requestData() emits the
+    // pending buffer as a final chunk first.
+    try {
+      if (recorder.state === "recording") recorder.requestData();
+    } catch {
+      /* not supported everywhere; stop() still flushes on most browsers */
     }
+    recorder.stop();
   };
 
   const transcribeAudio = async (blob: Blob): Promise<string> => {
