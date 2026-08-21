@@ -5,11 +5,14 @@
 // the new /api/knowledge-uploads/* routes and does not touch any existing
 // knowledge-base API surface.
 
+import { createClient } from "@supabase/supabase-js";
 import { resolveApiBaseUrl } from "../utils/runtimeUrls";
 import { getSessionToken } from "./session";
-// Shared instance — see supabaseClient.ts for why this must not call
-// createClient() itself.
-import { supabase } from "./supabaseClient";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabase =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 export type SourceFileStatus = "uploading" | "processing" | "indexed" | "failed";
 

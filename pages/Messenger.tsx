@@ -287,8 +287,6 @@ const Messenger: React.FC<MessengerProps> = ({
   const [audioWave, setAudioWave] = useState<number[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  /** True while the mic button is actually held down. */
-  const micHeldRef = useRef(false);
   const waveAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Voice preview state
@@ -566,36 +564,9 @@ const Messenger: React.FC<MessengerProps> = ({
   };
 
   // Voice recording
-  //
-  // The mic button used to wire BOTH onMouseDown/onMouseUp AND
-  // onTouchStart/onTouchEnd to start/stopRecording. On any touchscreen, a tap
-  // fires touchstart/touchend and then — because nothing called
-  // preventDefault() — the browser ALSO synthesises a trailing
-  // mousedown/mouseup for legacy mouse-only sites. That is not a hypothetical:
-  // it is standard behaviour on every touchscreen, every time. So one tap ran
-  // start/stopRecording twice, racing two MediaRecorders against two streams:
-  // whichever recorder stopRecording happened to stop second could have
-  // captured a few milliseconds of audio or none at all, which is exactly why
-  // it failed intermittently and "no matter how short" made it worse, not
-  // better. Fixed by switching to Pointer Events (one unified event per
-  // physical press, no mouse/touch duplication) plus a re-entrancy guard
-  // below so a second start while one is already active is a no-op.
   const startRecording = async () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      return; // already recording — ignore a duplicate start
-    }
-    micHeldRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // The button may have already been released while getUserMedia was
-      // awaiting the (already-granted) permission. Recording nothing the user
-      // asked to stop is worse than recording nothing at all — release the
-      // mic and bail rather than leave a stream open with no one driving it.
-      if (!micHeldRef.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
 
       // Ask for a container the transcription API accepts, and let the browser
       // pick the first it supports. Safari records mp4, Firefox ogg, Chrome
@@ -669,7 +640,6 @@ const Messenger: React.FC<MessengerProps> = ({
   };
 
   const stopRecording = () => {
-    micHeldRef.current = false;
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
 
@@ -1631,22 +1601,11 @@ const Messenger: React.FC<MessengerProps> = ({
                 {isVoiceMode ? (
                   <button
                     type="button"
-                    // Pointer Events only — see the note above startRecording
-                    // for why mouse + touch handlers together broke this.
-                    // touchAction: "none" stops the browser treating the press
-                    // as a scroll/zoom gesture and is also what suppresses the
-                    // legacy synthetic mouse event on touch devices.
-                    style={{ touchAction: "none" }}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      void startRecording();
-                    }}
-                    onPointerUp={stopRecording}
-                    onPointerCancel={stopRecording}
-                    onPointerLeave={() => {
-                      if (isRecording) stopRecording();
-                    }}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 select-none ${isRecording ? "bg-rose-500 animate-pulse" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onTouchStart={startRecording}
+                    onTouchEnd={stopRecording}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${isRecording ? "bg-rose-500 animate-pulse" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
                   >
                     <i className="fa-sharp fa-solid fa-microphone text-sm" />
                   </button>
