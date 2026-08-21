@@ -53,6 +53,10 @@ export const KnowledgeUploadTrigger: React.FC<{
   setUploading: (v: boolean) => void;
 }> = ({ knowledgeBaseId, onToast, onQueued, uploading, setUploading }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [progress, setProgress] = useState<{
+    name: string;
+    percent: number;
+  } | null>(null);
 
   const handleFiles = useCallback(
     async (fileList: FileList | null) => {
@@ -83,13 +87,17 @@ export const KnowledgeUploadTrigger: React.FC<{
           continue;
         }
         try {
+          setProgress({ name: file.name, percent: 0 });
           const registered = await knowledgeUploadsApi.uploadFile(
             knowledgeBaseId,
             file,
+            (percent) => setProgress({ name: file.name, percent }),
           );
           onQueued?.(registered);
         } catch (err: any) {
           onToast?.(err?.message || `Could not upload ${file.name}.`, false);
+        } finally {
+          setProgress(null);
         }
       }
       setUploading(false);
@@ -119,6 +127,27 @@ export const KnowledgeUploadTrigger: React.FC<{
       >
         {uploading ? "Uploading…" : "+ Files"}
       </button>
+
+      {/* Real transfer percentage. A large PDF previously showed only a
+          spinner, so there was no way to tell a slow upload from a stuck one. */}
+      {progress && (
+        <div className="mt-2 w-full">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+              {progress.name}
+            </span>
+            <span className="text-[11px] font-bold tabular-nums text-slate-600">
+              {progress.percent}%
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-[#F59E0B] transition-[width] duration-200"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -438,9 +438,18 @@ const Messenger: React.FC<MessengerProps> = ({
         launcherLabel: draft.launcherLabel,
         accentColor: draft.accentColor,
         position: draft.position,
-        avatarLabel: hasChatbotAvatarImage(draft.avatarLabel)
-          ? draft.avatarLabel
-          : "",
+        // Send the avatar through unchanged.
+        //
+        // This used to blank the field whenever hasChatbotAvatarImage() said
+        // no — but that helper only resolves images the CLIENT can render:
+        // a preset it knows, or an inline data URL. A freshly saved avatar
+        // comes back as "agently-upload-url:https://…", and any label the
+        // client cannot draw (including the plain "A" default) was silently
+        // rewritten to "". Three chatbots in production have an empty
+        // avatar_label as a result, and an uploaded image vanished on the
+        // very next save. The server already validates, uploads and
+        // normalises this value, so it does not need pre-filtering here.
+        avatarLabel: draft.avatarLabel ?? "",
         customPrompt: draft.customPrompt,
         suggestedPrompts: draft.suggestedPrompts,
         // Legacy chatbot.faqs is intentionally cleared when a Knowledge Base is selected.

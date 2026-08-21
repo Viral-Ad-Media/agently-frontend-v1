@@ -270,7 +270,7 @@ const CallSimulator: React.FC = () => {
                     </div>
                     <div>
                       <p className="font-black text-[#0F172A] text-sm">
-                        Call your AI workforce now
+                        Live web call
                       </p>
                     </div>
                   </div>
