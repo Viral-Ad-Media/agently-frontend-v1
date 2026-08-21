@@ -287,6 +287,8 @@ const Messenger: React.FC<MessengerProps> = ({
   const [audioWave, setAudioWave] = useState<number[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  /** When the current recording began, so a too-short tap is caught locally. */
+  const recordingStartedAtRef = useRef<number>(0);
   const waveAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Voice preview state
@@ -567,8 +569,30 @@ const Messenger: React.FC<MessengerProps> = ({
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+
+      // Ask for a container the transcription API accepts, and let the browser
+      // pick the first it supports. Safari records mp4, Firefox ogg, Chrome
+      // webm — previously the blob was hardcoded "audio/webm" whatever the
+      // browser actually produced, so mp4 bytes arrived labelled as webm and
+      // the API rejected the file outright.
+      const preferred = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4",
+      ];
+      const supported = preferred.find(
+        (t) =>
+          typeof MediaRecorder !== "undefined" &&
+          typeof MediaRecorder.isTypeSupported === "function" &&
+          MediaRecorder.isTypeSupported(t),
+      );
+      const recorder = supported
+        ? new MediaRecorder(stream, { mimeType: supported })
+        : new MediaRecorder(stream);
+
       audioChunksRef.current = [];
+      recordingStartedAtRef.current = Date.now();
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
@@ -580,7 +604,22 @@ const Messenger: React.FC<MessengerProps> = ({
         }
         setAudioWave([]);
         setIsRecording(false);
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+        // Report the real container so the server can name the file with a
+        // matching extension.
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || supported || "audio/webm",
+        });
+
+        // The API rejects anything under 0.1s. Catching it here means a
+        // fumbled tap says something useful instead of surfacing a raw API
+        // error, and saves a pointless round trip.
+        const heldMs = Date.now() - (recordingStartedAtRef.current || 0);
+        if (heldMs < 600 || blob.size < 1200) {
+          setError("That recording was too short — hold the mic button while you speak.");
+          return;
+        }
+
         const transcribed = await transcribeAudio(blob);
         if (transcribed) {
           setIsVoiceMode(false);
