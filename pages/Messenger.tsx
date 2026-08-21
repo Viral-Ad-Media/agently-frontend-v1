@@ -609,23 +609,35 @@ const Messenger: React.FC<MessengerProps> = ({
 
   const transcribeAudio = async (blob: Blob): Promise<string> => {
     try {
-      const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
       const apiBase = resolveApiBaseUrl();
       const token =
         localStorage.getItem("agently.auth.token") ||
         sessionStorage.getItem("agently.auth.token") ||
         "";
+      // Raw body, not multipart: the transcription endpoint reads the audio
+      // bytes directly, matching the public widget's working implementation.
       const resp = await fetch(`${apiBase}/api/messenger/transcribe`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": blob.type || "audio/webm",
+        },
+        body: blob,
       });
       if (resp.ok) {
         const data = await resp.json();
         return data.text || "";
       }
-    } catch {}
+      // A failure here used to be swallowed, leaving the recording UI looking
+      // like it had simply ignored the user. Say what happened.
+      const payload = await resp.json().catch(() => null);
+      setError(
+        payload?.error?.message ||
+          "Could not transcribe that recording. Please try again, or type your message.",
+      );
+    } catch {
+      setError("Could not reach the transcription service. Please try again.");
+    }
     return "";
   };
 
