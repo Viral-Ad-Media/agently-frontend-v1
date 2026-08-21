@@ -1,3 +1,17 @@
+/* Tailwind's generated stylesheet. This replaces the cdn.tailwindcss.com
+   <script> that used to build these utilities in the browser on every page
+   load — see tailwind.config.js for the theme, which is a verbatim copy of the
+   inline config that script used.
+
+   These three directives sit at the TOP on purpose: it puts Tailwind's
+   preflight and utilities ahead of this file's own rules in source order,
+   which is exactly where the CDN's injected <style> sat relative to this
+   stylesheet. Everything below therefore keeps winning the same specificity
+   ties it won before. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ─── TOKENS ─────────────────────────────────────────────────── */
 :root {
   color-scheme: light;

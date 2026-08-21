@@ -6,15 +6,10 @@
 //   VITE_SUPABASE_URL=https://xxx.supabase.co
 //   VITE_SUPABASE_ANON_KEY=eyJ...  (anon/public key, NOT service key)
 
-import { createClient, RealtimeChannel } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-// Only create client if env vars are present
-const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import type { RealtimeChannel } from '@supabase/supabase-js';
+// Shared instance — see supabaseClient.ts for why this must not call
+// createClient() itself.
+import { supabase } from './supabaseClient';
 
 export type RealtimeEvent = 'call' | 'lead' | 'usage' | 'wallet';
 
