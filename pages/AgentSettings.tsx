@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import BackLink from "../components/BackLink";
 import {
   Organization,
   AgentConfig,
@@ -1799,6 +1800,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
 
   return (
     <div className="agently-agent-settings-page animate-fade-up space-y-4">
+      <BackLink to="/dashboard" label="Back to voice agents" />
+
       {/* ── Toast ── */}
       {toast && (
         <div
