@@ -1923,7 +1923,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             }}
             className="ag-button-soft"
           >
-            Call Your AI Workforce Now
+            Live web call
           </button>
           <button
             type="button"
