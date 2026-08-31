@@ -238,14 +238,17 @@ const Login: React.FC<LoginProps> = ({
         <div className="mb-2 flex h-11 items-center justify-between rounded-full border border-[#0F172A]/10 bg-white/78 px-4 shadow-[0_10px_28px_rgba(15,23,42,0.055)] backdrop-blur-xl">
           <Link
             to="/"
-            className="flex items-center"
+            className="flex items-center gap-1.5"
             aria-label="Go to Agently home"
           >
             <img
-              src="/agently-reception-wordmark-dark.png"
-              alt="Agently Reception Ops"
-              className="h-7 w-auto object-contain sm:h-8"
+              src="/agently-mark.png"
+              alt=""
+              className="h-6 w-auto object-contain sm:h-7"
             />
+            <span className="text-lg font-bold text-[#0F172A] sm:text-xl">
+              Agently
+            </span>
           </Link>
           <Link
             to="/"
@@ -259,13 +262,16 @@ const Login: React.FC<LoginProps> = ({
           <section className="relative hidden overflow-hidden bg-[#0F172A] p-6 text-white lg:flex lg:flex-col lg:justify-between xl:p-6">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.42),transparent_28%),radial-gradient(circle_at_95%_15%,rgba(255,255,255,0.12),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.06),transparent_42%)]" />
             <div className="relative">
-              <img
-                src="/agently-reception-wordmark-light.png"
-                alt="Agently Reception Ops"
-                className="h-7 w-auto object-contain"
-              />
+              <div className="flex items-center gap-1.5">
+                <img
+                  src="/agently-mark.png"
+                  alt=""
+                  className="h-7 w-auto object-contain"
+                />
+                <span className="text-lg font-bold text-white">Agently</span>
+              </div>
               <p className="mt-4 text-[9px] font-medium uppercase tracking-[0.24em] text-white/50">
-                Reception ops control room
+                Your AI team, built around your business
               </p>
               <h1 className="font-display mt-3 max-w-[470px] text-[clamp(1.86rem,2.9vw,2.55rem)] font-medium leading-[1.02] tracking-[-0.055em] text-white">
                 Run every agent from one calm workspace.

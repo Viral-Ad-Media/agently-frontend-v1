@@ -1438,11 +1438,14 @@ const Onboarding: React.FC<OnboardingProps> = ({
           <div className="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
 
           <div className="relative z-10 flex items-center justify-between gap-4">
-            <img
-              src="/agently-reception-wordmark-light.png"
-              alt="Agently Reception Ops"
-              className="h-7 w-auto object-contain"
-            />
+            <div className="flex items-center gap-1.5">
+              <img
+                src="/agently-mark.png"
+                alt=""
+                className="h-7 w-auto object-contain"
+              />
+              <span className="text-lg font-bold text-white">Agently</span>
+            </div>
             <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/75">
               5 steps
             </span>
@@ -1480,12 +1483,15 @@ const Onboarding: React.FC<OnboardingProps> = ({
         <main className="overflow-hidden rounded-[1.65rem] border border-[#0F172A]/10 bg-[#F8FAFC]/95 shadow-2xl shadow-[#0F172A]/10 backdrop-blur md:rounded-[2.25rem] lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px]">
           <div className="border-b border-[#0F172A]/10 bg-white/55 px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center lg:hidden">
+              <div className="flex items-center gap-1.5 lg:hidden">
                 <img
-                  src="/agently-reception-wordmark-dark.png"
-                  alt="Agently Reception Ops"
+                  src="/agently-mark.png"
+                  alt=""
                   className="h-6 w-auto object-contain"
                 />
+                <span className="text-base font-bold text-[#0F172A]">
+                  Agently
+                </span>
               </div>
               <div className="hidden lg:block">
                 <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#0F172A]/45">

@@ -306,17 +306,19 @@ const PublicBrand: React.FC<{ inverted?: boolean; compact?: boolean }> = ({
   inverted = false,
   compact = false,
 }) => {
-  const src = inverted
-    ? "/agently-reception-wordmark-light.png"
-    : "/agently-reception-wordmark-dark.png";
   return (
-    <div className="flex items-center">
+    <div className="flex items-center gap-2">
       <img
-        src={src}
-        alt="Agently"
+        src="/agently-mark.png"
+        alt=""
         className={`${compact ? "h-8 sm:h-9" : "h-10 sm:h-11"} w-auto object-contain`}
         loading="eager"
       />
+      <span
+        className={`${compact ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"} font-bold ${inverted ? "text-white" : "text-slate-900"}`}
+      >
+        Agently
+      </span>
     </div>
   );
 };
@@ -326,16 +328,14 @@ const AppLoading: React.FC = () => (
     <div className="agently-loader-frame" role="status" aria-live="polite">
       <div className="agently-loader-orbit" aria-hidden="true">
         <img
-          src="/agently-reception-mark.png"
+          src="/agently-mark.png"
           alt=""
           className="agently-loader-mark"
         />
       </div>
-      <img
-        src="/agently-reception-wordmark-light.png"
-        alt="Agently Reception Ops"
-        className="agently-loader-wordmark"
-      />
+      <p className="agently-loader-wordmark" aria-hidden="true">
+        Agently
+      </p>
       <div className="agently-loader-line" aria-hidden="true">
         <span />
       </div>
@@ -824,13 +824,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         >
           <div className="flex h-full min-h-0 flex-col overflow-hidden border-r border-[#1E293B] bg-[#0F172A] shadow-[12px_0_40px_rgba(15,23,42,0.16)]">
             <div className="flex items-center justify-between px-7 pb-5 pt-7">
-              <Link to="/dashboard" className="flex min-w-0 items-center">
+              <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
                 <img
-                  src="/agently-reception-wordmark-light.png"
-                  alt="Agently Reception Ops"
-                  className="h-auto w-[10.5rem] max-w-full object-contain"
+                  src="/agently-mark.png"
+                  alt=""
+                  className="h-8 w-auto flex-shrink-0 object-contain"
                   loading="eager"
                 />
+                <span className="truncate text-xl font-bold text-white">
+                  Agently
+                </span>
               </Link>
               <button
                 type="button"

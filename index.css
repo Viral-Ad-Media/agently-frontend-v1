@@ -637,9 +637,11 @@ main {
 }
 
 .agently-loader-wordmark {
-  height: 1.55rem;
-  width: auto;
-  object-fit: contain;
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
 }
 
 .agently-loader-line {

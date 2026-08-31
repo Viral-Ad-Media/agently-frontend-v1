@@ -219,12 +219,13 @@ const AdminLogin: React.FC<{ onAuthenticated: (email: string) => void }> = ({
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F172A] shadow-[0_36px_120px_rgba(0,0,0,.38)] lg:grid-cols-[1.05fr_0.95fr]">
         <div className="relative hidden overflow-hidden border-r border-white/10 p-12 lg:flex lg:flex-col lg:justify-between">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(245,158,11,.2),transparent_35%),radial-gradient(circle_at_80%_80%,rgba(59,130,246,.12),transparent_42%)]" />
-          <div className="relative">
+          <div className="relative flex items-center gap-2">
             <img
-              src="/agently-reception-wordmark-light.png"
-              alt="Agently"
+              src="/agently-mark.png"
+              alt=""
               className="h-10 w-auto"
             />
+            <span className="text-2xl font-bold text-white">Agently</span>
           </div>
           <div className="relative max-w-xl">
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#F59E0B]">
@@ -1853,11 +1854,10 @@ const SuperAdmin: React.FC = () => {
     <div className="h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
       <div className="flex h-full">
         <aside className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
-          <img
-            src="/agently-reception-wordmark-light.png"
-            alt="Agently"
-            className="h-auto w-40"
-          />
+          <div className="flex items-center gap-2">
+            <img src="/agently-mark.png" alt="" className="h-8 w-auto" />
+            <span className="text-xl font-bold text-white">Agently</span>
+          </div>
           <p className="mt-8 px-3 text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
             Owner workspace
           </p>

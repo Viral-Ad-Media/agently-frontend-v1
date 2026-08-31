@@ -202,14 +202,17 @@ const ForgotPassword: React.FC = () => {
         <div className="mb-3 flex h-12 items-center justify-between rounded-full border border-[#0F172A]/10 bg-white/76 px-4 shadow-[0_12px_36px_rgba(15,23,42,0.06)] backdrop-blur-xl">
           <Link
             to="/"
-            className="flex items-center"
+            className="flex items-center gap-1.5"
             aria-label="Go to Agently home"
           >
             <img
-              src="/agently-reception-wordmark-dark.png"
-              alt="Agently Reception Ops"
-              className="h-8 w-auto object-contain sm:h-9"
+              src="/agently-mark.png"
+              alt=""
+              className="h-7 w-auto object-contain sm:h-8"
             />
+            <span className="text-lg font-bold text-[#0F172A] sm:text-xl">
+              Agently
+            </span>
           </Link>
           <Link
             to="/login"
@@ -223,11 +226,14 @@ const ForgotPassword: React.FC = () => {
           <section className="relative hidden overflow-hidden bg-[#0F172A] p-7 text-white lg:flex lg:flex-col lg:justify-between">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(245,158,11,0.43),transparent_30%),radial-gradient(circle_at_92%_16%,rgba(255,255,255,0.12),transparent_26%),linear-gradient(145deg,rgba(255,255,255,0.07),transparent_44%)]" />
             <div className="relative">
-              <img
-                src="/agently-reception-wordmark-light.png"
-                alt="Agently Reception Ops"
-                className="h-8 w-auto object-contain"
-              />
+              <div className="flex items-center gap-1.5">
+                <img
+                  src="/agently-mark.png"
+                  alt=""
+                  className="h-8 w-auto object-contain"
+                />
+                <span className="text-xl font-bold text-white">Agently</span>
+              </div>
               <p className="mt-7 text-[10px] font-medium uppercase tracking-[0.24em] text-white/50">
                 Account recovery
               </p>
