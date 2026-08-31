@@ -10,7 +10,7 @@ const FAQS = [
   {
     question: "Is Agently only an AI receptionist?",
     answer:
-      "No. Reception-style answering is one workflow, but Agently is a broader AI agent platform for inbound calls, outbound campaigns, qualification, no-show recovery, cart recovery, appointment setting, onboarding, and post-call follow-up.",
+      "No. Answering calls is one workflow, but Agently is a full AI team for your business — handling outbound campaigns, qualification, no-show recovery, cart recovery, appointment setting, onboarding, and post-call follow-up.",
   },
   {
     question: "How does an agent know what to say?",

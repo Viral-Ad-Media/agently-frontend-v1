@@ -464,14 +464,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
           setElevenLabsVoices(voicesResponse.value.voices || []);
         } else {
           setElevenLabsVoices([]);
-          showToast("Could not load ElevenLabs voices yet.", false);
+          showToast("Could not load premium voice options yet.", false);
         }
 
         if (openAiVoicesResponse.status === "fulfilled") {
           setOpenAiVoices(openAiVoicesResponse.value.voices || []);
         } else {
           setOpenAiVoices([]);
-          showToast("Could not load OpenAI voices yet.", false);
+          showToast("Could not load standard voice options yet.", false);
         }
 
         if (configResponse.status === "fulfilled") {
