@@ -399,7 +399,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       if (wallet.stripeTopUpEnabled) {
         const response = await api.createStripeWalletTopUp(amount);
         if (!response.checkoutUrl)
-          throw new Error("Stripe checkout URL was not returned.");
+          throw new Error("Could not start secure checkout. Please try again.");
         window.location.assign(response.checkoutUrl);
         return;
       }
@@ -408,7 +408,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       // the only way a tenant adds credit; internal testers are credited from
       // the super-admin dashboard instead.
       throw new Error(
-        "Card top-ups are not configured yet. Add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET on the backend.",
+        "Card top-ups aren't available right now. Please contact support to add credit.",
       );
     } catch (err) {
       setError(cleanError(err, "Unable to start secure checkout."));
