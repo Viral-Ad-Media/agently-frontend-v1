@@ -1217,7 +1217,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Add recipients manually, paste a list, or import from your
-                  Lead CRM.
+                  Leads.
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
@@ -1305,7 +1305,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 >
                   <option value="">Import recipients</option>
                   <option value="tag">Import from lead tags</option>
-                  <option value="leads">Select from Lead CRM</option>
+                  <option value="leads">Select from Leads</option>
                 </select>
                 {recipientImportMode === "leads" ? (
                   <button
@@ -1391,7 +1391,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                        Lead CRM
+                        Leads
                       </p>
                       <p className="mt-1 truncate text-xs text-slate-400">
                         Select leads, add them, then close this panel.
@@ -1404,7 +1404,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                         setLeadSearch("");
                       }}
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                      aria-label="Close Lead CRM import"
+                      aria-label="Close Leads import"
                     >
                       <i className="fa-solid fa-xmark" />
                     </button>

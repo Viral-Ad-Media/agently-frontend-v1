@@ -3474,7 +3474,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     No call campaigns assigned
                   </p>
                   <p className="text-xs text-slate-300 mt-1">
-                    Go to Lead CRM → Tag collections → Create Campaign to assign
+                    Go to Leads → Tag collections → Create Campaign to assign
                     this agent.
                   </p>
                 </div>

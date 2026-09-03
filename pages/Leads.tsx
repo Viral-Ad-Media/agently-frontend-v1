@@ -1235,7 +1235,7 @@ const Leads: React.FC<LeadsProps> = ({
           below the title into their own row. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black text-slate-900">Lead CRM</h2>
+          <h2 className="text-xl font-black text-slate-900">Leads</h2>
           <p className="mt-0.5 text-xs text-slate-400">
             {localLeads.length} total · tag leads to assign and schedule
             outreach

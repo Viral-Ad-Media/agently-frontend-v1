@@ -59,8 +59,8 @@ const NAV_ITEMS: Array<{
     to: "/leads",
     tourId: "nav-leads",
     icon: "/nav/lead-crm.png",
-    label: "Lead CRM",
-    description: "Pipeline health and contact capture",
+    label: "Leads",
+    description: "Contact capture and outreach scheduling",
   },
   {
     to: "/settings",
@@ -1088,9 +1088,9 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               </Link>
               <Link
                 to="/login"
-                className="rounded-full bg-[#F59E0B] px-4 py-2.5 text-[13px] font-medium leading-none text-white shadow-[0_12px_26px_rgba(245,158,11,0.22)] transition hover:bg-[#D97706]"
+                className="rounded-full bg-[#F59E0B] px-4 py-2.5 text-[13px] font-medium leading-none text-white shadow-[0_12px_26px_rgba(245,158,11,0.22)] transition hover:-translate-y-px hover:bg-[#D97706]"
               >
-                Get Started
+                Start trial
               </Link>
             </div>
 
@@ -1129,7 +1129,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
                 to="/login"
                 className="rounded-2xl bg-[#F59E0B] px-4 py-3 text-center text-sm font-medium text-white"
               >
-                Get Started
+                Start trial
               </Link>
             </div>
           </div>
@@ -1138,115 +1138,107 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
 
       <main className="relative">{children}</main>
 
-      <footer className="relative px-3 pb-5 pt-4 sm:px-5 sm:pb-6">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-[#0F172A] text-[#F8FAFC] shadow-[0_28px_90px_rgba(15,23,42,0.25)]">
-          <div className="grid gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[1.1fr_1.35fr] lg:px-10 lg:py-10">
-            <div className="max-w-md">
-              <PublicBrand inverted />
-              <h2 className="font-display mt-8 max-w-sm text-[clamp(1.7rem,2.7vw,2.3rem)] font-medium leading-[1.12] tracking-[-0.04em] text-[#F8FAFC]">
-                Everyday conversations. Extraordinary outcomes.
-              </h2>
-              <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#F8FAFC]/68">
-                AI voice agents, chatbots, follow-up workflows, and call
-                intelligence in one warm, reliable control room.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-2">
-                {["Inbound", "Outbound", "Chat", "CRM handoff"].map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-[#F8FAFC]/12 bg-[#F8FAFC]/[0.07] px-3 py-1.5 text-xs font-normal text-[#F8FAFC]/72"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-7 sm:grid-cols-3">
-              <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
-                  Product
-                </h4>
-                <div className="mt-4 space-y-3">
-                  <Link
-                    to="/features"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Features
-                  </Link>
-                  <Link
-                    to="/pricing"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Pricing
-                  </Link>
-                  <Link
-                    to="/login"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Workspace
-                  </Link>
-                  <Link
-                    to="/login"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Start Trial
-                  </Link>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
-                  Company
-                </h4>
-                <div className="mt-4 space-y-3">
-                  <Link
-                    to="/about"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    About
-                  </Link>
-                  <Link
-                    to="/contact"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Contact
-                  </Link>
-                  <Link
-                    to="/faqs"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    FAQs
-                  </Link>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
-                  Legal
-                </h4>
-                <div className="mt-4 space-y-3">
-                  <Link
-                    to="/privacy"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Privacy Policy
-                  </Link>
-                  <Link
-                    to="/terms"
-                    className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
-                  >
-                    Terms of Service
-                  </Link>
-                </div>
-              </div>
+      <footer className="relative border-t border-white/10 bg-[#0F172A] text-[#F8FAFC]">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:grid lg:grid-cols-[1.1fr_1.35fr] lg:gap-10 lg:px-10 lg:py-16">
+          <div className="max-w-md">
+            <PublicBrand inverted />
+            <h2 className="font-display mt-8 max-w-sm text-[clamp(1.7rem,2.7vw,2.3rem)] font-medium leading-[1.12] tracking-[-0.04em] text-[#F8FAFC]">
+              Every conversation, answered and followed through.
+            </h2>
+            <p className="mt-4 max-w-sm text-base font-normal leading-[1.35] text-[#F8FAFC]/68">
+              AI voice agents, chatbots, follow-up workflows, and call
+              intelligence in one workspace.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {["Inbound", "Outbound", "Chat", "CRM handoff"].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-[#F8FAFC]/12 bg-[#F8FAFC]/[0.07] px-3 py-1.5 text-xs font-normal text-[#F8FAFC]/72"
+                >
+                  {item}
+                </span>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-[#F8FAFC]/12 px-5 py-4 text-xs font-normal text-[#F8FAFC]/48 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
-            <p>© {currentYear} Agently. All rights reserved.</p>
-            <p>Voice, chat, CRM, and call intelligence for modern teams.</p>
+          <div className="mt-10 grid gap-7 sm:grid-cols-3 lg:mt-0">
+            <div>
+              <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
+                Product
+              </h4>
+              <div className="mt-4 space-y-3">
+                <Link
+                  to="/features"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Features
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Pricing
+                </Link>
+                <Link
+                  to="/login"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Start trial
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
+                Company
+              </h4>
+              <div className="mt-4 space-y-3">
+                <Link
+                  to="/about"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  About
+                </Link>
+                <Link
+                  to="/contact"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Contact
+                </Link>
+                <Link
+                  to="/faqs"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  FAQs
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-medium uppercase tracking-[0.18em] text-[#F8FAFC]/44">
+                Legal
+              </h4>
+              <div className="mt-4 space-y-3">
+                <Link
+                  to="/privacy"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Privacy Policy
+                </Link>
+                <Link
+                  to="/terms"
+                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                >
+                  Terms of Service
+                </Link>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-[#F8FAFC]/12 px-5 py-4 text-xs font-normal text-[#F8FAFC]/48 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+          <p>© {currentYear} Agently. All rights reserved.</p>
+          <p>Voice, chat, CRM, and call intelligence for modern teams.</p>
         </div>
       </footer>
     </div>

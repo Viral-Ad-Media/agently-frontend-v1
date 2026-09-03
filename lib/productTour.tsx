@@ -309,7 +309,7 @@ const SIDEBAR_STEPS: TourStep[] = [
   {
     needsSidebar: true,
     target: "tour:nav-leads",
-    title: "Lead CRM",
+    title: "Leads",
     body: "Everyone who left their details, whether they called or chatted. Track who you have followed up with.",
   },
   {
@@ -511,7 +511,7 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
   "/leads": [
     {
       placement: "center",
-      title: "Lead CRM",
+      title: "Leads",
       body: "Everyone who left their details with a voice agent or the chatbot, in one list.",
     },
     {
