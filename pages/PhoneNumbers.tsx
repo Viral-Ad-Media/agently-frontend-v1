@@ -871,7 +871,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
       </div>
 
       {tab === "numbers" && (
-        <div className="space-y-4">
+        /* Tour anchor lives on the panel, not the populated grid below: a
+           brand-new org owns no numbers, so that grid never renders and the
+           "Your numbers" step had nothing to point at. */
+        <div className="space-y-4" data-tour="numbers-panel">
           {busy === "load" && !hasLoaded ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-16 text-center shadow-card">
               <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />

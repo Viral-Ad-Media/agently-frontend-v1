@@ -44,10 +44,9 @@ const Blog: React.FC = () => {
       <section className="border-b border-slate-900/10 bg-white">
         <div className="marketing-shell py-14 sm:py-16 lg:py-20">
           <div className="max-w-3xl">
-            <div className="marketing-eyebrow mb-5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-[#B45309]">
               Agently Journal
-            </div>
+            </p>
             <h1 className="marketing-page-title">
               Product news, practical guides, and the thinking behind better
               customer conversations.
@@ -60,7 +59,7 @@ const Blog: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#F1F5F9]">
+      <section className="bg-[#E8EDF4]">
         <div className="marketing-shell py-12 lg:py-16">
           {loading ? (
             <div className="grid gap-5 md:grid-cols-3">
@@ -89,7 +88,7 @@ const Blog: React.FC = () => {
             <>
               <Link
                 to={`/blog/${featured.slug}`}
-                className="group grid overflow-hidden rounded-[2rem] border border-slate-900/10 bg-[#0F172A] text-white shadow-[0_28px_80px_rgba(5,8,23,0.15)] lg:grid-cols-[1.08fr_0.92fr]"
+                className="group grid overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F172A] text-white shadow-[0_28px_80px_rgba(5,8,23,0.15)] lg:grid-cols-[1.08fr_0.92fr]"
               >
                 <div className="relative min-h-[300px] overflow-hidden bg-white/5 lg:min-h-[430px]">
                   {featured.coverImageUrl ? (

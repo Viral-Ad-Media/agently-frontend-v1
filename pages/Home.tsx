@@ -10,34 +10,27 @@ const HERO_CHIPS = [
   "Follow-up automation",
 ];
 
-const WORKSPACE_ITEMS = [
-  {
-    label: "Inbound line",
-    value: "Answering now",
-    tone: "bg-emerald-50 text-emerald-700",
-  },
-  {
-    label: "Outbound campaign",
-    value: "42 queued",
-    tone: "bg-amber-50 text-amber-700",
-  },
-  {
-    label: "Follow-up queue",
-    value: "No-shows + carts",
-    tone: "bg-slate-100 text-slate-900/70",
-  },
-  {
-    label: "Knowledge Base",
-    value: "Synced",
-    tone: "bg-amber-50 text-amber-800",
-  },
+// Mirrors the real "Command Center" dashboard's actual card set and agent
+// list (verified against the live product), with illustrative sample
+// figures rather than any customer's real usage data.
+const COMMAND_CENTER_METRICS = [
+  { label: "Total calls", value: "62" },
+  { label: "Leads captured", value: "28" },
+  { label: "Call usage", value: "41m" },
 ];
 
-const FLOW_STEPS = [
-  "Understands intent",
-  "Qualifies the lead",
-  "Books or routes",
-  "Writes the CRM summary",
+// Real capabilities, matching what the Features page already lists.
+const VOICE_CAPABILITIES = [
+  "Inbound answering",
+  "Outbound campaigns",
+  "No-show recovery",
+  "Appointment setting",
+];
+
+const COMMAND_CENTER_AGENTS = [
+  { name: "Mimi", calls: "24 calls", role: "Inbound voice" },
+  { name: "Timi", calls: "19 calls", role: "Outbound follow-up" },
+  { name: "Fin", calls: "11 calls", role: "Website chatbot" },
 ];
 
 const OUTCOME_CARDS = [
@@ -92,14 +85,14 @@ const Home: React.FC = () => {
     <div className="marketing-page text-[#0F172A]">
       <section className="relative overflow-hidden border-b border-slate-900/10">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.18),transparent_58%)]" />
-        <div className="marketing-shell relative grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.92fr_1.08fr] lg:py-7">
+        <div className="marketing-shell relative grid items-center gap-8 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:py-14">
           <div className="max-w-3xl">
             <div className="marketing-eyebrow mb-5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
               Voice · Chat · Campaigns · Leads
             </div>
 
-            <h1 className="marketing-hero-title max-w-4xl">
+            <h1 className="marketing-hero-title max-w-3xl">
               AI agents for every customer conversation.
             </h1>
 
@@ -128,147 +121,125 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[640px] lg:justify-self-end">
-            <div className="absolute -inset-5 rounded-[2.5rem] bg-[#F59E0B]/12 blur-3xl" />
-            <div className="relative overflow-hidden rounded-[2rem] border border-slate-900/10 bg-[#0F172A] p-3 shadow-[0_34px_90px_rgba(5,8,23,0.22)]">
-              <div className="mb-3 flex items-center justify-between rounded-[1.35rem] border border-white/10 bg-white/[0.055] px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-                </div>
-                <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/40">
-                  Agent workspace
+          <div className="relative mx-auto w-full max-w-[560px] lg:justify-self-end">
+            <div className="absolute -inset-5 rounded-[2.5rem] bg-[#F59E0B]/10 blur-3xl" />
+            {/* The one deliberately dark surface on a light page: it is a
+                preview of the real (dark) product UI. */}
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#0F172A] shadow-[0_34px_90px_rgba(0,0,0,0.55)]">
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                <p className="text-sm font-medium tracking-[-0.03em] text-white">
+                  Command Center
                 </p>
+                <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-emerald-300">
+                  Sample workspace
+                </span>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr]">
-                <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.055] p-4">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-white/40">
-                    Live operations
-                  </p>
-                  <div className="mt-4 space-y-2.5">
-                    {WORKSPACE_ITEMS.map((item) => (
-                      <div
-                        key={item.label}
-                        className="rounded-[1.1rem] border border-white/10 bg-white/[0.05] p-3"
-                      >
-                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/35">
-                          {item.label}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium tracking-[-0.035em] text-white">
-                            {item.value}
-                          </p>
-                          <span
-                            className={`rounded-full px-2 py-1 text-[10px] font-medium ${item.tone}`}
-                          >
-                            Active
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+              <div className="grid grid-cols-3 gap-px bg-white/10">
+                {COMMAND_CENTER_METRICS.map((metric) => (
+                  <div key={metric.label} className="bg-[#0F172A] px-4 py-4">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-white/40">
+                      {metric.label}
+                    </p>
+                    <p className="mt-1.5 text-xl font-medium tracking-[-0.04em] text-white">
+                      {metric.value}
+                    </p>
                   </div>
-                </div>
+                ))}
+              </div>
 
-                <div className="rounded-[1.45rem] border border-white/10 bg-[#F8FAFC] p-4 text-[#0F172A]">
-                  <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2 px-5 py-5">
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-white/40">
+                  Agent performance
+                </p>
+                {COMMAND_CENTER_AGENTS.map((agent) => (
+                  <div
+                    key={agent.name}
+                    className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/10 bg-white/[0.04] px-4 py-3"
+                  >
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-[#0F172A]/45">
-                        Conversation flow
+                      <p className="text-sm font-medium tracking-[-0.03em] text-white">
+                        {agent.name}
                       </p>
-                      <h2 className="mt-2 max-w-sm text-[clamp(1.55rem,3vw,2.55rem)] font-medium leading-[0.96] tracking-[-0.065em]">
-                        From missed intent to booked action.
-                      </h2>
+                      <p className="mt-0.5 text-xs font-normal text-white/45">
+                        {agent.role}
+                      </p>
                     </div>
-                    <div className="marketing-icon-tile marketing-icon-orange h-11 w-11 shrink-0 rounded-full">
-                      <ICONS.Sparkles />
-                    </div>
+                    <span className="text-xs font-medium text-white/70">
+                      {agent.calls}
+                    </span>
                   </div>
-
-                  <div className="mt-4 space-y-2.5">
-                    {FLOW_STEPS.map((step, index) => (
-                      <div
-                        key={step}
-                        className="flex items-center gap-3 rounded-[1rem] border border-slate-900/10 bg-white px-3 py-2.5"
-                      >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]/14 text-[10px] font-medium text-[#B45309] ring-1 ring-[#F59E0B]/25">
-                          {index + 1}
-                        </span>
-                        <span className="text-sm font-medium tracking-[-0.03em] text-[#0F172A]/80">
-                          {step}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 rounded-[1.15rem] bg-amber-50 p-3">
-                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber-800">
-                      Next action
-                    </p>
-                    <p className="mt-1 text-sm font-medium tracking-[-0.03em]">
-                      Save summary, assign owner, trigger follow-up.
-                    </p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
+            <p className="mt-3 text-center text-xs font-normal text-[#0F172A]/45">
+              A preview of the real Agently workspace, with sample data.
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-slate-900/10 bg-[#F1F5F9]">
-        <div className="marketing-shell grid items-center gap-8 py-12 lg:grid-cols-[0.82fr_1.18fr] lg:py-14">
-          <div>
-            <div className="marketing-eyebrow mb-5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
-              About Agently
-            </div>
+      <section className="border-b border-slate-900/10 bg-[#F5F8FC]">
+        <div className="marketing-shell py-11 lg:py-14">
+          <div className="grid items-end gap-6 lg:grid-cols-[0.82fr_1.18fr]">
             <h2 className="marketing-section-title max-w-xl">
               Built for the conversations that create revenue.
             </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <p className="marketing-copy">
+                Agently connects voice agents, chatbots, outbound campaigns,
+                lead capture, CRM handoff, and call intelligence in one
+                operating layer.
+              </p>
+              <p className="marketing-copy">
+                Instead of treating every call, chat, and follow-up as separate
+                work, Agently keeps the context, outcome, and next action
+                together.
+              </p>
+            </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <p className="marketing-copy">
-              Agently connects voice agents, chatbots, outbound campaigns, lead
-              capture, CRM handoff, and call intelligence in one operating
-              layer.
-            </p>
-            <p className="marketing-copy">
-              Instead of treating every call, chat, and follow-up as separate
-              work, Agently keeps the context, outcome, and next action
-              together.
-            </p>
-          </div>
-        </div>
-      </section>
 
-      <section className="border-b border-slate-900/10 bg-white">
-        <div className="marketing-shell py-12 lg:py-14">
-          <div className="grid gap-4 md:grid-cols-3">
-            {OUTCOME_CARDS.map((card) => (
-              <div key={card.title} className="marketing-card p-6">
-                <div className={card.tone}>{card.icon}</div>
-                <h3 className="text-xl font-medium tracking-[-0.055em] text-[#0F172A]">
-                  {card.title}
-                </h3>
-                <p className="mt-3 text-sm font-normal leading-relaxed text-slate-600">
-                  {card.copy}
-                </p>
+          <div className="mt-8 grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
+            <div className="marketing-card p-7 md:self-start">
+              <div className={OUTCOME_CARDS[0].tone}>{OUTCOME_CARDS[0].icon}</div>
+              <h3 className="text-2xl font-medium tracking-[-0.055em] text-[#0F172A]">
+                {OUTCOME_CARDS[0].title}
+              </h3>
+              <p className="mt-3 max-w-md text-sm font-normal leading-relaxed text-slate-600">
+                {OUTCOME_CARDS[0].copy}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {VOICE_CAPABILITIES.map((item) => (
+                  <span key={item} className="marketing-chip">
+                    {item}
+                  </span>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="grid gap-4">
+              {OUTCOME_CARDS.slice(1).map((card) => (
+                <div key={card.title} className="marketing-card p-6">
+                  <div className={card.tone}>{card.icon}</div>
+                  <h3 className="text-xl font-medium tracking-[-0.055em] text-[#0F172A]">
+                    {card.title}
+                  </h3>
+                  <p className="mt-3 text-sm font-normal leading-relaxed text-slate-600">
+                    {card.copy}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-slate-900/10 bg-[#F1F5F9]">
-        <div className="marketing-shell py-12 lg:py-16">
+      <section className="border-b border-slate-900/10 bg-[#E8EDF4]">
+        <div className="marketing-shell py-11 lg:py-12">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="marketing-eyebrow mb-5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-[#B45309]">
                 From the Agently Journal
-              </div>
+              </p>
               <h2 className="marketing-section-title max-w-2xl">
                 Product updates and practical ideas for better customer
                 conversations.
@@ -287,7 +258,7 @@ const Home: React.FC = () => {
                   to={`/blog/${post.slug}`}
                   className="group overflow-hidden rounded-[1.75rem] border border-slate-900/10 bg-white transition hover:-translate-y-1 hover:shadow-[0_20px_55px_rgba(5,8,23,0.10)]"
                 >
-                  <div className="aspect-[16/10] overflow-hidden bg-slate-900/5">
+                  <div className="aspect-[16/10] overflow-hidden bg-white/5">
                     {post.coverImageUrl ? (
                       <img
                         src={post.coverImageUrl}
@@ -325,21 +296,14 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#F1F5F9]">
-        <div className="marketing-shell py-14">
-          <div className="grid items-center gap-8 rounded-[2rem] border border-slate-900/10 bg-[#0F172A] p-6 text-white shadow-[0_28px_90px_rgba(5,8,23,0.18)] md:grid-cols-[1fr_auto] md:p-8">
-            <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
-                Built for daily revenue operations
-              </p>
-              <h2 className="mt-3 max-w-2xl text-[clamp(1.9rem,4vw,3.4rem)] font-medium leading-[0.98] tracking-[-0.065em]">
-                Launch agents that answer, recover, qualify, and report.
-              </h2>
-            </div>
-            <Link to="/pricing" className="marketing-button-light">
-              View pricing
-            </Link>
-          </div>
+      <section className="bg-[#0F172A] text-white">
+        <div className="marketing-shell grid items-center gap-8 py-12 md:grid-cols-[1fr_auto] lg:py-14">
+          <h2 className="max-w-2xl text-[clamp(1.9rem,4vw,3.2rem)] font-medium leading-[1] tracking-[-0.065em]">
+            Launch agents that answer, recover, qualify, and report.
+          </h2>
+          <Link to="/pricing" className="marketing-button-light shrink-0">
+            View pricing
+          </Link>
         </div>
       </section>
     </div>

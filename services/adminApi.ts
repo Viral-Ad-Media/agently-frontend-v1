@@ -41,6 +41,68 @@ export type TenantEconomicsResponse = {
   tenants: TenantEconomicsRow[];
 };
 
+export type SharedInfraTenantRow = {
+  organizationId: string;
+  computeSeconds: number;
+  storageBytes: number;
+  activityCostUsd: number;
+  eventCount: number;
+  sharePercent: number;
+  sharedCostUsd: number;
+  sharedBillableUsd: number;
+  directCostUsd: number;
+  providers: Record<string, number>;
+};
+
+export type SharedInfraPool = {
+  poolUsd: number;
+  drivers: Record<string, number>;
+  unallocatedUsd: number;
+  byOrg: Record<string, number>;
+};
+
+export type SharedInfraEconomics = {
+  mode: "absorb" | "passthrough";
+  totalCostUsd: number;
+  directCostUsd: number;
+  sharedCostUsd: number;
+  revenueUsd: number;
+  grossProfitUsd: number;
+  profitable: boolean;
+  actualMarginPercent: number | null;
+  breakEvenMultiplier: number | null;
+  requiredMultiplier: number | null;
+  currentMultiplier: number;
+  infraShareOfCostPercent: number;
+};
+
+export type SharedInfrastructureResponse = {
+  generatedAt: string;
+  window: { from: string; to: string; hours: number };
+  economics: SharedInfraEconomics;
+  engine: {
+    enabled: boolean;
+    configured: boolean;
+    mode: "absorb" | "passthrough";
+    marginPercent: number;
+    marginMultiple: number;
+    marginSource: string;
+    warnings: string[];
+  };
+  cost: {
+    monthlyPools: Record<string, number>;
+    monthlyTotalUsd: number;
+    windowPooledUsd: number;
+    unallocatedUsd: number;
+    billableUsd: number;
+    directCostUsd: number;
+  };
+  pools: Record<string, SharedInfraPool>;
+  costModel: Record<string, Record<string, number>>;
+  drivers: Record<string, { label: string; kind: string }>;
+  tenants: SharedInfraTenantRow[];
+};
+
 export type PricingMarginResponse = {
   baseMarginPercent: number | null;
   baseMultiple: number | null;
@@ -322,6 +384,17 @@ export const adminApi = {
   async tenantEconomics() {
     return request<TenantEconomicsResponse>(
       "/api/super-admin/tenant-economics",
+    );
+  },
+
+  /**
+   * Flat infrastructure cost (Lightsail, Supabase) and how it splits across
+   * tenants. Always a dry run on the server — reading this page can never
+   * charge anyone.
+   */
+  async sharedInfrastructure(hours = 720) {
+    return request<SharedInfrastructureResponse>(
+      `/api/super-admin/shared-infrastructure?hours=${hours}`,
     );
   },
 

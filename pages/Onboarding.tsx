@@ -1,3 +1,4 @@
+import { searchIndustries } from "../lib/industries";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BusinessProfile, FAQ, AgentConfig } from "../types";
 
@@ -7,429 +8,19 @@ interface OnboardingProps {
 }
 
 /**
- * ISSUE 8 — "my industry is sport ... it should at least suggest something
- * similar like entertainment ... if I input nursing and nursing is not there it
- * should know that could also be similar to healthcare"
+ * Industry selection.
  *
- * The old filter was `industry.toLowerCase().includes(search)` — a raw
- * substring test. "sport" matched nothing. "nursing" matched nothing. The list
- * simply went blank and the person was left guessing what vocabulary we wanted.
- *
- * This maps what people actually type to the category we actually have. It is
- * a curated synonym table rather than fuzzy string distance, because edit
- * distance gets "nursing" -> "Cleaning Services" wrong in a way that looks
- * broken, while a table gets it right and is trivial to extend.
+ * People type what they call their business, not our category names: "sport",
+ * "nursing", "clothing". The taxonomy and the ranked matcher both live in
+ * lib/industries.ts — NAICS-derived categories with real-world aliases, plus a
+ * bigram-similarity fallback so typos still land. When nothing scores at all
+ * the picker offers to store the user's own words rather than forcing a wrong
+ * pick.
  */
-const INDUSTRY_SYNONYMS: Record<string, string[]> = {
-  "Healthcare & Medical": [
-    "nursing",
-    "nurse",
-    "doctor",
-    "clinic",
-    "hospital",
-    "medical",
-    "physician",
-    "surgery",
-    "pharmacy",
-    "pharmacist",
-    "therapy",
-    "physiotherapy",
-    "chiropractor",
-    "paediatric",
-    "pediatric",
-    "midwife",
-    "care home",
-    "nursing home",
-    "diagnostic",
-    "laboratory",
-    "mental health",
-    "psychology",
-    "psychiatry",
-    "radiology",
-    "health",
-  ],
-  "Fitness & Gym": [
-    "sport",
-    "sports",
-    "gym",
-    "fitness",
-    "training",
-    "trainer",
-    "coach",
-    "athletic",
-    "yoga",
-    "pilates",
-    "crossfit",
-    "martial arts",
-    "boxing",
-    "football",
-    "soccer",
-    "basketball",
-    "tennis",
-    "swimming",
-    "exercise",
-    "workout",
-    "wellness centre",
-  ],
-  "Event Planning": [
-    "event",
-    "events",
-    "wedding",
-    "party",
-    "conference",
-    "entertainment",
-    "concert",
-    "festival",
-    "catering event",
-    "venue",
-    "banquet",
-    "celebration",
-    "dj",
-    "mc",
-    "production",
-    "show",
-    "booking agency",
-  ],
-  "Beauty & Wellness": [
-    "spa",
-    "nail",
-    "nails",
-    "makeup",
-    "cosmetic",
-    "skincare",
-    "aesthetic",
-    "facial",
-    "lash",
-    "brow",
-    "waxing",
-    "tanning",
-    "wellness",
-    "therapist",
-    "massage",
-  ],
-  "Food & Restaurant": [
-    "food",
-    "restaurant",
-    "cafe",
-    "coffee",
-    "bakery",
-    "catering",
-    "kitchen",
-    "chef",
-    "takeaway",
-    "takeout",
-    "juice",
-    "smoothie",
-    "bar",
-    "pub",
-    "diner",
-    "fast food",
-    "grocery",
-    "deli",
-    "pizzeria",
-    "juicing",
-  ],
-  "IT & Technology": [
-    "tech",
-    "technology",
-    "software",
-    "it",
-    "developer",
-    "programming",
-    "saas",
-    "app",
-    "web",
-    "computer",
-    "network",
-    "cyber",
-    "data",
-    "ai",
-    "cloud",
-    "hosting",
-    "startup",
-  ],
-  "Legal / Law Firm": [
-    "law",
-    "legal",
-    "lawyer",
-    "attorney",
-    "solicitor",
-    "barrister",
-    "notary",
-    "paralegal",
-    "litigation",
-    "conveyancing",
-    "advocate",
-  ],
-  "Education & Tutoring": [
-    "school",
-    "teaching",
-    "teacher",
-    "tutor",
-    "education",
-    "training centre",
-    "academy",
-    "college",
-    "university",
-    "childcare",
-    "nursery",
-    "daycare",
-    "learning",
-    "course",
-  ],
-  "Auto Repair & Mechanic": [
-    "car",
-    "auto",
-    "mechanic",
-    "garage",
-    "vehicle",
-    "tyre",
-    "tire",
-    "bodyshop",
-    "detailing",
-    "motor",
-    "truck",
-    "fleet",
-    "dealership",
-  ],
-  "Real Estate": [
-    "property",
-    "real estate",
-    "realtor",
-    "estate agent",
-    "letting",
-    "rental",
-    "landlord",
-    "housing",
-    "apartment",
-    "broker",
-    "mortgage broker",
-  ],
-  "Construction & Contracting": [
-    "construction",
-    "builder",
-    "building",
-    "contractor",
-    "renovation",
-    "carpentry",
-    "roofing",
-    "masonry",
-    "concrete",
-    "civil",
-    "demolition",
-    "scaffolding",
-  ],
-  "Marketing Agency": [
-    "marketing",
-    "advertising",
-    "agency",
-    "branding",
-    "seo",
-    "social media",
-    "design",
-    "creative",
-    "pr",
-    "public relations",
-    "media",
-    "content",
-    "copywriting",
-  ],
-  "Financial Services": [
-    "finance",
-    "financial",
-    "investment",
-    "banking",
-    "wealth",
-    "advisor",
-    "broker",
-    "trading",
-    "crypto",
-    "fintech",
-    "tax",
-    "payroll",
-  ],
-  "Freight & Logistics": [
-    "logistics",
-    "freight",
-    "shipping",
-    "courier",
-    "delivery",
-    "haulage",
-    "transport",
-    "warehouse",
-    "supply chain",
-    "dispatch",
-    "trucking",
-  ],
-  "Home Services": [
-    "handyman",
-    "repair",
-    "maintenance",
-    "pest control",
-    "locksmith",
-    "appliance",
-    "gardening",
-    "window",
-    "gutter",
-    "pressure washing",
-  ],
-  "E-commerce": [
-    "ecommerce",
-    "e-commerce",
-    "online store",
-    "shopify",
-    "dropshipping",
-    "retail online",
-    "marketplace",
-    "webshop",
-  ],
-  Retail: [
-    "shop",
-    "store",
-    "boutique",
-    "retail",
-    "merchandise",
-    "clothing",
-    "fashion",
-  ],
-  "Hotel & Hospitality": [
-    "hotel",
-    "hospitality",
-    "guest house",
-    "bnb",
-    "airbnb",
-    "lodge",
-    "resort",
-    "hostel",
-    "accommodation",
-    "travel",
-    "tourism",
-  ],
-  Insurance: [
-    "insurance",
-    "underwriting",
-    "claims",
-    "broker insurance",
-    "policy",
-  ],
-  "Cleaning Services": [
-    "cleaning",
-    "cleaner",
-    "janitorial",
-    "housekeeping",
-    "laundry",
-    "dry cleaning",
-  ],
-  "Non-Profit": [
-    "charity",
-    "nonprofit",
-    "non-profit",
-    "ngo",
-    "foundation",
-    "volunteer",
-    "church",
-    "mosque",
-    "religious",
-  ],
-  Veterinary: ["vet", "veterinary", "animal", "pet", "grooming", "kennel"],
-  "Barbershop & Hair Salon": [
-    "barber",
-    "hair",
-    "salon",
-    "haircut",
-    "braiding",
-    "dreadlocks",
-    "weave",
-    "wig",
-  ],
-  Manufacturing: [
-    "manufacturing",
-    "factory",
-    "production",
-    "industrial",
-    "fabrication",
-    "assembly",
-  ],
-  Consulting: [
-    "consulting",
-    "consultant",
-    "advisory",
-    "strategy",
-    "coaching business",
-  ],
-  Photography: [
-    "photography",
-    "photographer",
-    "videography",
-    "video",
-    "film",
-    "studio",
-    "media production",
-  ],
-};
 
-const INDUSTRIES = [
-  "Accounting & Bookkeeping",
-  "Architecture",
-  "Auto Repair & Mechanic",
-  "Barbershop & Hair Salon",
-  "Beauty & Wellness",
-  "Cleaning Services",
-  "Construction & Contracting",
-  "Consulting",
-  "Dental Practice",
-  "E-commerce",
-  "Education & Tutoring",
-  "Electrical Services",
-  "Event Planning",
-  "Financial Services",
-  "Fitness & Gym",
-  "Flooring & Tiling",
-  "Food & Restaurant",
-  "Freight & Logistics",
-  "Funeral Services",
-  "General Contracting",
-  "Healthcare & Medical",
-  "Home Services",
-  "Hotel & Hospitality",
-  "HVAC Services",
-  "Insurance",
-  "Interior Design",
-  "IT & Technology",
-  "Landscaping & Lawn Care",
-  "Legal / Law Firm",
-  "Manufacturing",
-  "Marketing Agency",
-  "Massage Therapy",
-  "Mortgage & Lending",
-  "Moving Services",
-  "Non-Profit",
-  "Optometry",
-  "Painting Services",
-  "Pest Control",
-  "Pet Services",
-  "Photography",
-  "Physiotherapy",
-  "Plumbing",
-  "Printing & Signage",
-  "Property Management",
-  "Real Estate",
-  "Recruitment",
-  "Roofing",
-  "SaaS / Software",
-  "Security Services",
-  "Solar Energy",
-  "Spa & Skincare",
-  "Tailoring & Alterations",
-  "Tattoo Studio",
-  "Transportation",
-  "Travel Agency",
-  "Trucking",
-  "Tutoring",
-  "Veterinary",
-  "Wedding Services",
-  "Other",
-];
+
+/* Industry taxonomy now lives in lib/industries.ts (NAICS-based, 124
+   entries with aliases + fuzzy matching). */
 
 const TONE_OPTIONS = [
   {
@@ -1266,6 +857,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
 
   const [hours, setHours] = useState({ start: "09:00", end: "17:00" });
   const [industrySearch, setIndustrySearch] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [industryOpen, setIndustryOpen] = useState(false);
   const industryRef = useRef<HTMLDivElement>(null);
   const [citySearch, setCitySearch] = useState("");
@@ -1343,43 +935,55 @@ const Onboarding: React.FC<OnboardingProps> = ({
     };
   }, [citySearch]);
 
-  const filteredIndustries = useMemo(() => {
-    const query = industrySearch.trim().toLowerCase();
-    if (!query) return INDUSTRIES;
+  /*
+   * Ranked against the NAICS-based taxonomy in lib/industries.ts. The old
+   * substring+synonym pass could not answer "clothing" at all, because no
+   * apparel or retail category existed; the list now covers 19 NAICS sectors
+   * and the matcher falls back to bigram similarity, so typos still land.
+   */
+  const filteredIndustries = useMemo(
+    () => searchIndustries(industrySearch).map((m) => m.industry.label),
+    [industrySearch],
+  );
 
-    const direct = INDUSTRIES.filter((i) => i.toLowerCase().includes(query));
+  /** Nothing sensible matched, so offer to take the user's own words. */
+  const showCustomIndustry =
+    industrySearch.trim().length >= 2 && filteredIndustries.length === 0;
 
-    // Synonym pass: "sport" -> Fitness & Gym, "nursing" -> Healthcare & Medical.
-    const suggested: string[] = [];
-    for (const [industry, words] of Object.entries(INDUSTRY_SYNONYMS)) {
-      if (direct.includes(industry)) continue;
-      const hit = words.some(
-        (word) => word.includes(query) || query.includes(word),
-      );
-      if (hit && INDUSTRIES.includes(industry)) suggested.push(industry);
+  /*
+   * C4 — required-field validation.
+   *
+   * Step 1 previously accepted an entirely empty form: Continue was always
+   * enabled and handleNext just incremented the step, so an org could be
+   * created with no name, no industry and no location. Returns a per-field
+   * map so the UI can disable Continue AND show which field is missing,
+   * rather than only one of the two.
+   */
+  const stepErrors = useMemo<Record<string, string>>(() => {
+    const errors: Record<string, string> = {};
+    if (step === 1) {
+      if (!profile.name.trim()) errors.name = "Add your business name.";
+      if (!profile.industry.trim()) errors.industry = "Choose or type your industry.";
+      if (!profile.location.trim()) errors.location = "Add your city or location.";
+      const website = profile.website.trim();
+      if (website && !/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/.test(website)) {
+        errors.website = "That does not look like a website address.";
+      }
     }
+    if (step === 2 && !profile.website.trim()) {
+      errors.website = "Add your website so Agently can read it.";
+    }
+    return errors;
+  }, [step, profile]);
 
-    // Last resort: match any single word of a multi-word category, so
-    // "juice" still surfaces "Food & Restaurant" via its own label tokens.
-    const loose =
-      direct.length + suggested.length === 0
-        ? INDUSTRIES.filter((i) =>
-            i
-              .toLowerCase()
-              .split(/[^a-z]+/)
-              .some(
-                (token) =>
-                  token.length > 2 &&
-                  (token.startsWith(query) || query.startsWith(token)),
-              ),
-          )
-        : [];
-
-    return Array.from(new Set([...direct, ...suggested, ...loose]));
-  }, [industrySearch]);
+  const stepIsValid = Object.keys(stepErrors).length === 0;
 
   const handleNext = async () => {
     setError("");
+    if (!stepIsValid) {
+      setError(Object.values(stepErrors)[0]);
+      return;
+    }
     try {
       if (step === 2) {
         setLoading(true);
@@ -1429,6 +1033,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
     "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/60 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10";
   const labelClass =
     "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/55";
+
+  /* Inline, per-field. A disabled Continue on its own does not tell anyone
+     WHICH field is missing. */
+  const FieldError: React.FC<{ name: string }> = ({ name }) =>
+    touched[name] && stepErrors[name] ? (
+      <p className="mt-1 text-[12px] text-red-600">{stepErrors[name]}</p>
+    ) : null;
 
   return (
     <div className="ag-onboarding-no-callout min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
@@ -1550,10 +1161,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
                       placeholder="Your company name"
                       className={inputClass}
                       value={profile.name}
+                      onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                       onChange={(e) =>
                         setProfile((p) => ({ ...p, name: e.target.value }))
                       }
                     />
+                    <FieldError name="name" />
                   </div>
                   <div ref={industryRef}>
                     <label className={labelClass}>Industry</label>
@@ -1575,11 +1188,33 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         }}
                       />
                       <i className="fa-sharp fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#0F172A]/35" />
+                      <FieldError name="industry" />
                       {industryOpen && (
                         <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-56 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
-                          {filteredIndustries.length === 0 ? (
+                          {showCustomIndustry ? (
+                            /* C3: nothing matched, so take their own words
+                               rather than forcing a wrong pick. */
+                            <button
+                              type="button"
+                              className="w-full rounded-2xl px-4 py-3 text-left text-sm text-[#0F172A]/80 transition-colors hover:bg-[#F1F5F9]"
+                              onClick={() => {
+                                setProfile((p) => ({
+                                  ...p,
+                                  industry: industrySearch.trim(),
+                                }));
+                                setIndustryOpen(false);
+                                setIndustrySearch("");
+                              }}
+                            >
+                              Use “
+                              <span className="font-medium text-[#0F172A]">
+                                {industrySearch.trim()}
+                              </span>
+                              ” as my industry
+                            </button>
+                          ) : filteredIndustries.length === 0 ? (
                             <p className="px-4 py-3 text-sm text-[#0F172A]/45">
-                              No match
+                              Start typing to search industries
                             </p>
                           ) : (
                             filteredIndustries.map((ind) => (
@@ -1589,6 +1224,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                                 className={`w-full rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${profile.industry === ind ? "bg-[#F59E0B]/10 font-medium text-[#F59E0B]" : "text-[#0F172A]/75 hover:bg-[#F1F5F9]"}`}
                                 onClick={() => {
                                   setProfile((p) => ({ ...p, industry: ind }));
+                                  setTouched((t) => ({ ...t, industry: true }));
                                   setIndustryOpen(false);
                                   setIndustrySearch("");
                                 }}
@@ -1610,6 +1246,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                       type="text"
                       placeholder="City, country"
                       className={inputClass}
+                      onBlur={() => setTouched((t) => ({ ...t, location: true }))}
                       value={citySearch || profile.location}
                       onChange={(e) => {
                         const nextLocation = e.target.value;
@@ -1628,6 +1265,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         citySearch.length >= 3 && setCityOpen(true)
                       }
                     />
+                    <FieldError name="location" />
                     {cityOpen &&
                       (citySuggestions.length > 0 || cityLoading) && (
                         <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-52 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
@@ -2052,8 +1690,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
             )}
             <button
               onClick={handleNext}
-              disabled={loading}
-              className="flex-[2] rounded-[1.1rem] bg-[#0F172A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#F59E0B] disabled:opacity-60"
+              disabled={loading || !stepIsValid}
+              title={stepIsValid ? undefined : Object.values(stepErrors)[0]}
+              className="flex-[2] rounded-[1.1rem] bg-[#0F172A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">

@@ -1025,12 +1025,18 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       </div>
 
       {error && (
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600" data-tour="dashboard-stats">
+        <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-600">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      {/* data-tour anchor belongs on the real KPI row. It used to sit on the
+          error banner above, which only renders when the dashboard fails to
+          load — so the "Your headline numbers" tour step pointed at nothing. */}
+      <div
+        className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6"
+        data-tour="dashboard-stats"
+      >
         <StatCard
           label="Total calls"
           value={String(selectedStats.totalCalls)}

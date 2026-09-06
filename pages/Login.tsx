@@ -57,7 +57,10 @@ const PasswordVisibilityButton = ({
   <button
     type="button"
     onClick={onToggle}
-    className="absolute inset-y-0 right-3 flex items-center text-[#0F172A]/42 transition hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B]/45"
+    /* Was an 18px-wide hit area. Measured at 375px it was the smallest
+       control on the form; 44px square is the accessible minimum and matches
+       the reference auth forms. */
+    className="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-lg text-[#0F172A]/42 transition hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B]/45"
     aria-label={visible ? `Hide ${label}` : `Show ${label}`}
     title={visible ? `Hide ${label}` : `Show ${label}`}
   >
@@ -386,7 +389,7 @@ const Login: React.FC<LoginProps> = ({
                           }
                         }}
                         disabled={loading || !magicLinkToken}
-                        className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0F172A] px-5 py-2.5 text-[13px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
                       >
                         {loading ? (
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -397,7 +400,7 @@ const Login: React.FC<LoginProps> = ({
                       {magicLinkUrl && (
                         <a
                           href={magicLinkUrl}
-                          className="block w-full rounded-full border border-[#0F172A]/12 px-4 py-3 text-sm font-medium text-[#0F172A]/72 transition hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
+                          className="block min-h-[44px] w-full rounded-full border border-[#0F172A]/12 px-4 py-3 text-sm font-medium text-[#0F172A]/72 transition hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
                         >
                           Open secure link
                         </a>
@@ -425,7 +428,7 @@ const Login: React.FC<LoginProps> = ({
                           setError("");
                         }}
                         type="button"
-                        className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${authMode === "signin" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
+                        className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${authMode === "signin" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
                       >
                         Sign in
                       </button>
@@ -436,7 +439,7 @@ const Login: React.FC<LoginProps> = ({
                           setError("");
                         }}
                         type="button"
-                        className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${authMode === "signup" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
+                        className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${authMode === "signup" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
                       >
                         Create account
                       </button>
@@ -447,14 +450,14 @@ const Login: React.FC<LoginProps> = ({
                         <button
                           onClick={() => setMethod("password")}
                           type="button"
-                          className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${method === "password" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
+                          className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${method === "password" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
                         >
                           Password
                         </button>
                         <button
                           onClick={() => setMethod("magic")}
                           type="button"
-                          className={`rounded-full py-1.5 text-[13px] font-medium transition-all ${method === "magic" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
+                          className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${method === "magic" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
                         >
                           Secure link
                         </button>
@@ -516,7 +519,7 @@ const Login: React.FC<LoginProps> = ({
                             {authMode === "signin" && (
                               <Link
                                 to="/forgot-password"
-                                className="text-xs font-medium text-[#F59E0B] hover:underline"
+                                className="-my-1 inline-flex min-h-[32px] items-center px-1 text-xs font-medium text-[#F59E0B] hover:underline"
                               >
                                 Forgot?
                               </Link>
@@ -554,7 +557,7 @@ const Login: React.FC<LoginProps> = ({
                       <button
                         type="submit"
                         disabled={loading}
-                        className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0F172A] px-5 py-2.5 text-[13px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
                       >
                         {loading ? (
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -579,7 +582,7 @@ const Login: React.FC<LoginProps> = ({
                       <button
                         type="button"
                         onClick={() => setAuthMode("signin")}
-                        className="font-medium text-[#F59E0B] hover:underline"
+                        className="-my-2 inline-flex min-h-[32px] items-center px-1 font-medium text-[#F59E0B] hover:underline"
                       >
                         Sign in
                       </button>
@@ -590,7 +593,10 @@ const Login: React.FC<LoginProps> = ({
                       <button
                         type="button"
                         onClick={() => setAuthMode("signup")}
-                        className="font-medium text-[#F59E0B] hover:underline"
+                        /* Inline in a sentence, so it cannot be a 44px block;
+                           the negative margin keeps the sentence tight while
+                           giving the control a 32px hit area. */
+                        className="-my-2 inline-flex min-h-[32px] items-center px-1 font-medium text-[#F59E0B] hover:underline"
                       >
                         Create an account
                       </button>

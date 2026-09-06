@@ -12,6 +12,7 @@ import { ICONS } from "@/constants";
 import { voiceCallsApi } from "../services/voiceCallsApi";
 import { api } from "../services/api";
 import PlatformAssistant from "./PlatformAssistant";
+import TopUpGateModal from "./TopUpGateModal";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -83,6 +84,13 @@ const PUBLIC_NAV_ITEMS = [
 type WalletMini = {
   balanceUsd: number;
   minimumRechargeUsd?: number;
+  /** Signup-grant / top-up gate state; see agently-server lib/activation-gate.js */
+  activation?: {
+    signupGrantUsd?: number;
+    minimumTopUpUsd?: number;
+    hasCardOnFile?: boolean;
+    requiresCard?: boolean;
+  };
   status?: string;
   creditEnforcementMode?: string;
   autoChargeWalletEnabled?: boolean;
@@ -1034,6 +1042,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         not appear on the public marketing pages.
       */}
       <PlatformAssistant organizationId={org.id} />
+
+      {/*
+        Explains the activation gate when the server refuses a gated action.
+        Mounted once here so every gated action is covered by one modal.
+      */}
+      <TopUpGateModal
+        signupGrantUsd={walletMini?.activation?.signupGrantUsd}
+        minimumTopUpUsd={
+          walletMini?.activation?.minimumTopUpUsd ??
+          walletMini?.minimumRechargeUsd
+        }
+      />
     </div>
   );
 };
@@ -1050,11 +1070,11 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
   }, [location.pathname]);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#F1F5F9] text-[#0F172A]">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.12),transparent_25%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-[#E8EDF4] text-[#0F172A]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.04),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.10),transparent_25%)]" />
 
       <header className="sticky top-0 z-40 px-3 py-3 sm:px-5">
-        <div className="mx-auto max-w-7xl rounded-full border border-[#0F172A]/10 bg-[#F8FAFC]/88 px-3 py-2 shadow-[0_14px_46px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-4">
+        <div className="mx-auto max-w-7xl rounded-full border border-[#0F172A]/10 bg-[#F8FAFC]/90 px-3 py-2 shadow-[0_14px_46px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-4">
           <div className="flex items-center justify-between gap-4">
             <Link to="/" aria-label="Agently home" className="shrink-0">
               <PublicBrand compact />
@@ -1169,19 +1189,19 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               <div className="mt-4 space-y-3">
                 <Link
                   to="/features"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Features
                 </Link>
                 <Link
                   to="/pricing"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Pricing
                 </Link>
                 <Link
                   to="/login"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Start trial
                 </Link>
@@ -1195,19 +1215,19 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               <div className="mt-4 space-y-3">
                 <Link
                   to="/about"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   About
                 </Link>
                 <Link
                   to="/contact"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Contact
                 </Link>
                 <Link
                   to="/faqs"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   FAQs
                 </Link>
@@ -1221,13 +1241,13 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({
               <div className="mt-4 space-y-3">
                 <Link
                   to="/privacy"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Privacy Policy
                 </Link>
                 <Link
                   to="/terms"
-                  className="block text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
+                  className="-my-1.5 block py-1.5 text-sm font-normal text-[#F8FAFC]/72 transition hover:text-white"
                 >
                   Terms of Service
                 </Link>

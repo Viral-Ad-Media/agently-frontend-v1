@@ -154,6 +154,21 @@ const request = async <T>(path: string, options: {
       humanizeApiError({ status: response.status, code: errorPayload?.error?.code });
     if (auth && response.status === 401) notifyAuthExpired(message);
 
+    /*
+     * The activation gate is enforced server-side, so any gated action can
+     * come back 402 TOP_UP_REQUIRED. Announcing it here means one modal
+     * mounted in the shell covers every gated action — buying a number,
+     * putting a chatbot live, and anything gated later — without each page
+     * having to catch and render its own version.
+     */
+    if (errorPayload?.error?.code === 'CARD_REQUIRED') {
+      window.dispatchEvent(
+        new CustomEvent('agently:card-required', {
+          detail: { message },
+        }),
+      );
+    }
+
     throw new ApiError(
       message,
       response.status,
@@ -851,6 +866,51 @@ export const api = {
     }>('/api/billing/stripe/checkout-session', {
       method: 'POST',
       body: { amountUsd },
+    });
+  },
+
+  /** D2 — start card collection. Saves the card; charges nothing. */
+  async createCardSetupIntent() {
+    return request<{
+      success: boolean;
+      clientSecret: string;
+      setupIntentId: string;
+      customerId: string;
+    }>('/api/billing/stripe/setup-intent', { method: 'POST' });
+  },
+
+  async listSavedCards() {
+    return request<{
+      success: boolean;
+      hasCardOnFile: boolean;
+      cards: Array<{
+        id: string;
+        brand: string;
+        last4: string;
+        expMonth: number | null;
+        expYear: number | null;
+      }>;
+    }>('/api/billing/stripe/payment-methods');
+  },
+
+  /**
+   * D3 — one-click top-up on the saved card.
+   *
+   * Resolves as soon as Stripe accepts the PaymentIntent. It deliberately does
+   * NOT mean the balance moved: crediting happens on the webhook, so callers
+   * must refresh the wallet rather than adding the amount locally.
+   */
+  async chargeSavedCard(amountUsd: number, paymentMethodId?: string) {
+    return request<{
+      success: boolean;
+      topUpId: string;
+      paymentIntentId: string;
+      status: string;
+      amountUsd: number;
+      credited: boolean;
+    }>('/api/billing/stripe/charge', {
+      method: 'POST',
+      body: { amountUsd, paymentMethodId },
     });
   },
 

@@ -70,14 +70,10 @@ const PIPELINE = [
 
 const Features: React.FC = () => {
   return (
-    <div className="marketing-page text-black">
-      <section className="border-b border-black/12">
-        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.78fr_1.22fr] lg:py-7">
+    <div className="marketing-page text-[#0F172A]">
+      <section className="border-b border-slate-900/10">
+        <div className="marketing-shell grid items-center gap-8 py-10 lg:grid-cols-[0.78fr_1.22fr] lg:py-14">
           <div>
-            <div className="marketing-eyebrow mb-5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
-              Platform features
-            </div>
             <h1 className="marketing-page-title">
               One platform for voice, chat, follow-ups, and revenue recovery.
             </h1>
@@ -115,17 +111,17 @@ const Features: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-[#F8FAFC]">
+      <section className="bg-[#EEF2F8]">
         <div className="marketing-shell py-12 lg:py-14">
-          <div className="grid items-center gap-8 rounded-[2rem] border border-black/12 bg-white p-6 shadow-[0_20px_70px_rgba(5,8,23,0.08)] lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
+          <div className="grid items-center gap-8 rounded-[2rem] border border-slate-900/10 bg-white p-6 shadow-[0_20px_70px_rgba(5,8,23,0.06)] lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-black/42">
+              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-[#0F172A]/42">
                 Agent workflow
               </p>
               <h2 className="mt-3 text-[clamp(1.85rem,3.2vw,3.2rem)] font-medium leading-[0.98] tracking-[-0.065em]">
                 Built around what happens after the conversation starts.
               </h2>
-              <p className="mt-4 text-sm font-normal leading-relaxed text-black/62">
+              <p className="mt-4 text-sm font-normal leading-relaxed text-[#0F172A]/62">
                 The product is not only a bot. It is a workflow layer that helps
                 every call or chat become a record, a decision, or a follow-up.
               </p>
@@ -135,7 +131,7 @@ const Features: React.FC = () => {
               {PIPELINE.map((item, index) => (
                 <div
                   key={item.step}
-                  className="group relative overflow-hidden rounded-[1.45rem] border border-[#0F172A]/12 bg-[#F8FAFC] p-4 shadow-[0_12px_34px_rgba(15,23,42,0.06)] transition-transform duration-200 hover:-translate-y-0.5"
+                  className="group relative overflow-hidden rounded-[1.45rem] border border-[#0F172A]/10 bg-[#F5F8FC] p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition-transform duration-200 hover:-translate-y-0.5"
                 >
                   <div className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-[#F59E0B]/10 blur-2xl transition-opacity group-hover:opacity-80" />
                   <div className="relative flex items-start gap-3">

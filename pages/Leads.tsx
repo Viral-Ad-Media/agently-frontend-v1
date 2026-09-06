@@ -1353,7 +1353,7 @@ const Leads: React.FC<LeadsProps> = ({
               className="agently-mobile-metric-card relative flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition active:scale-[0.99] sm:gap-3 sm:p-3.5"
             >
               <span
-                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
+                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 max-w-full rounded-full bg-slate-950 px-3 py-1.5 text-center text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
                 data-open={isRevealed ? "true" : "false"}
               >
                 {metric.label}
@@ -1409,6 +1409,8 @@ const Leads: React.FC<LeadsProps> = ({
               </div>
               <select
                 value={statusFilter}
+                /* Tour anchor: a <select> exposes no text the matcher can see. */
+                data-tour="leads-status"
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="h-10 shrink-0 rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 sm:h-11 sm:px-4 sm:text-xs"
               >

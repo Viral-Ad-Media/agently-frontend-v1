@@ -227,6 +227,9 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
           <button
             type="button"
             onClick={() => setShowInvite(true)}
+            /* Icon-only button: it has no text content, so the tour's
+               text: matcher could never find it. */
+            data-tour="team-invite"
             className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 sm:h-10 sm:w-10 sm:rounded-xl"
             aria-label="Invite member"
             title="Invite member"

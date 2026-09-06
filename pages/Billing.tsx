@@ -205,11 +205,21 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     },
   });
   const [loading, setLoading] = useState(false);
+  /*
+   * Checkout gets its own flag. It used to share `loading` with the billing
+   * fetch, so while the page was still loading its data the top-up button sat
+   * disabled and labelled "Opening checkout…" before the user had clicked
+   * anything.
+   */
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [topUpAmount, setTopUpAmount] = useState("10");
   const [searchParams, setSearchParams] = useSearchParams();
   const [usageRange, setUsageRange] = useState<UsageRange>("all");
+  const [savedCards, setSavedCards] = useState<
+    Array<{ id: string; brand: string; last4: string }>
+  >([]);
   const mountedRef = useRef(true);
   const billingRequestInFlight = useRef(false);
   const billingRequestIdRef = useRef(0);
@@ -312,6 +322,26 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     setTopUpAmount(String(minimumRecharge));
   }, [minimumRecharge]);
 
+  /*
+   * Saved cards decide whether "Add credit" charges directly (D3) or sends the
+   * tenant through checkout to collect their first card. A failure here is not
+   * fatal: an empty list just means we fall back to checkout.
+   */
+  useEffect(() => {
+    let active = true;
+    api
+      .listSavedCards()
+      .then((result) => {
+        if (active) setSavedCards(result.cards || []);
+      })
+      .catch(() => {
+        if (active) setSavedCards([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id]);
+
   useEffect(() => {
     const result = searchParams.get("stripe");
     const sessionId = searchParams.get("session_id");
@@ -394,9 +424,30 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
       setError(`Minimum top-up is ${money(minimumRecharge)}.`);
       return;
     }
-    setLoading(true);
+    /*
+     * D4, layer one: disabled synchronously, before any await, so a double
+     * click cannot produce a second request. Layers two and three (a per-tenant
+     * lock and a Stripe idempotency key) live on the server, because this one
+     * is trivially bypassed by a retried fetch.
+     */
+    setCheckoutLoading(true);
     try {
       if (wallet.stripeTopUpEnabled) {
+        /*
+         * D3 — returning tenants with a saved card never see checkout again.
+         * Note we do NOT add the amount to the balance here: crediting happens
+         * on the Stripe webhook, so we just refetch and let the real number
+         * arrive. Optimistic crediting is how a failed card still shows money.
+         */
+        if (savedCards.length > 0) {
+          await api.chargeSavedCard(amount, savedCards[0].id);
+          setSuccess(
+            "Payment submitted. Your balance updates as soon as the payment is confirmed.",
+          );
+          await loadBilling({ silent: true });
+          return;
+        }
+
         const response = await api.createStripeWalletTopUp(amount);
         if (!response.checkoutUrl)
           throw new Error("Could not start secure checkout. Please try again.");
@@ -413,7 +464,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     } catch (err) {
       setError(cleanError(err, "Unable to start secure checkout."));
     } finally {
-      setLoading(false);
+      setCheckoutLoading(false);
     }
   };
 
@@ -534,136 +585,156 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         </p>
       )}
 
-      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0F172A]/40">
-                Secure card payment
+      {/*
+        One panel, not two competing cards with boxes nested inside boxes.
+        Balance is the only number that gets display size; the limits that used
+        to sit in three tiles are now a quiet meta line, and the top-up controls
+        sit inline on the right the way funded-balance products present them.
+      */}
+      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/70 sm:p-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <p className="text-[13px] font-medium text-slate-500">
+                Available balance
               </p>
-              <h3 className="mt-1 text-xl font-black text-[#0F172A]">
-                Top up usage credit
-              </h3>
-            </div>
-            <span className="rounded-full bg-[#0F172A] px-3 py-1 text-xs font-black text-white">
-              Prepaid
-            </span>
-          </div>
-          <p className="mt-3 text-sm leading-relaxed text-[#64748B]">
-            Choose an amount, then enter your card details on Stripe's secure
-            checkout page. Credit is added only after Stripe confirms that
-            payment succeeded.
-          </p>
-          <div className="mt-5 grid gap-3">
-            <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Amount (USD)
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  lowCredit
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {lowCredit ? "Top-up needed" : "Active"}
               </span>
-              <input
-                value={topUpAmount}
-                onChange={(event) => setTopUpAmount(event.target.value)}
-                type="number"
-                min={minimumRecharge}
-                step="0.01"
-                className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-[#0F172A] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
+            </div>
+
+            {wallet.balanceUsd === undefined ? (
+              // A 44px em-dash renders as a black bar and reads as a broken
+              // value. A skeleton of the same height reads as "still loading".
+              <div
+                className="mt-2 h-10 w-40 animate-pulse rounded-lg bg-slate-200"
+                role="status"
+                aria-label="Loading balance"
               />
-            </label>
+            ) : (
+              <p className="mt-1.5 text-[32px] font-semibold leading-none tracking-[-0.02em] text-[#0F172A] tabular-nums">
+                {money(balance)}
+              </p>
+            )}
+
+            <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-500">
+              <span>
+                Minimum top-up{" "}
+                <span className="font-medium text-[#0F172A] tabular-nums">
+                  {money(minimumRecharge)}
+                </span>
+              </span>
+              <span aria-hidden className="text-slate-300">
+                ·
+              </span>
+              <span>
+                Stays active above{" "}
+                <span className="font-medium text-[#0F172A] tabular-nums">
+                  {money(minimumActive)}
+                </span>
+              </span>
+            </p>
+
+            {lowCredit && (
+              <p className="mt-4 max-w-lg text-[13px] leading-relaxed text-amber-800">
+                Top up with at least {money(minimumActive)} to keep calls,
+                website assistants, Knowledge Base syncs and campaigns active.
+              </p>
+            )}
+          </div>
+
+          <div className="w-full lg:w-[19rem]">
             <div className="flex flex-wrap gap-2">
               {[10, 25, 50, 100]
                 .filter((amount) => amount >= minimumRecharge)
-                .map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => setTopUpAmount(String(amount))}
-                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
-                  >
-                    ${amount}
-                  </button>
-                ))}
+                .map((amount) => {
+                  const active = Number(topUpAmount) === amount;
+                  return (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => setTopUpAmount(String(amount))}
+                      className={`h-9 min-w-[3.5rem] rounded-[10px] px-3 text-[13px] font-medium tabular-nums transition active:scale-[0.97] ${
+                        active
+                          ? "bg-[#0F172A] text-white"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      ${amount}
+                    </button>
+                  );
+                })}
             </div>
+
+            <label className="mt-3 block">
+              <span className="sr-only">Top-up amount in US dollars</span>
+              <div className="flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-3 transition focus-within:border-[#F59E0B] focus-within:ring-2 focus-within:ring-[#F59E0B]/15">
+                <span className="text-[15px] text-slate-400">$</span>
+                <input
+                  value={topUpAmount}
+                  onChange={(event) => setTopUpAmount(event.target.value)}
+                  type="number"
+                  min={minimumRecharge}
+                  step="0.01"
+                  className="h-full w-full bg-transparent px-1.5 text-[15px] font-medium tabular-nums text-[#0F172A] outline-none"
+                />
+              </div>
+            </label>
+
             <button
               type="button"
-              disabled={loading}
+              disabled={checkoutLoading}
               onClick={handlePurchaseCredit}
-              className="h-11 w-full rounded-xl bg-[#0F172A] px-5 text-xs font-black uppercase tracking-[0.14em] text-white transition hover:bg-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-45"
+              className="mt-3 h-11 w-full rounded-[10px] bg-[#0F172A] text-[13px] font-medium text-white transition hover:bg-[#1E293B] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {loading ? "Opening checkout…" : "Continue to secure checkout"}
+              {checkoutLoading ? "Opening checkout…" : "Add credit"}
             </button>
-            <p className="text-xs leading-relaxed text-slate-400">
-              Minimum top-up: {money(minimumRecharge)}. Agently never receives
-              or stores your card number.
+
+            <p className="mt-2.5 text-[12px] leading-relaxed text-slate-400">
+              {savedCards.length > 0 ? (
+                <>
+                  Charged to your saved {savedCards[0].brand} ending{" "}
+                  {savedCards[0].last4}. Credit lands once the payment is
+                  confirmed.
+                </>
+              ) : (
+                <>
+                  Card details are entered on Stripe and saved for next time.
+                  Credit lands once Stripe confirms the payment.
+                </>
+              )}
             </p>
+
             {/* Only claim Stripe is unconfigured once the backend has actually
-                answered. The wallet starts at status "loading" with the flag
-                defaulting to false, so rendering on the flag alone flashed
-                "not configured" on every page load before the real config
-                arrived. */}
+                answered, and only for the capability that is genuinely missing.
+                This used to read the both-keys flag, so a working checkout with
+                no webhook secret told tenants checkout was unavailable. */}
             {wallet.status !== "loading" && !wallet.stripeTopUpEnabled ? (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                Stripe checkout is not configured on the backend yet.
+              <p className="mt-2.5 rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                Card payments are unavailable right now. Please try again
+                shortly.
               </p>
             ) : null}
           </div>
         </div>
-
-        <div className="rounded-[1.75rem] bg-[#0F172A] p-5 text-white shadow-sm sm:p-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
-            Available balance
-          </p>
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-            <p className="text-5xl font-black tracking-tight">
-              {wallet.balanceUsd === undefined ? "—" : money(balance)}
-            </p>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-black ${lowCredit ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}
-            >
-              {lowCredit ? "Top-up needed" : "Active"}
-            </span>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                Minimum active
-              </p>
-              <p className="mt-1 text-lg font-black">{money(minimumActive)}</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                Minimum top-up
-              </p>
-              <p className="mt-1 text-lg font-black">
-                {money(minimumRecharge)}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                Wallet status
-              </p>
-              <p className="mt-1 text-lg font-black capitalize">
-                {wallet.status || "active"}
-              </p>
-            </div>
-          </div>
-          {lowCredit && (
-            <p className="mt-5 rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold leading-relaxed text-amber-900">
-              Top up with at least {money(minimumActive)} to keep calls, website
-              assistants, Knowledge Base syncs and campaigns active.
-            </p>
-          )}
-        </div>
       </section>
 
-      <section className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
+      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0F172A]/40">
-              Usage billing credit
-            </p>
-            <h3 className="mt-1 text-2xl font-black text-[#0F172A]">
+            {/* No uppercase-tracking eyebrow and no font-black: measured
+                against Stripe, headings sit at ~16-18px/600, not 24px/900
+                under a wide-tracked label. */}
+            <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[#0F172A]">
               Wallet activity
             </h3>
-            <p className="mt-1 text-sm text-[#64748B]">
+            <p className="mt-1 text-[13px] text-[#64748B]">
               Top-ups, number purchases, calls, Knowledge Base syncs and other
               service deductions.
             </p>
@@ -728,49 +799,6 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         </div>
       </section>
 
-      <section className="rounded-[1.75rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0F172A]/40">
-              Receipts
-            </p>
-            <h3 className="mt-1 text-xl font-black text-[#0F172A]">Invoices</h3>
-          </div>
-        </div>
-        <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100">
-          {(billing.invoices || []).map((invoice) => (
-            <div
-              key={invoice.id}
-              className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="text-sm font-black text-[#0F172A]">
-                  Invoice {invoice.id}
-                </p>
-                <p className="mt-1 text-xs text-[#64748B]">
-                  {invoice.status} ·{" "}
-                  {new Date(invoice.date).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <p className="text-sm font-black">{money(invoice.amount)}</p>
-                <button
-                  type="button"
-                  onClick={() => void onDownloadInvoice(invoice.id)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
-                >
-                  Download
-                </button>
-              </div>
-            </div>
-          ))}
-          {!(billing.invoices || []).length && (
-            <p className="px-4 py-8 text-center text-sm font-semibold text-slate-400">
-              No invoices yet.
-            </p>
-          )}
-        </div>
-      </section>
     </div>
   );
 };

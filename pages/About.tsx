@@ -19,14 +19,10 @@ const PRINCIPLES = [
 
 const About: React.FC = () => {
   return (
-    <div className="marketing-page text-black">
-      <section className="border-b border-black/12">
-        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.92fr_1.08fr] lg:py-10">
+    <div className="marketing-page text-[#0F172A]">
+      <section className="border-b border-slate-900/10">
+        <div className="marketing-shell grid items-center gap-8 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:py-14">
           <div>
-            <div className="marketing-eyebrow mb-5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff9900]" />
-              About Agently
-            </div>
             <h1 className="marketing-page-title max-w-3xl">
               A control room for customer conversations.
             </h1>
@@ -45,9 +41,9 @@ const About: React.FC = () => {
             </div>
           </div>
 
-          <div className="marketing-card overflow-hidden bg-[#F8FAFC] p-4 lg:p-5">
-            <div className="rounded-[1.35rem] border border-black/12 bg-white p-5">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-black/50">
+          <div className="marketing-card overflow-hidden bg-[#EEF2F8] p-4 lg:p-5">
+            <div className="rounded-[1.35rem] border border-slate-900/10 bg-white p-5">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#0F172A]/50">
                 What we are building
               </p>
               <h2 className="marketing-section-title mt-3 max-w-xl">
@@ -59,32 +55,16 @@ const About: React.FC = () => {
                 moved forward with speed and consistency.
               </p>
             </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {["Voice", "Chat", "Follow-up"].map((item) => (
-                <div
-                  key={item}
-                  className="rounded-[1.2rem] border border-black/12 bg-white/72 p-4"
-                >
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-black/45">
-                    Layer
-                  </p>
-                  <p className="mt-2 text-xl font-medium tracking-[-0.052em]">
-                    {item}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-[#F8FAFC]">
+      <section className="bg-[#EEF2F8]">
         <div className="marketing-shell py-12 lg:py-14">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3 md:divide-x md:divide-slate-900/10">
             {PRINCIPLES.map((principle) => (
-              <div key={principle.title} className="marketing-card p-6">
-                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-black text-white">
+              <div key={principle.title} className="md:px-6 first:md:pl-0">
+                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-[#0F172A] text-white">
                   <ICONS.Sparkles />
                 </div>
                 <h2 className="text-xl font-medium tracking-[-0.052em]">

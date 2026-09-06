@@ -10,7 +10,7 @@ const FAQS = [
   {
     question: "Is Agently only an AI receptionist?",
     answer:
-      "No. Answering calls is one workflow, but Agently is a full AI team for your business — handling outbound campaigns, qualification, no-show recovery, cart recovery, appointment setting, onboarding, and post-call follow-up.",
+      "No. Answering calls is one workflow, but Agently is a full AI team for your business, handling outbound campaigns, qualification, no-show recovery, cart recovery, appointment setting, onboarding, and post-call follow-up.",
   },
   {
     question: "How does an agent know what to say?",
@@ -45,12 +45,8 @@ const FAQs: React.FC = () => {
   return (
     <div className="marketing-page text-[#0F172A]">
       <section className="border-b border-[#0F172A]/10">
-        <div className="marketing-shell grid min-h-[calc(100svh-74px)] items-center gap-8 py-8 lg:grid-cols-[0.8fr_1.2fr] lg:py-7">
+        <div className="marketing-shell grid items-center gap-8 py-10 lg:grid-cols-[0.8fr_1.2fr] lg:py-14">
           <div>
-            <div className="marketing-eyebrow mb-5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
-              FAQs
-            </div>
             <h1 className="marketing-page-title max-w-xl">
               Questions before your first agent goes live.
             </h1>
@@ -59,14 +55,14 @@ const FAQs: React.FC = () => {
               calls, escalation, and how Agently fits into customer conversation
               workflows.
             </p>
-            <div className="mt-6 rounded-[1.65rem] border border-[#0F172A]/10 bg-[#F8FAFC]/82 p-5 shadow-[0_18px_55px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#F59E0B]">
+            <div className="mt-6 rounded-[1.65rem] border border-[#0F172A]/10 bg-white p-5 shadow-[0_18px_55px_rgba(15,23,42,0.07)]">
+              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#B45309]">
                 Need a workflow review?
               </p>
               <h2 className="mt-2 max-w-sm text-[clamp(1.75rem,3vw,2.5rem)] font-medium leading-none tracking-[-0.055em] text-[#0F172A]">
                 Talk through your first agent setup.
               </h2>
-              <p className="mt-3 text-base font-normal leading-[1.3125] text-[#0F172A]">
+              <p className="mt-3 text-base font-normal leading-[1.3125] text-[#475569]">
                 Share the calls, chats, or follow-ups you want to automate and
                 we will help you map the right starting point.
               </p>
@@ -85,7 +81,7 @@ const FAQs: React.FC = () => {
               return (
                 <article
                   key={faq.question}
-                  className="overflow-hidden rounded-[1.35rem] border border-[#0F172A]/10 bg-[#F8FAFC]/88 shadow-[0_14px_42px_rgba(15,23,42,0.055)] backdrop-blur-sm"
+                  className="overflow-hidden rounded-[1.35rem] border border-[#0F172A]/10 bg-white shadow-[0_14px_42px_rgba(15,23,42,0.05)]"
                 >
                   <button
                     type="button"
@@ -99,7 +95,7 @@ const FAQs: React.FC = () => {
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-medium transition ${
                         isOpen
                           ? "rotate-45 bg-[#F59E0B] text-white"
-                          : "bg-white text-[#0F172A]/58"
+                          : "bg-[#EEF2F8] text-[#0F172A]/58"
                       }`}
                     >
                       +
@@ -110,7 +106,7 @@ const FAQs: React.FC = () => {
                       isOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"
                     }`}
                   >
-                    <p className="px-5 pb-5 text-base font-normal leading-[1.3125] text-[#0F172A]">
+                    <p className="px-5 pb-5 text-base font-normal leading-[1.3125] text-[#475569]">
                       {faq.answer}
                     </p>
                   </div>

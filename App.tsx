@@ -37,10 +37,7 @@ import Team from "./pages/Team";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
 // ─────────────────────────────────────────────────────────────────────────
-// PRODUCT TOUR REMOVED — 3 blocks in this file, all marked "PRODUCT TOUR
-// REMOVED". Uncomment all three to restore. See TOUR-REMOVAL.txt.
-// ─────────────────────────────────────────────────────────────────────────
-// import { PageTour, usePageTour } from "./lib/productTour";
+import { PageTour, usePageTour } from "./lib/productTour";
 import { subscribeToOrgRealtime } from "./services/realtime";
 
 const ROUTE_CHUNK_RELOAD_PREFIX = "agently:route-chunk-reload:";
@@ -160,6 +157,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   );
 };
 
+/**
+ * Tours only run for signed-in, onboarded users, so the caller gates this with
+ * `enabled` rather than the host living inside the authenticated subtree —
+ * that subtree remounts on every navigation and tab switch, which used to tear
+ * the tour down mid-run. usePageTour subscribes to the hash itself, so the
+ * host works fine from outside <Routes>. Progress is localStorage-only for
+ * now: no fetch, no route polling.
+ */
+const ProductTourHost: React.FC<{ enabled: boolean }> = ({ enabled }) =>
+  /*
+   * The hook must not run until the tenant is actually eligible.
+   *
+   * A brand-new signup lands on /dashboard but renders Onboarding, because the
+   * org is not onboarded yet. When usePageTour lived here unconditionally it
+   * still armed against /dashboard during onboarding and burned its
+   * once-per-session flag before the user could ever see a tour — which is why
+   * brand-new tenants, the entire audience for this thing, got nothing. Gating
+   * the MOUNT rather than the render means the hook first runs the moment
+   * onboarding completes.
+   */
+  enabled ? <ActiveProductTour /> : null;
+
+const ActiveProductTour: React.FC = () => {
+  const tour = usePageTour();
+  if (!tour.open || !tour.page) return null;
+  return (
+    <PageTour
+      page={tour.page}
+      steps={tour.steps}
+      open={tour.open}
+      onClose={tour.close}
+    />
+  );
+};
+
 const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -172,6 +204,13 @@ const App: React.FC = () => {
     topUpPath?: string;
   } | null>(null);
 
+  /*
+   * A session token exists the moment login succeeds, but `user` only lands
+   * once the workspace bootstrap resolves. Route guards looking at
+   * user/isInitializing alone saw a brief signed-out-looking gap and
+   * redirected to /login, which forwarded to /dashboard — losing deep links.
+   */
+  const authPending = isInitializing || Boolean(getSessionToken());
   const user = workspace?.user ?? null;
   const org = workspace?.organization ?? null;
   const calls = workspace?.calls ?? [];
@@ -440,10 +479,8 @@ const App: React.FC = () => {
    * kept whichever route was current when App last rendered. That is why tours
    * fired on the wrong page, or never fired at all after the first navigation.
    */
-  // PRODUCT TOUR REMOVED — this call is what issued GET /api/tour/state and
-  // ran a 300ms route poll on every page. Disabling the render alone did not
-  // stop either of those.
-  // const pageTour = usePageTour();
+  // The tour mounts as <ProductTourHost /> below, outside RouteCommitBoundary
+  // so navigation cannot tear it down. No /api/tour/state call, no route poll.
 
   const handleOnboardingComplete = async (
     profile: BusinessProfile,
@@ -908,6 +945,13 @@ const App: React.FC = () => {
                 <ProtectedRoute {...protectedRouteProps}>
                   <Dashboard org={org} dashboard={dashboard} />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -934,6 +978,13 @@ const App: React.FC = () => {
                     onRestartAgent={handleRestartAgent}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -958,6 +1009,13 @@ const App: React.FC = () => {
                     onAssignKnowledgeBase={handleAssignChatbotKnowledgeBase}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -976,6 +1034,13 @@ const App: React.FC = () => {
                     initialTab="calls"
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -992,6 +1057,13 @@ const App: React.FC = () => {
                     onChanged={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1004,6 +1076,13 @@ const App: React.FC = () => {
                 <ProtectedRoute {...protectedRouteProps}>
                   <Notifications />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1025,6 +1104,13 @@ const App: React.FC = () => {
                     onExport={handleExportLeads}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1041,6 +1127,13 @@ const App: React.FC = () => {
                     onRemoveMember={handleRemoveMember}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1059,6 +1152,13 @@ const App: React.FC = () => {
                     onContactSales={handleContactSales}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1076,6 +1176,13 @@ const App: React.FC = () => {
                     onAgentUpdated={() => void refreshWorkspace()}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1122,6 +1229,13 @@ const App: React.FC = () => {
                     onChangePassword={handleChangePassword}
                   />
                 </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
               ) : (
                 <Navigate to="/login" />
               )
@@ -1139,6 +1253,18 @@ const App: React.FC = () => {
           />
         </Routes>
       </RouteCommitBoundary>
+
+      {/*
+        Mounted OUTSIDE RouteCommitBoundary on purpose.
+        Every route below independently remounts MainLayout, and switching a
+        tab (Phone Numbers "Numbers" -> "Buy Number") goes through the router.
+        While the tour host lived inside that boundary, any such remount tore
+        it down mid-tour and restarted it from step 1. Up here it survives
+        navigation and keeps its place.
+      */}
+      <ProductTourHost
+        enabled={Boolean(user && org?.profile?.onboarded)}
+      />
 
       {creditAlert && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#232f3e]/55 px-4 backdrop-blur-sm">

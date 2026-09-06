@@ -1,45 +1,39 @@
 /**
- * agently/lib/productTour.tsx — FULL REWRITE
+ * agently/lib/productTour.tsx
  *
- * WHAT WAS WRONG WITH THE PREVIOUS VERSION
+ * The 50 steps and the target resolver are unchanged. The presentation layer
+ * (positioning, popover, motion, mobile) was rebuilt after the previous one
+ * was rejected on visual grounds and then switched off in App.tsx for cost.
  *
- * 1. It scrolled the window. This app is `h-screen overflow-hidden` with the
- *    real scrolling happening inside <main>. window.scrollIntoView therefore
- *    did nothing on most pages, so any card below the fold got a tooltip
- *    pointing at empty space. This is the single biggest reason it felt broken.
+ * WHAT THE REBUILD CHANGES
  *
- * 2. Completion lived in localStorage. Sign in on a phone and the whole tour
- *    replayed; clear site data and it replayed; and there was no way for an
- *    admin to bring one page's tour back after a redesign.
+ * • REAL PLACEMENT. Tries bottom -> top -> right -> left and takes the first
+ *   side where the MEASURED card fits and does not cover its own target,
+ *   falling back to centred. The old version only tried right then left, and
+ *   assumed a fixed 230/260px card height, so wide targets got a card sitting
+ *   on top of them and long steps ran off the bottom of the screen.
  *
- * 3. Anchors were a flat list of data-tour names that mostly did not exist on
- *    the pages, so most steps silently fell back to a centred card with no
- *    highlight — a slideshow, not a tour.
+ * • NO TIMERS. Target tracking is a ResizeObserver plus a passive scroll
+ *   listener on the real scroll container, coalesced through rAF. The old
+ *   260ms/250ms/300ms intervals are gone — that polling is the reason the
+ *   tour was disabled, not just the way it looked.
  *
- * 4. On mobile the sidebar steps pointed at a closed drawer.
+ * • MOTION. Card enters at 160ms ease-out from scale(0.96), exits faster,
+ *   and moves between steps on transform (GPU) with a short blur masking the
+ *   content swap. The scrim is ONE element with an animatable clip-path hole
+ *   instead of four panels that could never be transitioned.
  *
- * WHAT THIS DOES INSTEAD
- *
- * • RESOLVER, not a name list. Each step declares targets in priority order
- *   and may use any of: `tour:<data-tour value>`, a raw CSS selector, or
- *   `text:<string>` which matches a visible link/button/heading by its own
- *   text. Text matching means most steps need no page edits at all, which is
- *   why this ships without rewriting ten page files.
- *
- * • SCROLLS THE RIGHT ELEMENT. Walks up from the target to the nearest
- *   genuinely scrollable ancestor and scrolls that, falling back to the
- *   window. Verifies afterwards and retries once before giving up.
- *
- * • MOBILE GATE. On a narrow viewport, a sidebar step first checks whether the
- *   drawer is open. If not, it points a pulsing hand at the hamburger and
- *   waits for the user to open it, then continues on its own.
+ * • MOBILE. Below 768px the card docks to the bottom with its buttons in a
+ *   non-scrolling footer, so Next is always reachable without scrolling, and
+ *   scroll-into-view biases the target into the upper third so the sheet
+ *   cannot cover it.
  *
  * • ACTS BEFORE MEASURING. A step can carry `before: { click: target }` so the
- *   tour switches tabs itself — Phone Numbers moves from "Numbers" to "Buy a
- *   number" without the user touching anything.
+ *   tour switches tabs itself, and mobile sidebar steps now open the drawer
+ *   themselves rather than parking on a "tap the menu" state.
  *
- * • SERVER-BACKED PROGRESS with per-page versions, mirrored to localStorage so
- *   nothing flashes while the fetch is in flight.
+ * • PROGRESS IS LOCAL-ONLY for now. Server-backed per-page versions return in
+ *   the backend phase; see TOUR_VERSION below.
  */
 
 import React, {
@@ -49,8 +43,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { resolveApiBaseUrl } from "../utils/runtimeUrls";
-import { getSessionToken } from "../services/session";
 
 /* ══════════════════════════════════════════════════════════════════════════
  * Types
@@ -115,37 +107,59 @@ const isVisible = (el: Element): boolean => {
 const normalise = (value: string) =>
   value.replace(/\s+/g, " ").trim().toLowerCase();
 
-/** Smallest visible element whose own text matches — avoids matching <body>. */
+const INTERACTIVE =
+  'button, a, h1, h2, h3, h4, [role="tab"], [role="button"], label, summary';
+
+/**
+ * Text matching is scoped to the page content, never the app chrome.
+ *
+ * This used to search the whole document with a plain `includes()` fallback,
+ * which is how `text:Numbers` resolved to the sidebar's "Phone Numbers" link.
+ * On /phone-numbers that link was then CLICKED by a `before` action, which
+ * navigated the app mid-tour and silently killed the remaining steps — the
+ * page measured 1 of its 5 steps.
+ *
+ * Two rules fix that class of bug:
+ *  1. Search <main> first. The sidebar and topbar are only searched if the
+ *     page content has no match at all.
+ *  2. A partial match must land on a word boundary, so "Numbers" no longer
+ *     matches "Phone Numbers".
+ */
 const findByText = (needle: string): HTMLElement | null => {
   const wanted = normalise(needle);
-  const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      'button, a, h1, h2, h3, h4, [role="tab"], [role="button"], label, summary',
-    ),
-  ).filter((el) => isVisible(el) && normalise(el.textContent || "") === wanted);
+  const main = document.querySelector<HTMLElement>("main");
+  const scopes: Array<ParentNode> = main ? [main, document] : [document];
 
-  if (candidates.length) {
-    return candidates.sort(
-      (a, b) =>
-        a.getBoundingClientRect().width * a.getBoundingClientRect().height -
-        b.getBoundingClientRect().width * b.getBoundingClientRect().height,
-    )[0];
+  const area = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    return r.width * r.height;
+  };
+
+  for (const scope of scopes) {
+    const all = Array.from(
+      scope.querySelectorAll<HTMLElement>(INTERACTIVE),
+    ).filter(isVisible);
+
+    const exact = all.filter(
+      (el) => normalise(el.textContent || "") === wanted,
+    );
+    if (exact.length) return exact.sort((a, b) => area(a) - area(b))[0];
+
+    // Word-boundary partial match only.
+    const boundary = new RegExp(
+      `(^|\\W)${wanted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\W|$)`,
+    );
+    const partial = all.filter((el) =>
+      boundary.test(normalise(el.textContent || "")),
+    );
+    if (partial.length) {
+      return partial.sort(
+        (a, b) => (a.textContent || "").length - (b.textContent || "").length,
+      )[0];
+    }
   }
 
-  // Fall back to a partial match, still preferring the smallest element.
-  const partial = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      'button, a, h1, h2, h3, [role="tab"]',
-    ),
-  ).filter(
-    (el) => isVisible(el) && normalise(el.textContent || "").includes(wanted),
-  );
-
-  return partial.length
-    ? partial.sort(
-        (a, b) => (a.textContent || "").length - (b.textContent || "").length,
-      )[0]
-    : null;
+  return null;
 };
 
 const resolveOne = (spec: string): HTMLElement | null => {
@@ -207,6 +221,21 @@ const isFullyVisible = (el: HTMLElement, margin = 12): boolean => {
     ? container.getBoundingClientRect()
     : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
 
+  /*
+   * Horizontal counts too. A target inside a side-scrolling table could sit
+   * entirely outside the viewport while this returned true, so the card was
+   * placed against a box nobody could see (measured at 768px on /calls: the
+   * target's left edge was 1057px on a 768px-wide screen).
+   */
+  if (
+    rect.right > window.innerWidth - margin ||
+    rect.left < margin ||
+    rect.right > bounds.right ||
+    rect.left < bounds.left
+  ) {
+    return false;
+  }
+
   return (
     rect.top >= bounds.top + margin &&
     rect.bottom <= bounds.bottom - margin &&
@@ -215,18 +244,40 @@ const isFullyVisible = (el: HTMLElement, margin = 12): boolean => {
   );
 };
 
-/** Centre the element inside whichever thing scrolls. */
-const scrollIntoCenter = (el: HTMLElement) => {
+/**
+ * Bring the element into view inside whichever thing actually scrolls.
+ *
+ * `bias` is where the element should land as a fraction of the viewport
+ * height: 0.5 centres it, 0.32 parks it in the upper third. Mobile passes the
+ * smaller value so the bottom-docked card cannot cover its own target.
+ */
+const scrollIntoCenter = (el: HTMLElement, bias = 0.5) => {
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const behavior: ScrollBehavior = reduced ? "auto" : "smooth";
   const container = scrollableAncestor(el);
 
   if (container) {
     const containerRect = container.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
     const delta =
-      rect.top - containerRect.top - (container.clientHeight - rect.height) / 2;
+      rect.top -
+      containerRect.top -
+      (container.clientHeight - rect.height) * bias;
+    const deltaX =
+      rect.left -
+      containerRect.left -
+      (container.clientWidth - rect.width) / 2;
     container.scrollTo({
       top: Math.max(0, container.scrollTop + delta),
-      behavior: "smooth",
+      // Side-scrolling tables put targets off-screen horizontally; centre
+      // those too rather than pointing at a box outside the viewport.
+      left:
+        container.scrollWidth > container.clientWidth + 4
+          ? Math.max(0, container.scrollLeft + deltaX)
+          : container.scrollLeft,
+      behavior,
     });
     return;
   }
@@ -235,9 +286,9 @@ const scrollIntoCenter = (el: HTMLElement) => {
   window.scrollTo({
     top: Math.max(
       0,
-      window.scrollY + rect.top - (window.innerHeight - rect.height) / 2,
+      window.scrollY + rect.top - (window.innerHeight - rect.height) * bias,
     ),
-    behavior: "smooth",
+    behavior,
   });
 };
 
@@ -375,7 +426,7 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
     {
       placement: "center",
       title: "That is the dashboard",
-      body: "Open any other page when you are ready and it will introduce itself the same way. You will not see this one again.",
+      body: "That is the tour. Everything here updates on its own as calls and chats come in.",
     },
   ],
 
@@ -386,8 +437,9 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "This page has two tabs: the numbers you already own, and buying a new one. I will walk you through both.",
     },
     {
-      before: { click: "text:Numbers" },
-      target: ["tour:numbers-list", "text:Numbers"],
+      // First card in the list, not the whole panel: the panel measures
+      // 700-990px tall, so nothing fits beside it and the card landed on top.
+      target: ["[data-tour='numbers-list'] > *", "tour:numbers-panel"],
       title: "Your numbers",
       body: "Every number in this workspace, and which agent answers on it. A number with no agent assigned will not be answered.",
     },
@@ -502,7 +554,7 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Volume, average length and how many turned into leads.",
     },
     {
-      target: ["text:Transcript", "text:Summary"],
+      target: ["[data-tour='calls-rows'] > *", "tour:calls-rows", "tour:calls-stats"],
       title: "Inside a call",
       body: "Open any call for the recording, the full transcript and a short summary of what the caller wanted.",
     },
@@ -515,7 +567,7 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Everyone who left their details with a voice agent or the chatbot, in one list.",
     },
     {
-      target: ["text:Status", "text:New"],
+      target: ["tour:leads-status", "text:All statuses"],
       title: "Track your follow-up",
       body: "Move a lead from new to contacted to closed so you know who is still waiting to hear from you.",
     },
@@ -546,7 +598,7 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Invite colleagues into this workspace and choose what each of them can do.",
     },
     {
-      target: ["text:Invite", "text:Invite member"],
+      target: ["tour:team-invite", "text:Invite member"],
       title: "Inviting someone",
       body: "They get an email invitation. Owners can change billing; admins manage agents; viewers can only look.",
     },
@@ -584,11 +636,18 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
  * ══════════════════════════════════════════════════════════════════════════ */
 
 const MIRROR_KEY = "agently.tour.progress.v1";
-const API_BASE = resolveApiBaseUrl();
+
+/**
+ * Bump to replay every page tour for everyone. Progress is local-only for now;
+ * the server-backed version (per-page versions set by an admin) comes back in
+ * the backend phase. Deliberately NOT fetching /api/tour/state here: that call
+ * plus a 300ms route poll is what got the previous tour switched off.
+ */
+const TOUR_VERSION = 1;
 
 type ProgressMap = Record<string, number>; // pageKey -> completedVersion
 
-const readMirror = (): ProgressMap => {
+const readProgress = (): ProgressMap => {
   try {
     return JSON.parse(window.localStorage.getItem(MIRROR_KEY) || "{}");
   } catch {
@@ -596,66 +655,61 @@ const readMirror = (): ProgressMap => {
   }
 };
 
-const writeMirror = (progress: ProgressMap) => {
+const writeProgress = (progress: ProgressMap) => {
   try {
     window.localStorage.setItem(MIRROR_KEY, JSON.stringify(progress));
   } catch {
-    /* private mode — server remains the source of truth */
+    /* private mode: the tour simply replays next session */
   }
 };
 
-async function tourFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers || {});
-  if (init.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  const token = getSessionToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`Tour request failed (${response.status})`);
-  return (await response.json()) as T;
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
- * usePageTour
- * ══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * Tracks the HashRouter location itself.
- *
- * The previous version received `window.location.hash` read during App's
- * render. App sits OUTSIDE <Router>, so it does not re-render on navigation —
- * the hook could keep the stale route of whatever page happened to be open
- * when App last rendered, which is why tours fired on the wrong page or not at
- * all. Subscribing to hashchange makes the hook correct wherever it is mounted.
+ * Location tracking (no polling)
+ * ══════════════════════════════════════════════════════════════════════════
+ * App mounts this hook OUTSIDE <Router>, so it cannot read the router's
+ * location. The previous version polled `window.location.hash` every 300ms
+ * because HashRouter navigations that go through history.replaceState do not
+ * fire `hashchange`. Patching the two history methods once to emit an event
+ * covers that case exactly, with no timer.
  */
-function useHashRoute(explicit?: string) {
-  const read = () =>
-    typeof window === "undefined"
-      ? "/"
-      : window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+const LOCATION_EVENT = "agently:locationchange";
+let historyPatched = false;
 
-  const [hash, setHash] = useState(read);
+const patchHistory = () => {
+  if (historyPatched || typeof window === "undefined") return;
+  historyPatched = true;
+  for (const method of ["pushState", "replaceState"] as const) {
+    const original = window.history[method];
+    window.history[method] = function patched(
+      this: History,
+      ...args: Parameters<History["pushState"]>
+    ) {
+      const result = original.apply(this, args);
+      window.dispatchEvent(new Event(LOCATION_EVENT));
+      return result;
+    } as History[typeof method];
+  }
+};
+
+const readRoute = () =>
+  typeof window === "undefined"
+    ? "/"
+    : window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+
+function useHashRoute(explicit?: string) {
+  const [hash, setHash] = useState(readRoute);
 
   useEffect(() => {
     if (explicit) return;
-    const onChange = () => setHash(read());
+    patchHistory();
+    const onChange = () => setHash(readRoute());
     window.addEventListener("hashchange", onChange);
     window.addEventListener("popstate", onChange);
-    // HashRouter navigations that replace state do not always fire hashchange.
-    const poll = window.setInterval(() => {
-      const current = read();
-      setHash((previous) => (previous === current ? previous : current));
-    }, 300);
+    window.addEventListener(LOCATION_EVENT, onChange);
     return () => {
       window.removeEventListener("hashchange", onChange);
       window.removeEventListener("popstate", onChange);
-      window.clearInterval(poll);
+      window.removeEventListener(LOCATION_EVENT, onChange);
     };
   }, [explicit]);
 
@@ -664,41 +718,11 @@ function useHashRoute(explicit?: string) {
 
 export function usePageTour(explicitPathname?: string) {
   const pathname = useHashRoute(explicitPathname);
-  const [pages, setPages] = useState<TourPageMeta[]>([]);
   const [progress, setProgress] = useState<ProgressMap>(() =>
-    typeof window === "undefined" ? {} : readMirror(),
+    typeof window === "undefined" ? {} : readProgress(),
   );
-  const [loaded, setLoaded] = useState(false);
   const [activePage, setActivePage] = useState<string | null>(null);
   const startedThisSession = useRef<Set<string>>(new Set());
-
-  /* Load published versions and this user's progress, once. */
-  useEffect(() => {
-    let cancelled = false;
-    tourFetch<{
-      pages: TourPageMeta[];
-      progress: Record<string, { completedVersion: number }>;
-    }>("/api/tour/state")
-      .then((state) => {
-        if (cancelled) return;
-        const map: ProgressMap = {};
-        for (const [key, value] of Object.entries(state.progress || {})) {
-          map[key] = value.completedVersion;
-        }
-        setPages(state.pages || []);
-        setProgress(map);
-        writeMirror(map);
-        setLoaded(true);
-      })
-      .catch(() => {
-        // Offline or pre-migration: fall back to the mirror. Worst case the
-        // tour does not run, which is far better than it running twice.
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const route = useMemo(() => {
     const clean = (pathname || "/").split("?")[0];
@@ -709,87 +733,54 @@ export function usePageTour(explicitPathname?: string) {
     );
   }, [pathname]);
 
-  const versionFor = useCallback(
-    (key: string) => pages.find((page) => page.pageKey === key)?.version ?? 1,
-    [pages],
-  );
-
-  /* Decide whether this route owes the user a tour. */
   useEffect(() => {
-    if (!loaded || !route) {
+    if (!route) {
       setActivePage(null);
       return;
     }
     if (startedThisSession.current.has(route)) return;
-
+    if ((progress[route] ?? 0) >= TOUR_VERSION) return;
     /*
-     * A page missing from tour_pages is disabled — do not run it.
+     * Mark "started" inside the timer, not before it.
      *
-     * FIXED: this previously read `if (pages.length && !pages.some(...))`.
-     * The `pages.length` guard was there to avoid suppressing tours while the
-     * list was still loading, but it fails OPEN: disable every page in the
-     * super admin dashboard and `pages` comes back empty, the condition
-     * short-circuits to false, and every tour runs anyway — the exact opposite
-     * of what the switch says it does.
-     *
-     * Load-time is already handled by the `loaded` flag above, so the length
-     * check was never doing the job it was added for. An empty list now
-     * correctly means "no tours".
+     * Marking it up front meant a cleanup that ran before the 900ms elapsed —
+     * StrictMode's double-invoke in dev, or any MainLayout remount in prod —
+     * cancelled the timer while leaving the flag set, so the effect's next run
+     * early-returned and the tour could never open again for that route.
      */
-    if (!pages.some((page) => page.pageKey === route)) return;
-
-    const completed = progress[route] ?? 0;
-    if (completed >= versionFor(route)) return;
-
-    startedThisSession.current.add(route);
-
-    // Let the route's data land and the layout settle before measuring.
-    const timer = window.setTimeout(() => setActivePage(route), 900);
+    const timer = window.setTimeout(() => {
+      startedThisSession.current.add(route);
+      setActivePage(route);
+    }, 900);
     return () => window.clearTimeout(timer);
-  }, [loaded, route, pages, progress, versionFor]);
+  }, [route, progress]);
 
-  const close = useCallback(
-    (completed: boolean) => {
-      const page = activePage;
-      setActivePage(null);
-      if (!page) return;
+  const close = useCallback(() => {
+    const page = activePage;
+    setActivePage(null);
+    if (!page) return;
+    setProgress((current) => {
+      const next = { ...current, [page]: TOUR_VERSION };
+      writeProgress(next);
+      return next;
+    });
+  }, [activePage]);
 
-      const version = versionFor(page);
-      const next = { ...progress, [page]: version };
-      setProgress(next);
-      writeMirror(next);
-
-      void tourFetch("/api/tour/complete", {
-        method: "POST",
-        body: JSON.stringify({
-          pageKey: page,
-          version,
-          status: completed ? "completed" : "skipped",
-        }),
-      }).catch(() => {
-        /* mirror already written; next load reconciles */
-      });
-    },
-    [activePage, progress, versionFor],
-  );
-
-  /** Replay the current page's tour on demand. */
+  /** Replay a page's tour on demand (used by the help menu). */
   const replay = useCallback(
     (target?: string) => {
       const page = target || route;
       if (!page) return;
       startedThisSession.current.delete(page);
-      const next = { ...progress };
-      delete next[page];
-      setProgress(next);
-      writeMirror(next);
-      void tourFetch("/api/tour/reset", {
-        method: "POST",
-        body: JSON.stringify({ pageKey: page }),
-      }).catch(() => {});
+      setProgress((current) => {
+        const next = { ...current };
+        delete next[page];
+        writeProgress(next);
+        return next;
+      });
       setActivePage(page);
     },
-    [route, progress],
+    [route],
   );
 
   return {
@@ -802,11 +793,200 @@ export function usePageTour(explicitPathname?: string) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * PageTour — the renderer
+ * Placement
  * ══════════════════════════════════════════════════════════════════════════ */
 
-const CARD_MAX_W = 380;
-const GAP = 14;
+type Placement = "bottom" | "top" | "right" | "left" | "center" | "docked";
+
+interface Placed {
+  x: number;
+  y: number;
+  placement: Placement;
+  /** Arrow offset in px along the card edge, or null when there is no arrow. */
+  arrow: number | null;
+}
+
+const MARGIN = 12; // viewport gutter
+const GAP = 12; // distance between target and card
+const ARROW = 7; // half-width of the arrow notch
+
+const intersects = (a: Rect, b: Rect) =>
+  a.left < b.left + b.width &&
+  a.left + a.width > b.left &&
+  a.top < b.top + b.height &&
+  a.top + a.height > b.top;
+
+/**
+ * Tries bottom, top, right, left, and takes the first side where the card fits
+ * inside the viewport AND does not cover the element it is describing. Falls
+ * back to centred. Card size is measured, never assumed, which is what the old
+ * version got wrong (it hardcoded 230px/260px and overflowed on long steps).
+ */
+export const computePlacement = (
+  target: Rect | null,
+  card: { w: number; h: number },
+  vp: { w: number; h: number },
+  mobile: boolean,
+): Placed => {
+  if (!target) {
+    return {
+      x: Math.max(MARGIN, (vp.w - card.w) / 2),
+      y: Math.max(MARGIN, (vp.h - card.h) / 2),
+      placement: "center",
+      arrow: null,
+    };
+  }
+
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), max);
+
+  const centreX = target.left + target.width / 2;
+  const centreY = target.top + target.height / 2;
+
+  const candidates: Array<{ placement: Placement; x: number; y: number }> = [
+    {
+      placement: "bottom",
+      x: clamp(centreX - card.w / 2, MARGIN, vp.w - card.w - MARGIN),
+      y: target.top + target.height + GAP,
+    },
+    {
+      placement: "top",
+      x: clamp(centreX - card.w / 2, MARGIN, vp.w - card.w - MARGIN),
+      y: target.top - card.h - GAP,
+    },
+    {
+      placement: "right",
+      x: target.left + target.width + GAP,
+      y: clamp(centreY - card.h / 2, MARGIN, vp.h - card.h - MARGIN),
+    },
+    {
+      placement: "left",
+      x: target.left - card.w - GAP,
+      y: clamp(centreY - card.h / 2, MARGIN, vp.h - card.h - MARGIN),
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const fits =
+      candidate.x >= MARGIN &&
+      candidate.y >= MARGIN &&
+      candidate.x + card.w <= vp.w - MARGIN &&
+      candidate.y + card.h <= vp.h - MARGIN;
+    if (!fits) continue;
+
+    const cardRect: Rect = {
+      top: candidate.y,
+      left: candidate.x,
+      width: card.w,
+      height: card.h,
+    };
+    if (intersects(cardRect, target)) continue;
+
+    const arrow =
+      candidate.placement === "bottom" || candidate.placement === "top"
+        ? clamp(centreX - candidate.x, 18, card.w - 18)
+        : clamp(centreY - candidate.y, 18, card.h - 18);
+
+    return { ...candidate, arrow };
+  }
+
+  /*
+   * Nothing fits beside the target. On a narrow viewport dock to whichever
+   * edge is furthest from the target so the card still cannot cover it; this
+   * is the only case that gives up on adjacency, and it is reported as
+   * "docked" rather than pretending to point at something.
+   */
+  if (mobile) {
+    const targetBottom = target.top + target.height;
+    const roomAbove = target.top;
+    const roomBelow = vp.h - targetBottom;
+    const dockBelow = roomBelow >= roomAbove;
+    return {
+      x: MARGIN,
+      y: dockBelow
+        ? Math.max(MARGIN, vp.h - card.h - MARGIN)
+        : MARGIN,
+      placement: "docked",
+      arrow: null,
+    };
+  }
+
+  return {
+    x: Math.max(MARGIN, (vp.w - card.w) / 2),
+    y: Math.max(MARGIN, (vp.h - card.h) / 2),
+    placement: "center",
+    arrow: null,
+  };
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PageTour
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const CARD_W = 344;
+
+/**
+ * Progress dial. `total` is always the length of the runtime-filtered step
+ * list, never a constant: pages carry mobile-only and desktop-only steps, so a
+ * hardcoded total would be wrong for whichever viewport it was not written for.
+ */
+const TourProgressDial: React.FC<{ current: number; total: number }> = ({
+  current,
+  total,
+}) => {
+  const size = 26;
+  const stroke = 2.5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const safeTotal = Math.max(1, total);
+  const progress = Math.min(Math.max(current / safeTotal, 0), 1);
+
+  return (
+    <div
+      className="relative shrink-0"
+      role="progressbar"
+      aria-valuenow={current}
+      aria-valuemin={1}
+      aria-valuemax={safeTotal}
+      aria-label={`Step ${current} of ${safeTotal}`}
+      title={`Step ${current} of ${safeTotal}`}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#E2E8F0"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#F59E0B"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          style={{ transition: "stroke-dashoffset 220ms cubic-bezier(0.23,1,0.32,1)" }}
+        />
+      </svg>
+    </div>
+  );
+};
+
+/** Scrim with a real hole punched in it, so the target stays clickable. */
+const cutout = (rect: Rect | null, vw: number, vh: number) => {
+  if (!rect) return undefined;
+  const pad = 6;
+  const t = Math.max(0, rect.top - pad);
+  const l = Math.max(0, rect.left - pad);
+  const r = Math.min(vw, rect.left + rect.width + pad);
+  const b = Math.min(vh, rect.top + rect.height + pad);
+  return `polygon(0px 0px, 0px ${vh}px, ${l}px ${vh}px, ${l}px ${t}px, ${r}px ${t}px, ${r}px ${b}px, ${l}px ${b}px, ${l}px ${vh}px, ${vw}px ${vh}px, ${vw}px 0px)`;
+};
 
 export const PageTour: React.FC<{
   page: string;
@@ -816,66 +996,104 @@ export const PageTour: React.FC<{
 }> = ({ page, steps, open, onClose }) => {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
-  const [waitingForSidebar, setWaitingForSidebar] = useState(false);
   const [unresolved, setUnresolved] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [mobile, setMobile] = useState(isMobileViewport);
+  const [vp, setVp] = useState(() => ({
+    w: typeof window === "undefined" ? 0 : window.innerWidth,
+    h: typeof window === "undefined" ? 0 : window.innerHeight,
+  }));
+  const [cardSize, setCardSize] = useState({ w: CARD_W, h: 180 });
+
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocus = useRef<HTMLElement | null>(null);
   const settling = useRef(false);
 
-  /* Steps that do not apply to this viewport are removed up front, so the
-     progress counter reads honestly ("3 of 9", not "3 of 14 with 5 skipped"). */
-  const visibleSteps = useMemo(() => {
-    const mobile = isMobileViewport();
-    return steps.filter((step) => {
-      if (step.only === "mobile" && !mobile) return false;
-      if (step.only === "desktop" && mobile) return false;
-      return true;
-    });
-  }, [steps, open]);
+  /* Recomputed on resize so rotating a phone swaps the step set and the
+     "of N" count honestly — the old useMemo never re-ran. */
+  const visibleSteps = useMemo(
+    () =>
+      steps.filter((step) => {
+        if (step.only === "mobile" && !mobile) return false;
+        if (step.only === "desktop" && mobile) return false;
+        return true;
+      }),
+    [steps, mobile],
+  );
 
   const step = visibleSteps[index];
+  const isLast = index === visibleSteps.length - 1;
 
   useEffect(() => {
     if (open) setIndex(0);
   }, [open, page]);
 
-  /*
-   * Lock background scrolling so the highlight cannot drift under the user.
-   *
-   * FIXED: this used to guard on `open` alone. If a page's steps array was
-   * ever empty, or every step was filtered out by the viewport rules, the
-   * component rendered null — invisible — while this effect had already set
-   * body overflow to hidden. Nothing was on screen to advance or dismiss, so
-   * `open` never flipped back and the cleanup never ran: an invisible page
-   * lock with no way out except a reload.
-   *
-   * Guarding on `step` as well means the lock only exists while something is
-   * actually drawn.
-   */
+  /* Viewport + breakpoint tracking. */
   useEffect(() => {
-    if (!open || !step) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
+    if (!open) return;
+    const onResize = () => {
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+      setMobile(isMobileViewport());
     };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [open]);
+
+  /* Measure the card itself, so placement never assumes a height. */
+  useEffect(() => {
+    const node = cardRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const r = node.getBoundingClientRect();
+      setCardSize((current) =>
+        Math.abs(current.h - r.height) < 1 && Math.abs(current.w - r.width) < 1
+          ? current
+          : { w: r.width, h: r.height },
+      );
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [open, step]);
 
-  /* ── Locate, act, scroll, measure ─────────────────────────────────────── */
+  /* ── Locate, act, scroll, then track the target ───────────────────────── */
   useEffect(() => {
     if (!open || !step) return;
     let stopped = false;
-    let poll = 0;
+    let observer: ResizeObserver | null = null;
+    let frame = 0;
+    let scrollHost: HTMLElement | Window = window;
+    let detachScroll: (() => void) | null = null;
 
     const measure = (el: HTMLElement) => {
-      if (!stopped) setRect(rectOf(el));
+      if (stopped || settling.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!stopped) setRect(rectOf(el));
+      });
     };
 
     const run = async () => {
       setUnresolved(false);
 
-      // 1. Perform the step's action first (tab switch, panel open).
+      // 1. The step's own action first (tab switch, opening the mobile drawer).
       if (step.before?.click) {
         const trigger = resolveTarget(step.before.click);
-        if (trigger) {
+        /*
+         * Never let a `before` action navigate. A tour step wants to flip a
+         * tab, not change route: if the resolver hands back a link pointing
+         * somewhere else, clicking it unmounts the page the remaining steps
+         * are written for. Belt and braces alongside the scoped text matcher.
+         */
+        const leavesRoute = (() => {
+          if (!(trigger instanceof HTMLAnchorElement)) return false;
+          const href = trigger.getAttribute("href") || "";
+          if (!href.startsWith("#")) return href.length > 0;
+          const to = href.replace(/^#/, "").split("?")[0];
+          const here = window.location.hash.replace(/^#/, "").split("?")[0];
+          return Boolean(to) && to !== here;
+        })();
+
+        if (trigger && !leavesRoute) {
           trigger.click();
           await new Promise((r) =>
             window.setTimeout(r, step.before?.waitMs ?? 420),
@@ -884,32 +1102,23 @@ export const PageTour: React.FC<{
       }
       if (stopped) return;
 
-      // 2. On mobile, sidebar steps need the drawer open. Point at the
-      //    hamburger and wait rather than highlighting a hidden element.
+      // 2. Sidebar steps on mobile: open the drawer ourselves rather than
+      //    parking on a "tap the menu" state and polling for it.
       if (step.needsSidebar && isMobileViewport() && !isSidebarOpen()) {
-        setWaitingForSidebar(true);
         const toggle = resolveOne("tour:menu-toggle");
-        setRect(toggle ? rectOf(toggle) : null);
-
-        poll = window.setInterval(() => {
-          if (stopped) return;
-          if (isSidebarOpen()) {
-            window.clearInterval(poll);
-            setWaitingForSidebar(false);
-            void run();
-          }
-        }, 250);
-        return;
+        if (toggle) {
+          toggle.click();
+          await new Promise((r) => window.setTimeout(r, 320));
+        }
       }
-      setWaitingForSidebar(false);
+      if (stopped) return;
 
-      // 3. Centred steps need no target.
       if (!step.target || step.placement === "center") {
         setRect(null);
         return;
       }
 
-      // 4. Resolve. React may still be committing, so retry briefly.
+      // 3. Resolve, retrying briefly while React commits.
       let el: HTMLElement | null = null;
       for (let attempt = 0; attempt < 12 && !stopped; attempt += 1) {
         el = resolveTarget(step.target);
@@ -919,57 +1128,78 @@ export const PageTour: React.FC<{
       if (stopped) return;
 
       if (!el) {
-        // Show the copy centred rather than skipping — silently dropping a
-        // step is how the previous tour ended up feeling like a slideshow.
         setUnresolved(true);
         setRect(null);
         return;
       }
 
-      // 5. Scroll the right container, verify, retry once.
+      // 4. Scroll the real container. On mobile bias the target upward so the
+      //    docked sheet cannot cover it.
       if (!isFullyVisible(el)) {
         settling.current = true;
-        scrollIntoCenter(el);
-        await new Promise((r) => window.setTimeout(r, 480));
-        if (stopped) return;
-
-        const again = resolveTarget(step.target);
-        if (again && !isFullyVisible(again)) {
-          scrollIntoCenter(again);
-          await new Promise((r) => window.setTimeout(r, 380));
-        }
+        scrollIntoCenter(el, isMobileViewport() ? 0.32 : 0.5);
+        await new Promise((r) => window.setTimeout(r, 420));
         settling.current = false;
       }
       if (stopped) return;
 
       const final = resolveTarget(step.target) || el;
-      measure(final);
 
-      // Keep the highlight glued to the element while the step is on screen.
-      poll = window.setInterval(() => {
-        if (stopped || settling.current) return;
-        const live = resolveTarget(step.target);
-        if (live) measure(live);
-      }, 260);
+      /*
+       * Last line of defence: if the target still cannot be brought into the
+       * viewport (a cell inside a table wider than the screen, measured at
+       * 768px on /calls with a left edge of 966px), do NOT anchor to it.
+       * Pointing a card at a box the user cannot see is worse than showing
+       * the copy centred, so fall back rather than draw a highlight offscreen.
+       */
+      const fr = final.getBoundingClientRect();
+      const offscreen =
+        fr.right <= 0 ||
+        fr.left >= window.innerWidth ||
+        fr.bottom <= 0 ||
+        fr.top >= window.innerHeight ||
+        fr.left > window.innerWidth - 24;
+      if (offscreen) {
+        setUnresolved(true);
+        setRect(null);
+        return;
+      }
+
+      setRect(rectOf(final));
+
+      // 5. Track it: observer + scroll, no interval.
+      if (typeof ResizeObserver !== "undefined") {
+        observer = new ResizeObserver(() => measure(final));
+        observer.observe(final);
+      }
+      scrollHost = scrollableAncestor(final) || window;
+      detachScroll = () => measure(final);
+      scrollHost.addEventListener("scroll", detachScroll, { passive: true });
     };
 
     void run();
 
-    const onResize = () => {
-      const live = resolveTarget(step.target);
-      if (live) measure(live);
-    };
-    window.addEventListener("resize", onResize);
-
     return () => {
       stopped = true;
-      if (poll) window.clearInterval(poll);
-      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      if (detachScroll) scrollHost.removeEventListener("scroll", detachScroll);
     };
   }, [open, index, step]);
 
+  /* Brief "moving" flag drives the blur that masks the content swap. */
+  useEffect(() => {
+    if (!open) return;
+    setMoving(true);
+    const timer = window.setTimeout(() => setMoving(false), 220);
+    return () => window.clearTimeout(timer);
+  }, [index, open]);
+
   const finish = useCallback(
-    (completed: boolean) => onClose(completed),
+    (completed: boolean) => {
+      restoreFocus.current?.focus?.();
+      onClose(completed);
+    },
     [onClose],
   );
 
@@ -980,199 +1210,201 @@ export const PageTour: React.FC<{
 
   const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
+  /* Focus moves into the card and is trapped there; keys are scoped to the
+     dialog so Enter inside a page input can no longer advance the tour. */
   useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") finish(false);
-      else if (event.key === "ArrowRight" || event.key === "Enter") next();
-      else if (event.key === "ArrowLeft") prev();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, next, prev, finish]);
+    if (!open || !step) return;
+    if (!restoreFocus.current) {
+      restoreFocus.current = document.activeElement as HTMLElement | null;
+    }
+    cardRef.current?.focus({ preventScroll: true });
+  }, [open, step, index]);
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      finish(false);
+      return;
+    }
+    if (event.key === "ArrowRight") next();
+    if (event.key === "ArrowLeft") prev();
+    if (event.key === "Tab") {
+      const focusable = cardRef.current?.querySelectorAll<HTMLElement>(
+        "button:not([disabled])",
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  };
 
   if (!open || !step) return null;
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const mobile = isMobileViewport();
-  const cardW = mobile ? Math.min(vw - 24, CARD_MAX_W) : CARD_MAX_W;
-  const centred = !rect || unresolved;
+  const targetRect = unresolved ? null : rect;
+  const placed = computePlacement(
+    targetRect,
+    { w: mobile ? vp.w - MARGIN * 2 : CARD_W, h: cardSize.h },
+    vp,
+    mobile,
+  );
+  const cardWidth = mobile ? vp.w - MARGIN * 2 : CARD_W;
 
-  /* Card placement: prefer the side with room, never clip. */
-  let cardStyle: React.CSSProperties;
-  if (centred) {
-    cardStyle = {
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%,-50%)",
-      width: cardW,
-    };
-  } else if (mobile) {
-    const below = rect.top + rect.height + GAP;
-    cardStyle =
-      below + 230 < vh
-        ? { top: below, left: 12, width: cardW }
-        : { bottom: 16, left: 12, width: cardW };
-  } else {
-    let left = rect.left + rect.width + GAP;
-    if (left + cardW > vw - 16) {
-      left = rect.left - cardW - GAP;
-      if (left < 16) left = Math.min(Math.max(16, rect.left), vw - cardW - 16);
-    }
-    cardStyle = {
-      top: Math.min(Math.max(16, rect.top - 8), Math.max(16, vh - 260)),
-      left,
-      width: cardW,
-    };
-  }
-
-  const stepNumber = index + 1;
-  const isLast = index === visibleSteps.length - 1;
+  const origin =
+    placed.placement === "bottom"
+      ? `${placed.arrow ?? cardWidth / 2}px 0px`
+      : placed.placement === "top"
+        ? `${placed.arrow ?? cardWidth / 2}px 100%`
+        : placed.placement === "right"
+          ? `0px ${placed.arrow ?? cardSize.h / 2}px`
+          : placed.placement === "left"
+            ? `100% ${placed.arrow ?? cardSize.h / 2}px`
+            : "center";
 
   return (
-    <div className="fixed inset-0 z-[9998]" role="dialog" aria-modal="true">
+    <div
+      className="ag-tour fixed inset-0 z-[120]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Product tour"
+    >
       <style>{`
-        @keyframes ag-tour-hand {
-          0%, 100% { transform: translate(0, 0); }
-          50%      { transform: translate(0, -9px); }
+        .ag-tour-scrim,
+        .ag-tour-ring,
+        .ag-tour-card { transition-timing-function: cubic-bezier(0.77,0,0.175,1); }
+        .ag-tour-scrim { transition: clip-path 220ms; }
+        .ag-tour-ring  { transition: transform 220ms, width 220ms, height 220ms, opacity 160ms; }
+        .ag-tour-card  { transition: transform 220ms, opacity 160ms cubic-bezier(0.23,1,0.32,1); }
+        .ag-tour-card[data-enter="true"] { opacity: 0; transform: scale(0.96); }
+        .ag-tour-body  { transition: filter 200ms ease, opacity 200ms ease; }
+        .ag-tour-body[data-moving="true"] { filter: blur(1.5px); opacity: 0.72; }
+        .ag-tour-btn   { transition: transform 160ms cubic-bezier(0.23,1,0.32,1), background-color 160ms ease; }
+        .ag-tour-btn:active { transform: scale(0.97); }
+        .ag-tour-btn:focus-visible { outline: 2px solid #F59E0B; outline-offset: 2px; }
+        @media (hover: hover) and (pointer: fine) {
+          .ag-tour-btn-primary:hover { background-color: #1E293B; }
+          .ag-tour-skip:hover { color: #0F172A; }
         }
-        @keyframes ag-tour-ring {
-          0%   { box-shadow: 0 0 0 0 rgba(245,158,11,0.55); }
-          70%  { box-shadow: 0 0 0 14px rgba(245,158,11,0); }
-          100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
-        }
-        .ag-tour-hand { animation: ag-tour-hand 1.1s ease-in-out infinite; }
-        .ag-tour-ring { animation: ag-tour-ring 1.6s ease-out infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .ag-tour-hand, .ag-tour-ring { animation: none !important; }
+          .ag-tour-scrim, .ag-tour-ring, .ag-tour-card, .ag-tour-body {
+            transition-property: opacity !important;
+            transition-duration: 120ms !important;
+          }
+          .ag-tour-body[data-moving="true"] { filter: none; }
         }
       `}</style>
 
-      {/*
-        Four panels rather than one overlay with a hole. A box-shadow spotlight
-        cannot be clicked through, which matters here: while the tour waits for
-        the mobile menu, the hamburger underneath must stay tappable.
-      */}
-      {centred ? (
-        <div className="absolute inset-0 bg-slate-950/62" />
-      ) : (
-        <>
-          <div
-            className="absolute left-0 right-0 top-0 bg-slate-950/62"
-            style={{ height: Math.max(0, rect.top - 6) }}
-          />
-          <div
-            className="absolute left-0 right-0 bg-slate-950/62"
-            style={{ top: rect.top + rect.height + 6, bottom: 0 }}
-          />
-          <div
-            className="absolute left-0 bg-slate-950/62"
-            style={{
-              top: rect.top - 6,
-              height: rect.height + 12,
-              width: Math.max(0, rect.left - 6),
-            }}
-          />
-          <div
-            className="absolute right-0 bg-slate-950/62"
-            style={{
-              top: rect.top - 6,
-              height: rect.height + 12,
-              left: rect.left + rect.width + 6,
-            }}
-          />
-          <div
-            className={`pointer-events-none absolute rounded-xl border-2 border-[#F59E0B] ${
-              waitingForSidebar ? "ag-tour-ring" : ""
-            }`}
-            style={{
-              top: rect.top - 6,
-              left: rect.left - 6,
-              width: rect.width + 12,
-              height: rect.height + 12,
-            }}
-          />
-        </>
-      )}
+      {/* One scrim with a real hole: animatable, and the target stays clickable. */}
+      <div
+        className="ag-tour-scrim absolute inset-0 bg-slate-950/55"
+        style={{ clipPath: cutout(targetRect, vp.w, vp.h) }}
+        onClick={() => finish(false)}
+      />
 
-      {/* Pointing hand while we wait for the menu to be opened. */}
-      {waitingForSidebar && rect ? (
+      {targetRect ? (
         <div
-          className="ag-tour-hand pointer-events-none absolute z-[2] text-3xl"
+          className="ag-tour-ring pointer-events-none absolute rounded-xl ring-2 ring-[#F59E0B]"
           style={{
-            top: rect.top + rect.height + 10,
-            left: rect.left + rect.width / 2 - 14,
+            transform: `translate3d(${targetRect.left - 6}px, ${targetRect.top - 6}px, 0)`,
+            width: targetRect.width + 12,
+            height: targetRect.height + 12,
+            top: 0,
+            left: 0,
           }}
-          aria-hidden
-        >
-          👆
-        </div>
+        />
       ) : null}
 
       <div
-        className="absolute rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.35)]"
-        style={cardStyle}
+        ref={cardRef}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="ag-tour-card absolute flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)] outline-none"
+        style={{
+          transform: `translate3d(${placed.x}px, ${placed.y}px, 0)`,
+          width: cardWidth,
+          maxHeight: mobile ? "60dvh" : "min(70dvh, 32rem)",
+          transformOrigin: origin,
+          top: 0,
+          left: 0,
+          paddingBottom: mobile ? "env(safe-area-inset-bottom)" : undefined,
+        }}
       >
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F59E0B]">
-            Step {stepNumber} of {visibleSteps.length}
-          </span>
-          <button
-            type="button"
-            onClick={() => finish(false)}
-            className="text-[11px] font-bold text-slate-400 transition hover:text-slate-700"
-          >
-            Skip
-          </button>
-        </div>
-
-        <h3 className="mt-2.5 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-[#0F172A]">
-          {step.title}
-        </h3>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
-          {step.body}
-        </p>
-
-        {waitingForSidebar ? (
-          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
-            Tap the menu button to carry on.
-          </p>
+        {/* Arrow notch, pointing back at the target. */}
+        {placed.arrow !== null ? (
+          <span
+            aria-hidden
+            className="absolute h-3 w-3 rotate-45 border border-slate-200/80 bg-white"
+            style={{
+              ...(placed.placement === "bottom"
+                ? { top: -ARROW, left: placed.arrow - ARROW, borderRight: "none", borderBottom: "none" }
+                : placed.placement === "top"
+                  ? { bottom: -ARROW, left: placed.arrow - ARROW, borderLeft: "none", borderTop: "none" }
+                  : placed.placement === "right"
+                    ? { left: -ARROW, top: placed.arrow - ARROW, borderRight: "none", borderTop: "none" }
+                    : { right: -ARROW, top: placed.arrow - ARROW, borderLeft: "none", borderBottom: "none" }),
+            }}
+          />
         ) : null}
 
-        <div className="mt-4 flex items-center gap-2">
-          <div className="flex flex-1 gap-1">
-            {visibleSteps.map((_, dot) => (
-              <span
-                key={dot}
-                className={`h-1 flex-1 rounded-full ${
-                  dot <= index ? "bg-[#F59E0B]" : "bg-slate-200"
-                }`}
-              />
-            ))}
-          </div>
+        <div
+          className="ag-tour-body min-h-0 flex-1 overflow-y-auto px-5 pt-5"
+          data-moving={moving ? "true" : "false"}
+        >
+          <h3 className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[#0F172A]">
+            {step.title}
+          </h3>
+          <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+            {step.body}
+          </p>
         </div>
 
-        <div className="mt-4 flex gap-2">
-          {index > 0 ? (
+        <div className="shrink-0 px-5 pb-5 pt-4">
+          <div className="flex items-center gap-3">
+            {/*
+              Progress dial instead of "Step 3 of 17". The total is read from
+              visibleSteps at render time, so conditional (mobile-only /
+              desktop-only) steps are already filtered out and the dial can
+              never disagree with the tour the user is actually being shown.
+            */}
+            <TourProgressDial current={index + 1} total={visibleSteps.length} />
+
             <button
               type="button"
-              onClick={prev}
-              className="h-10 rounded-xl border border-slate-200 px-4 text-[12px] font-bold text-slate-600 transition hover:border-slate-300"
+              onClick={() => finish(false)}
+              className="ag-tour-skip ag-tour-btn text-[12px] font-normal text-slate-500"
             >
-              Back
+              Skip
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={next}
-            disabled={waitingForSidebar}
-            className="h-10 flex-1 rounded-xl bg-[#0F172A] text-[12px] font-bold text-white transition disabled:opacity-40"
-          >
-            {isLast ? "Finish" : "Next"}
-          </button>
+            <span className="ml-auto" />
+            {index > 0 ? (
+              <button
+                type="button"
+                onClick={prev}
+                className="ag-tour-btn h-9 rounded-[10px] border border-slate-200 px-3 text-[12px] font-medium text-slate-700"
+              >
+                Back
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={next}
+              className="ag-tour-btn ag-tour-btn-primary h-9 rounded-[10px] bg-[#0F172A] px-4 text-[12px] font-medium text-white"
+            >
+              {isLast ? "Finish" : "Next"}
+            </button>
+          </div>
         </div>
       </div>
+
+      <span className="sr-only" aria-live="polite">
+        Step {index + 1} of {visibleSteps.length}: {step.title}
+      </span>
     </div>
   );
 };

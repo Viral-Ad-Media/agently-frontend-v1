@@ -1323,7 +1323,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
               className="agently-mobile-metric-card relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white p-1.5 text-center shadow-sm transition active:scale-[0.99] sm:flex-row sm:justify-start sm:gap-3 sm:rounded-2xl sm:p-3.5 sm:text-left"
             >
               <span
-                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
+                className="agently-mobile-metric-popover pointer-events-none absolute left-1/2 top-0 z-30 max-w-full rounded-full bg-slate-950 px-3 py-1.5 text-center text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-xl sm:hidden"
                 data-open={isRevealed ? "true" : "false"}
               >
                 {item.label}
@@ -1418,7 +1418,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
             {/* Mobile: one compact row per call. No transcript preview, no
                 separate agent box, no action-button row — tapping the row
                 opens the full detail, so nothing is lost, just decluttered. */}
-            <div className="divide-y divide-slate-100 md:hidden">
+            <div className="divide-y divide-slate-100 md:hidden" data-tour="calls-rows">
               {filtered.map((call, index) => {
                 const statusKey = call.status.toLowerCase();
                 return (
@@ -1470,7 +1470,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
                 <span>AI transcript preview</span>
                 <span className="text-right">Actions</span>
               </div>
-              <div className="divide-y divide-slate-200">
+              {/* Tour anchor: the row list. The step used to target the
+                  "Transcript" column header, which sits ~966px across inside a
+                  table wider than a 768px screen and so could never be shown. */}
+              <div className="divide-y divide-slate-200" data-tour="calls-rows">
                 {filtered.map((call, index) => {
                   const statusKey = call.status.toLowerCase();
                   const directionKey = call.direction.toLowerCase();
