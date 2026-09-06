@@ -2,9 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- No maximum-scale / user-scalable=no: blocking pinch-zoom fails WCAG
+         1.4.4, and low-vision users rely on it. The iOS zoom-on-focus this is
+         usually added to stop is handled properly instead, by keeping every
+         input at 16px (see .auth-input in index.css). -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Agently - Your AI Team, Built Around Your Business</title>
     <link rel="icon" type="image/png" href="/agently-favicon.png" />
@@ -13,7 +17,7 @@
     <script>
       (() => {
         const viewportContent =
-          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+          "width=device-width, initial-scale=1, viewport-fit=cover";
         const applyMobileViewport = () => {
           const viewport = document.querySelector('meta[name="viewport"]');
           if (

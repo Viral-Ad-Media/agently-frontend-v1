@@ -260,6 +260,21 @@ async function request<T>(path: string, options: RequestInit & { auth?: boolean 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+
+    // A dead session must end the session, not decorate the page with an
+    // error. The token lives in sessionStorage, so without this the stale
+    // token survives every reload of the tab: each one looks like a fresh
+    // start and fails identically, with no way back to the sign-in form
+    // short of knowing to hit "Sign out". Handled here rather than per
+    // route so it covers every super-admin call, not just the one that
+    // happened to be on screen when the token expired.
+    if (response.status === 401 && options.auth !== false) {
+      setAdminToken("");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("agently:super-admin-signed-out"));
+      }
+    }
+
     const error = new Error(payload?.error?.message || `Request failed with status ${response.status}`) as Error & { status?: number };
     error.status = response.status;
     throw error;

@@ -1505,6 +1505,18 @@ const SuperAdmin: React.FC = () => {
     }
   };
 
+  // The session check above only runs on mount. A 30-minute token that dies
+  // mid-task would otherwise leave the panel authenticated-but-broken: every
+  // request 401s and the errors surface inside whichever tab happens to be
+  // open, with no route back to the sign-in form. adminApi clears the token
+  // and fires this the moment any call comes back 401.
+  useEffect(() => {
+    const onSignedOut = () => setAuthenticated(false);
+    window.addEventListener("agently:super-admin-signed-out", onSignedOut);
+    return () =>
+      window.removeEventListener("agently:super-admin-signed-out", onSignedOut);
+  }, []);
+
   useEffect(() => {
     if (!authenticated) return;
     adminApi
