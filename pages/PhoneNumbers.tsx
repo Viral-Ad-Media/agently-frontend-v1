@@ -733,7 +733,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
             </div>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
+            data-tour="numbers-assign"
+          >
             <Select
               value={assignmentDrafts[numberId] || ""}
               onChange={(event) =>

@@ -3,6 +3,7 @@ node_modules/
 .DS_Store
 dist/
 .env.local
+.env.*.local
 
 # Local agent tooling, not application code
 .claude/

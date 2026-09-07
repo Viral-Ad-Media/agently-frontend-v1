@@ -394,7 +394,7 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         </section>
 
-        <section className={sectionClass}>
+        <section className={sectionClass} data-tour="settings-business">
           <div className="mb-5">
             <h3 className="text-base font-black text-slate-900">
               Business Profile

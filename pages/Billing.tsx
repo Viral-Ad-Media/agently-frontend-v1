@@ -725,7 +725,10 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6">
+      <section
+        className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6"
+        data-tour="billing-history"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             {/* No uppercase-tracking eyebrow and no font-black: measured

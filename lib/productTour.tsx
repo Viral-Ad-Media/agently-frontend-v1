@@ -44,6 +44,8 @@ import React, {
   useState,
 } from "react";
 
+import { resolveApiBaseUrl } from "../utils/runtimeUrls";
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Types
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -184,15 +186,78 @@ const resolveOne = (spec: string): HTMLElement | null => {
   }
 };
 
+/**
+ * Controls a tour must never press.
+ *
+ * A tour step can carry `before.click` to flip a tab before it measures. That
+ * mechanism has no idea what it is clicking: on /phone-numbers it resolved to
+ * a control called "Buy Number", and a text-matched target one word away from
+ * that is a real purchase. The same shape of mistake on /agent would place a
+ * live phone call to a real number and bill for it.
+ *
+ * So the engine refuses. Highlighting any of these is fine and often the whole
+ * point of the step; pressing one on the user's behalf never is. A page can
+ * also mark a control explicitly with data-tour-side-effect, which is the
+ * reliable signal — the word list is the safety net for controls nobody
+ * remembered to mark.
+ */
+const SIDE_EFFECT_TEXT =
+  /\b(call now|start call|test call|place call|ring|dial|buy|purchase|pay|charge|top ?up|checkout|subscribe|send|publish|delete|remove|discard|cancel|invite|confirm|submit|save)\b/i;
+
+const hasSideEffect = (el: HTMLElement): boolean => {
+  if (el.hasAttribute("data-tour-side-effect")) return true;
+  // Only the control's own label, not its subtree's: a section containing a
+  // "Delete" button somewhere is not itself destructive, and treating it as
+  // such would block every legitimate tab.
+  const own = Array.from(el.childNodes)
+    .filter((n) => n.nodeType === Node.TEXT_NODE)
+    .map((n) => n.textContent || "")
+    .join(" ");
+  const label =
+    (own.trim() ? own : el.getAttribute("aria-label") || el.textContent || "");
+  return SIDE_EFFECT_TEXT.test(label.replace(/\s+/g, " ").trim());
+};
+
+/**
+ * An element that sticks out past the right edge of the viewport.
+ *
+ * Full-width is fine; overflowing is not. A row inside a horizontally
+ * scrolling table is the usual case: at 1440 the first call row measures
+ * 1134px and is a good target, at 768 the same row is 825px and its right edge
+ * lands at 1057px, so the card gets positioned against a box the user cannot
+ * see. Being wider than the viewport is a property of the breakpoint, not of
+ * the step, which is why it is settled here rather than by hand-writing
+ * per-width targets.
+ */
+const overflowsViewport = (el: HTMLElement): boolean => {
+  const rect = el.getBoundingClientRect();
+  return rect.right > window.innerWidth + 1 || rect.left < -1;
+};
+
 const resolveTarget = (target?: TourTarget): HTMLElement | null => {
   if (!target) return null;
   const specs = Array.isArray(target) ? target : [target];
+  let fallback: HTMLElement | null = null;
   for (const spec of specs) {
     const found = resolveOne(spec);
-    if (found) return found;
+    if (!found) continue;
+    if (!overflowsViewport(found)) return found;
+    // Keep it, but keep looking: a later spec is usually the container that
+    // holds the overflowing element, and pointing at the container is far
+    // better than pointing off the side of the screen.
+    fallback = fallback || found;
   }
-  return null;
+  return fallback;
 };
+
+/**
+ * Exported so a step's target can be checked against the real DOM without
+ * re-implementing the matcher. Every previous audit of "does this step point at
+ * anything" guessed at selectors from the source and got it wrong; this runs
+ * the engine's own resolution, so an audit cannot silently drift from what the
+ * tour actually does at runtime.
+ */
+export { resolveTarget, hasSideEffect };
 
 /* ══════════════════════════════════════════════════════════════════════════
  * Scrolling
@@ -444,18 +509,21 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Every number in this workspace, and which agent answers on it. A number with no agent assigned will not be answered.",
     },
     {
-      target: ["text:Assign", "text:Assign to agent"],
+      // "text:Assign" matched nothing: the control reads "Add agent". The row
+      // only exists once the tenant owns a number, so this step is skipped on
+      // an empty account rather than pointed at the empty state.
+      target: "tour:numbers-assign",
       title: "Assigning a number",
       body: "Point a number at one of your agents here. This is the step most people miss — buying a number is not enough on its own.",
     },
     {
-      before: {
-        click: ["text:Buy Number", "text:Buy a number", "tour:numbers-buy"],
-        waitMs: 520,
-      },
-      target: ["tour:numbers-search", "tour:numbers-buy", "text:Buy Number"],
+      // No `before.click` any more. It resolved to a control labelled "Buy
+      // Number", and the engine now refuses to press anything that reads like a
+      // purchase — correctly, because one careless text match away is a real
+      // one. The tab is described instead, and the tenant presses it.
+      target: ["tour:numbers-buy", "text:Buy Number"],
       title: "Buying a number",
-      body: "Search by country and area code, then buy the one you want. Your usage balance needs to cover the purchase first.",
+      body: "Open this tab to search by country and area code, then buy the one you want. Your usage balance needs to cover the purchase first.",
     },
     {
       placement: "center",
@@ -471,33 +539,39 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "This is where you shape how your agent sounds and what it says. Changes take effect on the next call.",
     },
     {
-      target: ["text:Greeting", "text:Greeting message"],
+      // Was "text:Voice"/"text:Language" and landed on the Save Voice button.
+      // The card itself holds the name, voice, language and provider.
+      target: "tour:agent-identity",
+      title: "Voice and language",
+      body: "Your agent's name, the voice it speaks in, and its language. Listen to a preview before you save.",
+    },
+    {
+      // Was "text:Greeting" and matched nothing at any width: the field's
+      // caption is a styled <Label>, and the resolver only reads buttons,
+      // links, headings and real <label> elements.
+      target: "tour:agent-greeting",
       title: "The greeting",
       body: 'The first thing every caller hears. Name the business and the agent, for example: "Thanks for calling Nutra Wellness, this is Mimi — how can I help?"',
     },
     {
-      target: ["text:Voice", "text:Language"],
-      title: "Voice and language",
-      body: "Pick how your agent sounds and which language it speaks. Try a preview before you save.",
+      target: "tour:agent-prompt",
+      title: "What it should do on the call",
+      body: "The behaviour and the objective. This is what the agent is actually trying to achieve once the greeting is out of the way.",
     },
     {
-      target: [
-        "tour:agent-escalation",
-        "text:Escalation",
-        "text:Escalation phone",
-      ],
-      title: "Handing over to a person",
-      body: "When a caller needs a human, this is the number your agent transfers them to.",
+      // These last two live behind tabs, so the tour points at the tab strip
+      // and says which tab, rather than clicking through. `before.click` on a
+      // tab would work, but the same mechanism is what put a purchase button
+      // one text match away from being pressed on /phone-numbers, and a tour
+      // is not worth that risk for two steps.
+      target: "tour:agent-tabs",
+      title: "Knowledge, and handing over",
+      body: "Two more tabs. Assignment & FAQs is where you attach a knowledge base, so the agent can answer real questions instead of just taking messages. Rules & Routing is where you set the number it transfers to when a caller needs a person.",
     },
     {
-      target: ["text:Knowledge", "text:Knowledge base"],
-      title: "What it knows",
-      body: "Attach a knowledge base and your agent can answer real questions about your business instead of just taking messages.",
-    },
-    {
-      target: ["tour:agent-call-now", "text:Test call", "text:Call now"],
-      title: "Try it yourself",
-      body: "Ring your own agent and hear exactly what a customer hears. Do this after every change you care about.",
+      target: "tour:agent-start-call",
+      title: "Hearing it for yourself",
+      body: "Start Call rings a number with this agent so you hear exactly what a customer hears. It places a real call and uses real credit, so it is yours to press when you are ready — not part of this tour.",
     },
   ],
 
@@ -531,14 +605,12 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "This is what your agents actually know. Everything they say about your business comes from here.",
     },
     {
-      target: ["text:Add source", "text:Add website", "text:Website"],
-      title: "Add your website",
-      body: "Point it at your site and Agently reads the public pages, turning them into answers your agents can use.",
-    },
-    {
-      target: ["text:FAQ", "text:FAQs"],
-      title: "Fill the gaps by hand",
-      body: "Anything not on your website — pricing rules, opening hours, policies — add it here. Hand-written answers outrank scraped ones.",
+      // "Add source"/"Add website"/"FAQ" were all invented: the page's only
+      // reliable control is "+ New knowledge base", and on a new account it is
+      // the only thing on the page at all.
+      target: "tour:kb-new",
+      title: "Start with your website",
+      body: "Create a knowledge base and point it at your site. Agently reads the public pages and turns them into answers your agents can use. You are charged per page read, so fewer, better pages usually wins.",
     },
   ],
 
@@ -554,7 +626,11 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Volume, average length and how many turned into leads.",
     },
     {
-      target: ["[data-tour='calls-rows'] > *", "tour:calls-rows", "tour:calls-stats"],
+      // No fallback to tour:calls-stats. On an account with no calls yet the
+      // fallback fired, so the previous step and this one both pointed at the
+      // same stats bar while this one said "open any call" — nonsense on a page
+      // showing an empty list. With no fallback the step is skipped instead.
+      target: ["[data-tour='calls-rows'] > *", "tour:calls-rows"],
       title: "Inside a call",
       body: "Open any call for the recording, the full transcript and a short summary of what the caller wanted.",
     },
@@ -585,7 +661,9 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Calls, chats, numbers and website scans all draw from this balance. Agents pause when it runs out.",
     },
     {
-      target: ["text:History", "text:Transactions"],
+      // The section is called "Wallet activity"; nothing on the page has ever
+      // said "History" or "Transactions".
+      target: "tour:billing-history",
       title: "Where it went",
       body: "Every charge, itemised, so you can see exactly what each call and each number cost.",
     },
@@ -624,9 +702,11 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "Your business details and the things every agent inherits.",
     },
     {
-      target: ["tour:settings-general", "text:Business", "text:General"],
+      // settings-general wraps Customer Account — the login name and email —
+      // not the business profile this step describes.
+      target: ["tour:settings-business", "tour:settings-general"],
       title: "Business details",
-      body: "Name, industry, timezone and hours. Your agents use all of it when they speak to customers.",
+      body: "Name, industry, location and website. Your agents use all of it when they speak to customers.",
     },
   ],
 };
@@ -638,12 +718,77 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
 const MIRROR_KEY = "agently.tour.progress.v1";
 
 /**
- * Bump to replay every page tour for everyone. Progress is local-only for now;
- * the server-backed version (per-page versions set by an admin) comes back in
- * the backend phase. Deliberately NOT fetching /api/tour/state here: that call
- * plus a 300ms route poll is what got the previous tour switched off.
+ * Fallback version, used only until /api/tour/state answers (and if it never
+ * does). The real per-page version lives in tour_pages and is set by an admin,
+ * which is what makes "introduce one new feature" possible without replaying
+ * the whole tour.
  */
 const TOUR_VERSION = 1;
+
+/**
+ * Who sees a tour.
+ *
+ * localStorage alone got this wrong in both directions: an existing customer
+ * on a second device, or in a private window, was shown the whole tour again as
+ * if they were new, and a tenant who genuinely was new but had cleared site
+ * data saw it twice. "Have I seen this" is a fact about the account, so it is
+ * read from and written to the server, with localStorage kept only as a mirror
+ * so the current session behaves correctly while offline or if the write fails.
+ *
+ * The earlier note here warned against fetching state because of a 300ms route
+ * poll — that poll is gone (see useHashRoute), so the objection no longer
+ * applies. This is one request per session, not per route.
+ */
+type ServerTourState = {
+  versions: Record<string, number>;
+  completed: Record<string, number>;
+};
+
+let serverStatePromise: Promise<ServerTourState | null> | null = null;
+
+const fetchServerState = (): Promise<ServerTourState | null> => {
+  if (serverStatePromise) return serverStatePromise;
+  serverStatePromise = (async () => {
+    try {
+      const token = window.localStorage.getItem("agently.auth.token");
+      if (!token) return null;
+      const response = await fetch(`${resolveApiBaseUrl()}/api/tour/state`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (data?.degraded) return null;
+      const versions: Record<string, number> = {};
+      for (const page of data?.pages || []) {
+        versions[page.pageKey] = Number(page.version) || TOUR_VERSION;
+      }
+      const completed: Record<string, number> = {};
+      for (const [key, value] of Object.entries(data?.progress || {})) {
+        completed[key] = Number((value as { completedVersion?: number })?.completedVersion) || 0;
+      }
+      return { versions, completed };
+    } catch {
+      return null;
+    }
+  })();
+  return serverStatePromise;
+};
+
+const recordServerProgress = (pageKey: string, version: number, status: "completed" | "skipped") => {
+  try {
+    const token = window.localStorage.getItem("agently.auth.token");
+    if (!token) return;
+    void fetch(`${resolveApiBaseUrl()}/api/tour/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ pageKey, version, status }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* the localStorage mirror still covers this session */
+  }
+};
 
 type ProgressMap = Record<string, number>; // pageKey -> completedVersion
 
@@ -723,6 +868,34 @@ export function usePageTour(explicitPathname?: string) {
   );
   const [activePage, setActivePage] = useState<string | null>(null);
   const startedThisSession = useRef<Set<string>>(new Set());
+  const [server, setServer] = useState<ServerTourState | null>(null);
+  /*
+   * Until the server answers, no tour opens.
+   *
+   * Opening on the localStorage mirror alone is what made an existing customer
+   * on a new laptop sit through the whole tour again: their browser had no
+   * record, even though their account did. One request settles it, and a page
+   * that stays quiet for an extra moment is much cheaper than a tour that
+   * replays for someone who finished it months ago.
+   */
+  const [serverSettled, setServerSettled] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void fetchServerState().then((state) => {
+      if (!live) return;
+      setServer(state);
+      setServerSettled(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const versionFor = useCallback(
+    (page: string) => server?.versions[page] ?? TOUR_VERSION,
+    [server],
+  );
 
   const route = useMemo(() => {
     const clean = (pathname || "/").split("?")[0];
@@ -739,7 +912,19 @@ export function usePageTour(explicitPathname?: string) {
       return;
     }
     if (startedThisSession.current.has(route)) return;
-    if ((progress[route] ?? 0) >= TOUR_VERSION) return;
+    if (!serverSettled) return;
+    /*
+     * The page is only enabled if the server listed it. An admin disabling a
+     * page in tour_pages has to actually stop that tour, or the switch is
+     * decorative.
+     */
+    if (server && !(route in server.versions)) return;
+    const publishedVersion = versionFor(route);
+    // Whichever record is further ahead wins, so a completion that failed to
+    // reach the server still suppresses the tour for the rest of the session,
+    // and a completion from another device suppresses it here.
+    const seen = Math.max(progress[route] ?? 0, server?.completed[route] ?? 0);
+    if (seen >= publishedVersion) return;
     /*
      * Mark "started" inside the timer, not before it.
      *
@@ -753,18 +938,25 @@ export function usePageTour(explicitPathname?: string) {
       setActivePage(route);
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [route, progress]);
+  }, [route, progress, server, serverSettled, versionFor]);
 
-  const close = useCallback(() => {
-    const page = activePage;
-    setActivePage(null);
-    if (!page) return;
-    setProgress((current) => {
-      const next = { ...current, [page]: TOUR_VERSION };
-      writeProgress(next);
-      return next;
-    });
-  }, [activePage]);
+  const close = useCallback(
+    (status: "completed" | "skipped" = "completed") => {
+      const page = activePage;
+      setActivePage(null);
+      if (!page) return;
+      const version = versionFor(page);
+      // Skipping is a decision too, and re-showing a tour somebody dismissed is
+      // the behaviour this whole mechanism exists to avoid.
+      recordServerProgress(page, version, status);
+      setProgress((current) => {
+        const next = { ...current, [page]: version };
+        writeProgress(next);
+        return next;
+      });
+    },
+    [activePage, versionFor],
+  );
 
   /** Replay a page's tour on demand (used by the help menu). */
   const replay = useCallback(
@@ -778,6 +970,28 @@ export function usePageTour(explicitPathname?: string) {
         writeProgress(next);
         return next;
       });
+      // Clear the server's record too, or the next page load reads "already
+      // completed" back from the account and the replay lasts one session.
+      setServer((current) =>
+        current
+          ? { ...current, completed: { ...current.completed, [page]: 0 } }
+          : current,
+      );
+      try {
+        const token = window.localStorage.getItem("agently.auth.token");
+        if (token) {
+          void fetch(`${resolveApiBaseUrl()}/api/tour/reset`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pageKey: page }),
+          }).catch(() => {});
+        }
+      } catch {
+        /* the local mirror still replays it this session */
+      }
       setActivePage(page);
     },
     [route],
@@ -992,7 +1206,9 @@ export const PageTour: React.FC<{
   page: string;
   steps: TourStep[];
   open: boolean;
-  onClose: (completed: boolean) => void;
+  // "skipped" is recorded as deliberately as "completed": dismissing a tour
+  // is a decision, and showing it again next time would undo it.
+  onClose: (status: "completed" | "skipped") => void;
 }> = ({ page, steps, open, onClose }) => {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -1016,9 +1232,28 @@ export const PageTour: React.FC<{
       steps.filter((step) => {
         if (step.only === "mobile" && !mobile) return false;
         if (step.only === "desktop" && mobile) return false;
-        return true;
+        /*
+         * Drop a step whose target is not usable at this width.
+         *
+         * A step that cannot find its element, or can only find one that hangs
+         * off the side of the screen, has nothing honest to point at: the card
+         * either floats in the middle with no highlight, or rings a box the
+         * user cannot see. A call row is 1146px wide and a fine target at
+         * 1440; the same row at 768 is still 837px and reaches past the right
+         * edge, so the step is simply not shown there.
+         *
+         * Only steps that ASK for a target are dropped. A deliberately centred
+         * card (the welcome and the sign-off) has no target and always shows.
+         */
+        if (!step.target) return true;
+        const el = resolveTarget(step.target);
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.right <= window.innerWidth + 1 && rect.left >= -1;
       }),
-    [steps, mobile],
+    // vp is in the dependency list on purpose: the set is re-derived on resize
+    // and on rotation, so the "of N" count stays honest.
+    [steps, mobile, vp],
   );
 
   const step = visibleSteps[index];
@@ -1093,7 +1328,21 @@ export const PageTour: React.FC<{
           return Boolean(to) && to !== here;
         })();
 
-        if (trigger && !leavesRoute) {
+        /*
+         * And never let it press something that does real work. `before` exists
+         * to flip a tab; a tab click is free and reversible. Anything that
+         * spends money, places a call or sends something is out of bounds even
+         * when a step asks for it — the step is wrong, not the guard.
+         */
+        if (trigger && hasSideEffect(trigger)) {
+          if (import.meta.env?.DEV) {
+            console.warn(
+              "[tour] refusing to click a control with a side effect:",
+              (trigger.textContent || "").trim().slice(0, 60),
+              "— highlight it instead of clicking it.",
+            );
+          }
+        } else if (trigger && !leavesRoute) {
           trigger.click();
           await new Promise((r) =>
             window.setTimeout(r, step.before?.waitMs ?? 420),
@@ -1196,15 +1445,15 @@ export const PageTour: React.FC<{
   }, [index, open]);
 
   const finish = useCallback(
-    (completed: boolean) => {
+    (status: "completed" | "skipped") => {
       restoreFocus.current?.focus?.();
-      onClose(completed);
+      onClose(status);
     },
     [onClose],
   );
 
   const next = useCallback(() => {
-    if (index >= visibleSteps.length - 1) finish(true);
+    if (index >= visibleSteps.length - 1) finish("completed");
     else setIndex((i) => i + 1);
   }, [index, visibleSteps.length, finish]);
 
@@ -1223,7 +1472,7 @@ export const PageTour: React.FC<{
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Escape") {
       event.stopPropagation();
-      finish(false);
+      finish("skipped");
       return;
     }
     if (event.key === "ArrowRight") next();
@@ -1304,7 +1553,7 @@ export const PageTour: React.FC<{
       <div
         className="ag-tour-scrim absolute inset-0 bg-slate-950/55"
         style={{ clipPath: cutout(targetRect, vp.w, vp.h) }}
-        onClick={() => finish(false)}
+        onClick={() => finish("skipped")}
       />
 
       {targetRect ? (
@@ -1376,7 +1625,7 @@ export const PageTour: React.FC<{
 
             <button
               type="button"
-              onClick={() => finish(false)}
+              onClick={() => finish("skipped")}
               className="ag-tour-skip ag-tour-btn text-[12px] font-normal text-slate-500"
             >
               Skip

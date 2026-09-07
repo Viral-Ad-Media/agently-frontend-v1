@@ -1875,6 +1875,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         <div
           className="ag-agent-tabs ag-agent-tabs-flat ag-voice-tabs"
           role="tablist"
+          data-tour="agent-tabs"
         >
           {TABS.map((t) => (
             <button
@@ -1922,6 +1923,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               else void startWebcall(draft, org);
             }}
             className="ag-button-soft"
+            data-tour-side-effect="starts a real, billed web call"
           >
             Live web call
           </button>
@@ -1929,6 +1931,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             type="button"
             onClick={() => void openCallCampaignComposer("call-now")}
             className="ag-button-orange"
+            data-tour="agent-start-call"
+            data-tour-side-effect="places a real phone call"
           >
             Start Call
           </button>
@@ -2141,7 +2145,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 </button>
               </div>
             </div>
-            <div className="grid min-w-0 grid-cols-2 sm:grid-cols-3 gap-4">
+            {/* The tour anchors on this grid, not on the card around it: the
+                card runs to ~1250px tall, which is taller than a laptop
+                viewport, so a tooltip has nothing sensible to point at. The
+                grid is the six fields the step is actually about. */}
+            <div
+              className="grid min-w-0 grid-cols-2 sm:grid-cols-3 gap-4"
+              data-tour="agent-identity"
+            >
               <div className="min-w-0">
                 <Label>Agent Name</Label>
                 <Inp
@@ -2621,7 +2632,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
             </div>
 
-            <div>
+            <div data-tour="agent-greeting">
               <Label>Greeting Message</Label>
               <BufferedTextarea
                 rows={2}
@@ -2633,7 +2644,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
 
-            <div className="ag-prompt-purpose-card space-y-5">
+            <div className="ag-prompt-purpose-card space-y-5" data-tour="agent-prompt">
               <div>
                 <h3 className="text-sm font-medium leading-tight text-[#0F172A]">
                   Prompt & Call Purpose
@@ -2735,7 +2746,10 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ KNOWLEDGE TAB */}
       {tab === "knowledge" && (
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+          <div
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
+            data-tour="agent-knowledge"
+          >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">

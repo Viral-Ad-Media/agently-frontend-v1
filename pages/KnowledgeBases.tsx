@@ -462,6 +462,7 @@ const KnowledgeBases: React.FC<KnowledgeBasesProps> = ({
         </div>
         <button
           onClick={() => setCreateOpen(true)}
+          data-tour="kb-new"
           className="ag-kb-new-button inline-flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-amber-600 sm:h-10 sm:rounded-xl sm:px-5 sm:py-2.5 sm:text-[10px] sm:uppercase sm:tracking-widest"
         >
           <span>+ New knowledge base</span>
