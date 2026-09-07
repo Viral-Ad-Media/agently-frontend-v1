@@ -698,6 +698,77 @@ const AgentFilterToolbar: React.FC<{
   );
 };
 
+/**
+ * Holds a chart's box and only mounts the chart once that box has real
+ * dimensions.
+ *
+ * Recharts' ResponsiveContainer measures its parent on mount and logs
+ * "The width(-1) and height(-1) of chart should be greater than 0" when the
+ * parent has not been laid out yet. That happens here because the charts are
+ * gated on requestIdleCallback, which the browser will happily run while the
+ * tab is backgrounded — at which point getBoundingClientRect returns zeros and
+ * every chart on the page logs the warning. Waiting for a non-zero size is the
+ * fix Recharts itself recommends, and it also avoids mounting an SVG that would
+ * immediately have to re-render.
+ */
+/**
+ * Holds a chart's box, measures it, and hands the chart real pixel dimensions.
+ *
+ * Two problems, one fix. ResponsiveContainer with width="100%" height="100%"
+ * starts every mount at width -1 / height -1 and logs "The width(-1) and
+ * height(-1) of chart should be greater than 0" during that first render —
+ * before its own ResizeObserver has run. The remedy the message suggests
+ * (minWidth / minHeight) does not work: calculateChartDimensions ignores both.
+ * The warning is only avoidable by giving it numbers instead of percentages.
+ *
+ * So this measures the box and passes concrete pixels down, which also means
+ * the chart never mounts into a zero-sized parent — the case that made this
+ * fire on a backgrounded tab, where the charts are gated on
+ * requestIdleCallback and getBoundingClientRect returns zeros.
+ */
+const ChartFrame: React.FC<{
+  className?: string;
+  dataTour?: string;
+  ready: boolean;
+  children: (size: { width: number; height: number }) => React.ReactNode;
+}> = ({ className, dataTour, ready, children }) => {
+  const host = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const node = host.current;
+    if (!node) return;
+    const apply = (width: number, height: number) => {
+      if (width <= 0 || height <= 0) return;
+      setSize((current) =>
+        current && Math.abs(current.width - width) < 1 && Math.abs(current.height - height) < 1
+          ? current
+          : { width: Math.round(width), height: Math.round(height) },
+      );
+    };
+    const rect = node.getBoundingClientRect();
+    apply(rect.width, rect.height);
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (box) apply(box.width, box.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={host} className={className} data-tour={dataTour}>
+      {ready && size ? (
+        children(size)
+      ) : (
+        <div className="flex h-full items-center justify-center rounded-3xl bg-slate-50 text-sm font-semibold text-slate-400">
+          Preparing chart…
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
   const minuteLimitFromOrg =
     dashboard.usage.minuteLimit || org.subscription?.usage?.minuteLimit || 500;
@@ -1106,9 +1177,13 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
               Calls
             </div>
           </div>
-          <div className="h-[22rem] sm:h-[25rem]" data-tour="dashboard-chart">
-            {chartsReady ? (
-              <ResponsiveContainer width="100%" height="100%">
+          <ChartFrame
+            className="h-[22rem] sm:h-[25rem]"
+            dataTour="dashboard-chart"
+            ready={chartsReady}
+          >
+            {({ width, height }) => (
+              <ResponsiveContainer width={width} height={height}>
                 <AreaChart
                   data={flowData}
                   margin={{ top: 14, right: 18, left: 0, bottom: 18 }}
@@ -1169,12 +1244,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                   />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center rounded-3xl bg-slate-50 text-sm font-semibold text-slate-400">
-                Preparing chart…
-              </div>
             )}
-          </div>
+          </ChartFrame>
         </div>
 
         <div className="min-w-0 ag-panel p-4 sm:p-5">
@@ -1220,9 +1291,9 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
             Direction mix
           </p>
-          <div className="mt-4 h-64 sm:h-[21rem]">
-            {chartsReady ? (
-              <ResponsiveContainer width="100%" height="100%">
+          <ChartFrame className="mt-4 h-64 sm:h-[21rem]" ready={chartsReady}>
+            {({ width, height }) => (
+              <ResponsiveContainer width={width} height={height}>
                 <BarChart
                   data={[
                     { name: "Inbound", calls: selectedStats.inboundCalls },
@@ -1261,12 +1332,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                   />
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center rounded-3xl bg-slate-50 text-sm font-semibold text-slate-400">
-                Preparing chart…
-              </div>
             )}
-          </div>
+          </ChartFrame>
         </div>
 
         <div className="min-w-0 ag-panel p-4 sm:p-5">

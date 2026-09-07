@@ -559,16 +559,6 @@ export const PAGE_TOURS: Record<string, TourStep[]> = {
       body: "The behaviour and the objective. This is what the agent is actually trying to achieve once the greeting is out of the way.",
     },
     {
-      // These last two live behind tabs, so the tour points at the tab strip
-      // and says which tab, rather than clicking through. `before.click` on a
-      // tab would work, but the same mechanism is what put a purchase button
-      // one text match away from being pressed on /phone-numbers, and a tour
-      // is not worth that risk for two steps.
-      target: "tour:agent-tabs",
-      title: "Knowledge, and handing over",
-      body: "Two more tabs. Assignment & FAQs is where you attach a knowledge base, so the agent can answer real questions instead of just taking messages. Rules & Routing is where you set the number it transfers to when a caller needs a person.",
-    },
-    {
       target: "tour:agent-start-call",
       title: "Hearing it for yourself",
       body: "Start Call rings a number with this agent so you hear exactly what a customer hears. It places a real call and uses real credit, so it is yours to press when you are ready — not part of this tour.",
