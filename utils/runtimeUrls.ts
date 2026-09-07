@@ -1,4 +1,13 @@
-const DEFAULT_BACKEND_URL = "https://agently-server-v1.vercel.app";
+/*
+ * Where the API lives when nothing else says otherwise.
+ *
+ * This used to point at agently-server-v1.vercel.app, which we no longer run.
+ * The API is the Lightsail container service; a stale default means any build
+ * that loses VITE_API_BASE_URL silently talks to a dead host instead of
+ * failing loudly.
+ */
+const DEFAULT_BACKEND_URL =
+  "https://agently-ingest.zxy7w9w65bv9y.us-east-1.cs.amazonlightsail.com";
 const LOCAL_BACKEND_URL = "http://localhost:4000";
 
 const FRONTEND_ONLY_HOSTS = new Set([
@@ -54,6 +63,8 @@ function getWindowHost(): string {
 
 function firstUsableBackendUrl(candidates: Array<string | undefined | null>): string {
   const frontendOrigin = getWindowOrigin();
+  const pageIsLocal = isLocalHost(getWindowHost());
+
   for (const candidate of candidates) {
     const cleaned = cleanBaseUrl(candidate);
     if (!cleaned) continue;
@@ -65,6 +76,23 @@ function firstUsableBackendUrl(candidates: Array<string | undefined | null>): st
     // /chatbot-widget, /chatbot-avatar, or /chatbot-avatars.
     if (frontendOrigin && origin === frontendOrigin) continue;
     if (isFrontendOnlyUrl(origin)) continue;
+
+    /*
+     * A page served from a real domain must never call localhost.
+     *
+     * VITE_API_BASE_URL is inlined at build time, so a build machine — or a
+     * hosting project with the variable left set to a developer's value —
+     * bakes its own address into the bundle that every visitor downloads. That
+     * is what shipped to www.agentlycall.com: the production bundle contained
+     * resolveApiBaseUrl() === "http://localhost:4000", so every visitor's
+     * browser tried to reach an API on THEIR OWN machine and reported
+     * "You are currently not connected to the internet".
+     *
+     * The value is never right off localhost, so it is rejected here rather
+     * than trusted. Local development is unaffected: there the page is on
+     * localhost too, and a localhost API is exactly what is wanted.
+     */
+    if (!pageIsLocal && isLocalHost(hostFromUrl(origin))) continue;
 
     return origin;
   }
