@@ -9,6 +9,19 @@ export function humanizeApiError(input: { status?: number; code?: string | null 
   if (status === 404) return "The requested resource could not be found.";
   if (status === 409) return "This record already exists or conflicts with another record.";
   if (status === 429) return "Too many requests. Please wait a moment and try again.";
+  /*
+   * Payments are their own subsystem, and lumping them into the 503 branch
+   * below told tenants "Agently could not reach its data service" whenever
+   * Stripe was misconfigured — the same sentence a real database outage
+   * produces, naming the wrong component, and asking them to retry something
+   * the API reports as retryable: false. Retrying never fixes a missing key.
+   */
+  if (code === "STRIPE_NOT_CONFIGURED") {
+    return "Card payments are not set up on this workspace yet. Nothing has been charged — contact support and we will switch them on.";
+  }
+  if (code === "STRIPE_TIMEOUT" || code === "STRIPE_NETWORK_ERROR") {
+    return "Our payment provider did not respond in time. Nothing has been charged. Please try again in a moment.";
+  }
   if (status === 503 || code.includes("UNAVAILABLE")) {
     return "Agently could not reach its data service. Your session is still valid; please retry.";
   }
