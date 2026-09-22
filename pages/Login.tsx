@@ -135,6 +135,12 @@ const formatAuthError = (error: unknown) => {
     if (error.status === 429) {
       return "Too many attempts. Please wait a minute and try again.";
     }
+    if (error.code === "EMAIL_DELIVERY_FAILED" && error.retryable === false) {
+      return "We could not deliver email to this address. Check the address or contact support before trying again.";
+    }
+    if (error.code === "AUTH_TEMPORARILY_UNAVAILABLE") {
+      return "Authentication is temporarily unavailable. Please try again shortly.";
+    }
     if (error.status >= 500) {
       return "Something went wrong on our side. Please try again in a moment — if it keeps happening, contact support.";
     }
