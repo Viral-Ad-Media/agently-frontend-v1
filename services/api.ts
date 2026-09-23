@@ -205,18 +205,52 @@ const triggerDownload = (blob: Blob, filename: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-type AuthResponse = {
+/**
+ * A completed authentication. Only ever produced by verify-email,
+ * verify-login-otp, accept-invitation and change-password — never by
+ * /login or /register, which now stop at a challenge.
+ */
+export type AuthSession = {
   token: string;
   user: User;
-  organization?: Organization;
+  session: {
+    id: string;
+    absoluteExpiresAt: string;
+    idleTimeoutSeconds: number;
+    absoluteTimeoutSeconds: number;
+  };
+  emailVerified?: boolean;
+  mustSetPassword?: boolean;
 };
 
-type MagicLinkResponse = {
-  message: string;
+/**
+ * The half-authenticated state between a correct password (or a fresh signup)
+ * and the emailed code. `pendingToken` is NOT a session: the API refuses it
+ * everywhere except the verify and resend endpoints.
+ */
+export type AuthChallenge = {
+  /** Exactly one of these is true, and it decides which endpoint verifies it. */
+  otpRequired?: boolean;
+  verificationRequired?: boolean;
+  pendingToken: string;
   email: string;
-  magicLinkToken: string;
-  verifyEndpoint: string;
-  magicLinkUrl?: string | null;
+  expiresInSeconds: number;
+  message?: string;
+};
+
+export type AuthConfig = {
+  providers: string[];
+  passwordMinLength: number;
+  signupRequiresEmailVerification: boolean;
+  loginRequiresEmailOtp: boolean;
+  magicLinkSignInEnabled: boolean;
+  emailVerifyCodeTtlSeconds: number;
+  loginOtpTtlSeconds: number;
+  codeLength: number;
+  maxCodeAttempts: number;
+  resendCooldownSeconds: number;
+  sessionIdleTimeoutSeconds: number;
+  sessionAbsoluteTimeoutSeconds: number;
 };
 
 type PasswordResetRequestResponse = {
@@ -234,35 +268,95 @@ type MessengerResponse = {
 type LeadExportDownload = Promise<void>;
 
 export const api = {
+  /** Public. Which sign-in methods the backend actually offers right now. */
+  async getAuthConfig() {
+    return request<AuthConfig>('/api/auth/config', { auth: false });
+  },
+
+  /**
+   * Step 1 of signing in. A correct password does NOT produce a session — it
+   * produces a challenge. The session is issued by verifyLoginOtp.
+   */
   async login(email: string, password: string) {
-    return request<AuthResponse>('/api/auth/login', {
+    return request<AuthChallenge>('/api/auth/login', {
       method: 'POST',
       auth: false,
-      body: { email, password },
+      body: { email, password, client: 'web' },
     });
   },
 
+  /**
+   * Step 1 of signing up. Creates the user, organization and owner membership,
+   * then stops at email verification.
+   */
   async register(payload: { name: string; companyName: string; email: string; password: string }) {
-    return request<AuthResponse>('/api/auth/register', {
+    return request<AuthChallenge>('/api/auth/register', {
       method: 'POST',
       auth: false,
-      body: payload,
+      body: { ...payload, client: 'web' },
     });
   },
 
-  async sendMagicLink(email: string) {
-    return request<MagicLinkResponse>('/api/auth/magic-link', {
+  /** Step 2 of signing up. Proves mailbox ownership and returns the session. */
+  async verifyEmail(pendingToken: string, code: string) {
+    return request<AuthSession>('/api/auth/verify-email', {
       method: 'POST',
       auth: false,
-      body: { email },
+      body: { pendingToken, code, client: 'web' },
     });
   },
 
-  async verifyMagicLink(token: string) {
-    return request<AuthResponse>('/api/auth/magic-link/verify', {
+  /** Step 2 of signing in. Returns the session. */
+  async verifyLoginOtp(pendingToken: string, code: string) {
+    return request<AuthSession>('/api/auth/verify-login-otp', {
       method: 'POST',
       auth: false,
-      body: { token },
+      body: { pendingToken, code, client: 'web' },
+    });
+  },
+
+  /**
+   * Send another code. The backend reads the purpose out of the pending token,
+   * so there is one endpoint for both flows and no way to ask for the wrong
+   * kind of code. Returns a REFRESHED pendingToken which the caller must store
+   * in place of the old one.
+   */
+  async resendAuthCode(pendingToken: string) {
+    return request<{
+      sent: boolean;
+      pendingToken: string;
+      email: string;
+      expiresInSeconds: number;
+      resendCooldownSeconds: number;
+    }>('/api/auth/resend-code', {
+      method: 'POST',
+      auth: false,
+      body: { pendingToken },
+    });
+  },
+
+  /**
+   * Accept a team invitation. Replaces the removed magic-link verifier, and
+   * unlike it can only ever resolve a user an admin already created.
+   */
+  async acceptInvitation(token: string) {
+    return request<AuthSession>('/api/auth/accept-invitation', {
+      method: 'POST',
+      auth: false,
+      body: { token, client: 'web' },
+    });
+  },
+
+  async logout() {
+    return request<{ success: boolean; sessionRevoked: boolean }>('/api/auth/logout', {
+      method: 'POST',
+    });
+  },
+
+  /** Ends every session for this account, on every device. */
+  async logoutEverywhere() {
+    return request<{ success: boolean; allSessionsRevoked: boolean }>('/api/auth/logout-all', {
+      method: 'POST',
     });
   },
 
@@ -279,12 +373,6 @@ export const api = {
       method: 'POST',
       auth: false,
       body: { token, password },
-    });
-  },
-
-  async logout() {
-    return request<{ success: boolean }>('/api/auth/logout', {
-      method: 'POST',
     });
   },
 
@@ -992,11 +1080,16 @@ export const api = {
     });
   },
 
+  /**
+   * Changing a password revokes every session for the account, including this
+   * one, so the response carries a REPLACEMENT token. The caller must store it
+   * or the current tab is signed out a moment later.
+   */
   async changePassword(payload: { currentPassword: string; newPassword: string }) {
-    return request<{ success: boolean; message: string }>('/api/auth/change-password', {
-      method: 'POST',
-      body: payload,
-    });
+    return request<{ success: boolean; message: string; otherSessionsRevoked: boolean } & AuthSession>(
+      '/api/auth/change-password',
+      { method: 'POST', body: { ...payload, client: 'web' } },
+    );
   },
 
 

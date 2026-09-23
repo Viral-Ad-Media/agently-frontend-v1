@@ -1,19 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ApiError, NETWORK_OFFLINE_MESSAGE } from "../services/api";
+import type { AuthChallenge } from "../services/api";
+import AuthCodePanel from "../components/AuthCodePanel";
 
 interface LoginProps {
-  onLogin: (email: string, password: string) => Promise<void>;
+  /** Verifies the password and returns the OTP challenge. Never a session. */
+  onLogin: (email: string, password: string) => Promise<AuthChallenge>;
+  /** Creates the workspace and returns the email-verification challenge. */
   onRegister: (payload: {
     name: string;
     companyName: string;
     email: string;
     password: string;
-  }) => Promise<void>;
-  onSendMagicLink: (
-    email: string,
-  ) => Promise<{ magicLinkToken: string; magicLinkUrl?: string | null }>;
-  onVerifyMagicLink: (token: string) => Promise<void>;
+  }) => Promise<AuthChallenge>;
+  /** Completes signup. Establishes the session and loads the workspace. */
+  onVerifyEmail: (pendingToken: string, code: string) => Promise<void>;
+  /** Completes sign-in. Establishes the session and loads the workspace. */
+  onVerifyLoginOtp: (pendingToken: string, code: string) => Promise<void>;
+  /** Sends another code and returns the REFRESHED pending token. */
+  onResendCode: (
+    pendingToken: string,
+  ) => Promise<{ pendingToken: string; expiresInSeconds: number }>;
+  resendCooldownSeconds?: number;
 }
 
 const EyeIcon = ({ hidden }: { hidden: boolean }) => (
@@ -159,49 +168,39 @@ const formatAuthError = (error: unknown) => {
 const Login: React.FC<LoginProps> = ({
   onLogin,
   onRegister,
-  onSendMagicLink,
-  onVerifyMagicLink,
+  onVerifyEmail,
+  onVerifyLoginOtp,
+  onResendCode,
+  resendCooldownSeconds = 60,
 }) => {
-  const location = useLocation();
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [method, setMethod] = useState<"password" | "magic">("password");
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [magicLinkToken, setMagicLinkToken] = useState("");
-  const [magicLinkUrl, setMagicLinkUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
-  const attemptedMagicTokenRef = useRef<string | null>(null);
 
-  const verifyMagicLink = async (token: string) => {
-    setLoading(true);
+  /*
+   * The pending challenge, or null when we are showing the form.
+   *
+   * Holding the whole AuthChallenge (rather than a boolean plus loose fields)
+   * means the panel below cannot be rendered without the pendingToken it needs,
+   * and a resend that returns a REFRESHED token replaces the whole object —
+   * which is what keeps the client from verifying against a token the server
+   * has already superseded.
+   */
+  const [challenge, setChallenge] = useState<AuthChallenge | null>(null);
+
+  const challengePurpose =
+    challenge?.verificationRequired === true ? "email_verify" : "login_otp";
+
+  const resetToForm = () => {
+    setChallenge(null);
     setError("");
-
-    try {
-      await onVerifyMagicLink(token);
-    } catch (submitError) {
-      setError(formatAuthError(submitError));
-      setSent(true);
-    } finally {
-      setLoading(false);
-    }
+    setPassword("");
   };
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get("magic") || params.get("magicToken");
-
-    if (!token || attemptedMagicTokenRef.current === token) {
-      return;
-    }
-
-    attemptedMagicTokenRef.current = token;
-    void verifyMagicLink(token);
-  }, [location.search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,29 +208,47 @@ const Login: React.FC<LoginProps> = ({
     setError("");
 
     try {
-      if (authMode === "signup") {
-        await onRegister({
-          name,
-          companyName,
-          email,
-          password,
-        });
-        return;
-      }
-
-      if (method === "password") {
-        await onLogin(email, password);
-      } else {
-        const response = await onSendMagicLink(email);
-        setMagicLinkToken(response.magicLinkToken);
-        setMagicLinkUrl(response.magicLinkUrl || "");
-        setSent(true);
-      }
+      /*
+       * Both paths end at a challenge, never at a session. /register and
+       * /login return { pendingToken, ... } and nothing else; the token only
+       * arrives once the emailed code is verified.
+       */
+      const next =
+        authMode === "signup"
+          ? await onRegister({ name, companyName, email, password })
+          : await onLogin(email, password);
+      setChallenge(next);
+      // Do not keep the password in component state while the user reads their
+      // email. It has done its job.
+      setPassword("");
     } catch (submitError) {
       setError(formatAuthError(submitError));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerify = async (code: string) => {
+    if (!challenge) return;
+    if (challengePurpose === "email_verify") {
+      await onVerifyEmail(challenge.pendingToken, code);
+    } else {
+      await onVerifyLoginOtp(challenge.pendingToken, code);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!challenge) return;
+    const refreshed = await onResendCode(challenge.pendingToken);
+    setChallenge((current) =>
+      current
+        ? {
+            ...current,
+            pendingToken: refreshed.pendingToken,
+            expiresInSeconds: refreshed.expiresInSeconds,
+          }
+        : current,
+    );
   };
 
   const heading =
@@ -356,75 +373,16 @@ const Login: React.FC<LoginProps> = ({
               </div>
 
               <div className="rounded-[1.45rem] border border-[#0F172A]/10 bg-[#F8FAFC]/94 p-3.5 shadow-[0_14px_42px_rgba(15,23,42,0.09)] backdrop-blur-xl sm:p-3.5">
-                {sent ? (
-                  <div className="py-5 text-center animate-in fade-in zoom-in">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#F59E0B]/10 text-[#F59E0B]">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="28"
-                        height="28"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <rect width="20" height="16" x="2" y="4" rx="2" />
-                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                      </svg>
-                    </div>
-                    <h2 className="text-xl font-medium tracking-[-0.035em] text-[#0F172A]">
-                      Secure link ready
-                    </h2>
-                    <p className="mx-auto mt-2 max-w-sm text-[15px] font-normal leading-[21px] text-[#0F172A]/68">
-                      Continue to your workspace with the secure link generated
-                      for this session.
-                    </p>
-                    {error && (
-                      <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                        {error}
-                      </div>
-                    )}
-                    <div className="mt-5 space-y-3">
-                      <button
-                        onClick={() => {
-                          if (magicLinkToken) {
-                            void verifyMagicLink(magicLinkToken);
-                          }
-                        }}
-                        disabled={loading || !magicLinkToken}
-                        className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
-                      >
-                        {loading ? (
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        ) : (
-                          "Continue to workspace"
-                        )}
-                      </button>
-                      {magicLinkUrl && (
-                        <a
-                          href={magicLinkUrl}
-                          className="block min-h-[44px] w-full rounded-full border border-[#0F172A]/12 px-4 py-3 text-sm font-medium text-[#0F172A]/72 transition hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
-                        >
-                          Open secure link
-                        </a>
-                      )}
-                      <button
-                        onClick={() => {
-                          setSent(false);
-                          setMethod("password");
-                          setMagicLinkToken("");
-                          setMagicLinkUrl("");
-                          setError("");
-                        }}
-                        className="text-sm font-medium text-[#F59E0B] hover:underline"
-                      >
-                        Try another method
-                      </button>
-                    </div>
-                  </div>
+                {challenge ? (
+                  <AuthCodePanel
+                    purpose={challengePurpose}
+                    email={challenge.email}
+                    expiresInSeconds={challenge.expiresInSeconds}
+                    resendCooldownSeconds={resendCooldownSeconds}
+                    onSubmit={handleVerify}
+                    onResend={handleResend}
+                    onCancel={resetToForm}
+                  />
                 ) : (
                   <>
                     <div className="mb-2.5 grid grid-cols-2 rounded-full border border-[#0F172A]/8 bg-white p-1">
@@ -441,7 +399,6 @@ const Login: React.FC<LoginProps> = ({
                       <button
                         onClick={() => {
                           setAuthMode("signup");
-                          setMethod("password");
                           setError("");
                         }}
                         type="button"
@@ -450,25 +407,6 @@ const Login: React.FC<LoginProps> = ({
                         Create account
                       </button>
                     </div>
-
-                    {authMode === "signin" && (
-                      <div className="mb-2.5 grid grid-cols-2 rounded-full border border-[#0F172A]/8 bg-white p-1">
-                        <button
-                          onClick={() => setMethod("password")}
-                          type="button"
-                          className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${method === "password" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
-                        >
-                          Password
-                        </button>
-                        <button
-                          onClick={() => setMethod("magic")}
-                          type="button"
-                          className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${method === "magic" ? "bg-[#F59E0B] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
-                        >
-                          Secure link
-                        </button>
-                      </div>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-2.5">
                       {authMode === "signup" && (
@@ -480,6 +418,7 @@ const Login: React.FC<LoginProps> = ({
                             <input
                               type="text"
                               required
+                              autoComplete="name"
                               placeholder="Your name"
                               className="auth-input"
                               value={name}
@@ -493,6 +432,7 @@ const Login: React.FC<LoginProps> = ({
                             <input
                               type="text"
                               required
+                              autoComplete="organization"
                               placeholder="Company or team"
                               className="auth-input"
                               value={companyName}
@@ -509,6 +449,7 @@ const Login: React.FC<LoginProps> = ({
                         <input
                           type="email"
                           required
+                          autoComplete="email"
                           placeholder="name@company.com"
                           className="auth-input"
                           value={email}
@@ -516,46 +457,54 @@ const Login: React.FC<LoginProps> = ({
                         />
                       </div>
 
-                      {(authMode === "signup" || method === "password") && (
-                        <div>
-                          <div className="mb-1 flex justify-between">
-                            <label className="block text-[12px] font-medium text-[#0F172A]">
-                              Password
-                            </label>
-                            {authMode === "signin" && (
-                              <Link
-                                to="/forgot-password"
-                                className="-my-1 inline-flex min-h-[32px] items-center px-1 text-xs font-medium text-[#F59E0B] hover:underline"
-                              >
-                                Forgot?
-                              </Link>
-                            )}
-                          </div>
-                          <div className="relative">
-                            <input
-                              type={showPassword ? "text" : "password"}
-                              required={
-                                authMode === "signup" || method === "password"
-                              }
-                              placeholder="••••••••"
-                              className="auth-input"
-                              style={{ paddingRight: "2.85rem" }}
-                              value={password}
-                              onChange={(e) => setPassword(e.target.value)}
-                            />
-                            <PasswordVisibilityButton
-                              visible={showPassword}
-                              onToggle={() =>
-                                setShowPassword((value) => !value)
-                              }
-                              label="password"
-                            />
-                          </div>
+                      <div>
+                        <div className="mb-1 flex justify-between">
+                          <label className="block text-[12px] font-medium text-[#0F172A]">
+                            Password
+                          </label>
+                          {authMode === "signin" && (
+                            <Link
+                              to="/forgot-password"
+                              className="-my-1 inline-flex min-h-[32px] items-center px-1 text-xs font-medium text-[#F59E0B] hover:underline"
+                            >
+                              Forgot?
+                            </Link>
+                          )}
                         </div>
-                      )}
+                        <div className="relative">
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            required
+                            minLength={authMode === "signup" ? 8 : undefined}
+                            autoComplete={
+                              authMode === "signup"
+                                ? "new-password"
+                                : "current-password"
+                            }
+                            placeholder="••••••••"
+                            className="auth-input"
+                            style={{ paddingRight: "2.85rem" }}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                          />
+                          <PasswordVisibilityButton
+                            visible={showPassword}
+                            onToggle={() => setShowPassword((value) => !value)}
+                            label="password"
+                          />
+                        </div>
+                        {authMode === "signup" && (
+                          <p className="mt-1 text-[11px] font-normal text-[#0F172A]/52">
+                            At least 8 characters.
+                          </p>
+                        )}
+                      </div>
 
                       {error && (
-                        <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-red-600">
+                        <div
+                          role="alert"
+                          className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-red-600"
+                        >
                           {error}
                         </div>
                       )}
@@ -569,18 +518,25 @@ const Login: React.FC<LoginProps> = ({
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                         ) : authMode === "signup" ? (
                           "Create workspace"
-                        ) : method === "password" ? (
-                          "Sign in"
                         ) : (
-                          "Send secure link"
+                          "Continue"
                         )}
                       </button>
+
+                      {/* Both flows end at an emailed code, so say so before
+                          the button is pressed rather than surprising people
+                          with a screen they did not expect. */}
+                      <p className="text-center text-[11px] font-normal leading-[15px] text-[#0F172A]/52">
+                        {authMode === "signup"
+                          ? "We'll email you a 6-digit code to confirm your address."
+                          : "We'll email you a 6-digit code to finish signing in."}
+                      </p>
                     </form>
                   </>
                 )}
               </div>
 
-              {!sent && (
+              {!challenge && (
                 <p className="mt-2 text-center text-[12px] font-normal text-[#0F172A]/60">
                   {authMode === "signup" ? (
                     <>

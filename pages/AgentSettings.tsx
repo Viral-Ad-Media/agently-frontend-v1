@@ -2971,11 +2971,6 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   desc: "Always collect caller name, phone & reason",
                 },
                 {
-                  key: "autoBook",
-                  label: "Booking Engine",
-                  desc: "Allow callers to schedule appointments",
-                },
-                {
                   key: "autoEscalate",
                   label: "Auto Escalation",
                   desc: "Only suggest an escalation manager for extreme or unresolved matters",

@@ -99,8 +99,7 @@ const Home: React.FC = () => {
             <p className="marketing-copy mt-5 max-w-2xl">
               Agently gives teams a control room for inbound calls, outbound
               follow-ups, lead capture, no-show recovery, cart recovery,
-              appointment setting, onboarding, chatbot support, CRM handoff, and
-              call intelligence.
+              onboarding, chatbot support, CRM handoff, and call intelligence.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">

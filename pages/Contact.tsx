@@ -61,8 +61,8 @@ const Contact: React.FC = () => {
             </h1>
             <p className="marketing-copy mt-5 max-w-xl">
               Tell us whether you are launching inbound answering, outbound
-              follow-ups, chatbot support, lead recovery, appointment setting,
-              or a custom AI agent workflow.
+              follow-ups, chatbot support, lead recovery, or a custom AI agent
+              workflow.
             </p>
 
             <div className="mt-6 grid gap-3">

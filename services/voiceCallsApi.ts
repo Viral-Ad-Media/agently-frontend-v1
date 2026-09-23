@@ -723,6 +723,25 @@ export const voiceCallsApi = {
       const payload = await request<unknown>('/api/twilio/owned-numbers');
       return normalizeTwilioNumbersResponse(payload);
     },
+    // The country list used to arrive only inside a SEARCH response, and the
+    // dropdown was seeded with ["US"] — so a tenant could not pick CA to search
+    // for CA numbers. Fetched on mount now, independently of searching.
+    async getNumberCountries() {
+      return request<{
+        sellableCountries: string[];
+        lowRiskVoiceCountries: string[];
+        defaultCountry: string;
+        noBundleRequired: string[];
+      }>('/api/twilio/number-countries');
+    },
+    // Permanent. The caller must pass the exact number back as confirmation;
+    // the server compares digits only, and refuses without it.
+    async releaseTwilioNumber(numberId: string, confirmPhoneNumber: string) {
+      return request<{ released: boolean; phoneNumber: string; releasedAt: string; message: string }>(
+        `/api/twilio/numbers/${encodeURIComponent(numberId)}/release`,
+        { method: 'POST', body: { confirmPhoneNumber } },
+      );
+    },
     async searchAvailableTwilioNumbers(params: Record<string, string | number | boolean | undefined>) {
       const payload = await request<unknown>('/api/twilio/numbers/search', {
         method: 'POST',

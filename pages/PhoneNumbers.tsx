@@ -247,6 +247,13 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
   // mobile. Both are now in-app modals.
   const [purchaseTarget, setPurchaseTarget] =
     useState<AvailableTwilioNumber | null>(null);
+  // Release is permanent, so the confirmation is typing the number rather than
+  // clicking a button. The server enforces the same thing independently — the
+  // UI is not the guard, it is the explanation.
+  const [releaseTarget, setReleaseTarget] = useState<TwilioNumberRecord | null>(
+    null,
+  );
+  const [releaseConfirmText, setReleaseConfirmText] = useState("");
   const [creditBlock, setCreditBlock] = useState<{
     title: string;
     message: string;
@@ -265,6 +272,28 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
 
   const agents = useMemo(() => org.voiceAgents || [], [org.voiceAgents]);
   const isCallsMode = initialTab === "calls";
+
+  // Populate the country dropdown on mount rather than from a search result.
+  // It was seeded with ["US"] and only replaced after a successful search, so
+  // CA inventory was unreachable: you had to search as US to learn CA existed.
+  useEffect(() => {
+    let cancelled = false;
+    voiceCallsApi.phoneNumbers
+      .getNumberCountries()
+      .then((data) => {
+        if (cancelled) return;
+        if (Array.isArray(data?.sellableCountries) && data.sellableCountries.length) {
+          setCountryOptions(data.sellableCountries);
+        }
+      })
+      .catch(() => {
+        // Leave the seeded default in place. Losing the extra countries is a
+        // degraded dropdown; throwing here would break the whole page.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const requestedTab = isCallsMode
@@ -573,6 +602,28 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     if (target) await handlePurchase(target);
   };
 
+  const confirmRelease = async () => {
+    const target = releaseTarget;
+    if (!target) return;
+    const phoneNumber = getPhoneNumber(target) || "";
+    const numberId = getNumberId(target) || "";
+    setBusy(`release-${numberId}`);
+    try {
+      await voiceCallsApi.phoneNumbers.releaseTwilioNumber(numberId, phoneNumber);
+      setReleaseTarget(null);
+      setReleaseConfirmText("");
+      showToast(`${phoneNumber} released. Its monthly charge has stopped.`, true);
+      // Reload rather than removing it locally: the server decides what the
+      // list looks like now, and a released number that failed to release at
+      // the carrier must still appear.
+      await loadNumbers();
+    } catch (error: any) {
+      showToast(error?.message || "Could not release this number.", false);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const renderNumberCard = (number: TwilioNumberRecord) => {
     const phoneNumber = getPhoneNumber(number) || "Unknown number";
     const numberId = getNumberId(number) || phoneNumber;
@@ -778,6 +829,27 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                 : "Remove all outbound agents"}
             </button>
           )}
+        </div>
+
+        {/* Release. Deliberately the quietest control on the card and set
+            apart from everything else: it is the only action here that cannot
+            be undone. The confirmation is a separate modal that requires
+            typing the number, not a button that fires on one click. */}
+        <div className="border-t border-slate-100 pt-3">
+          <button
+            onClick={() => {
+              setReleaseTarget(number);
+              setReleaseConfirmText("");
+            }}
+            disabled={!!busy}
+            className="text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:text-red-600 disabled:opacity-50"
+          >
+            Release this number
+          </button>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Gives the number back to the carrier and stops its monthly charge.
+            This cannot be undone.
+          </p>
         </div>
       </div>
     );
@@ -1099,6 +1171,70 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         <p className="mt-2 text-xs text-slate-500">
           If anything goes wrong during setup, the number is returned and you
           are not charged.
+        </p>
+      </AppModal>
+
+      <AppModal
+        open={!!releaseTarget}
+        onClose={() => {
+          setReleaseTarget(null);
+          setReleaseConfirmText("");
+        }}
+        title="Release this number permanently"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setReleaseTarget(null);
+                setReleaseConfirmText("");
+              }}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              Keep it
+            </button>
+            <button
+              onClick={() => void confirmRelease()}
+              disabled={
+                !!busy ||
+                releaseConfirmText.replace(/\D/g, "") !==
+                  String(getPhoneNumber(releaseTarget as TwilioNumberRecord) || "").replace(
+                    /\D/g,
+                    "",
+                  )
+              }
+              className="rounded-xl bg-red-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy?.startsWith("release-") ? "Releasing…" : "Release forever"}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          <span className="font-black text-slate-900">
+            {getPhoneNumber(releaseTarget as TwilioNumberRecord)}
+          </span>{" "}
+          goes back to the carrier. Your monthly charge for it stops, and any
+          agent using it is detached.
+        </p>
+        <p className="mt-2 text-sm font-bold text-red-600">
+          You will almost certainly never be able to get this number back — not
+          even by buying it again. Anyone who calls it will reach whoever owns
+          it next.
+        </p>
+        <label className="mt-4 block text-[10px] font-black uppercase tracking-widest text-slate-500">
+          Type the number to confirm
+        </label>
+        <input
+          value={releaseConfirmText}
+          onChange={(event) => setReleaseConfirmText(event.target.value)}
+          placeholder={getPhoneNumber(releaseTarget as TwilioNumberRecord) || ""}
+          autoComplete="off"
+          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono text-sm focus:border-red-400 focus:outline-none"
+        />
+        <p className="mt-1 text-[11px] text-slate-400">
+          Typing it is the confirmation. The server checks this too, so a
+          mistyped number cannot release anything.
         </p>
       </AppModal>
 

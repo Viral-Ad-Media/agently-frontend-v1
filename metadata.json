@@ -1,6 +1,6 @@
 {
   "name": "Agently",
-  "description": "An AI-powered inbound voice and chat receptionist platform for service-based businesses to handle FAQs, capture leads, and book appointments 24/7.",
+  "description": "An AI-powered inbound voice and chat receptionist platform for service-based businesses to handle FAQs and capture leads 24/7.",
   "requestFramePermissions": [
     "microphone"
   ]

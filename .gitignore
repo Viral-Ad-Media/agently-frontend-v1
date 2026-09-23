@@ -7,3 +7,8 @@ dist/
 
 # Local agent tooling, not application code
 .claude/
+
+.vercel
+
+# Launch-video output from the /brag tooling — artefacts, not source.
+brag-output/

@@ -86,6 +86,10 @@ const ForgotPassword = lazyRoute(
   () => import("./pages/ForgotPassword"),
   "forgot-password",
 );
+const AcceptInvite = lazyRoute(
+  () => import("./pages/AcceptInvite"),
+  "accept-invite",
+);
 const Features = lazyRoute(() => import("./pages/Features"), "features");
 const Home = lazyRoute(() => import("./pages/Home"), "home");
 const About = lazyRoute(() => import("./pages/About"), "about");
@@ -285,6 +289,32 @@ const App: React.FC = () => {
       window.removeEventListener("agently:auth-expired", handleAuthExpired);
   }, []);
 
+  /*
+   * The server's own auth policy, fetched once.
+   *
+   * The resend cooldown is enforced server-side; asking for it rather than
+   * hardcoding 60 means changing AUTH_RESEND_COOLDOWN_SECONDS does not leave
+   * the button lying about how long the wait is.
+   */
+  const [authConfig, setAuthConfig] = useState<Awaited<
+    ReturnType<typeof api.getAuthConfig>
+  > | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getAuthConfig()
+      .then((config) => {
+        if (!cancelled) setAuthConfig(config);
+      })
+      .catch(() => {
+        // Non-fatal: the panel falls back to the documented default.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
     setWorkspace(nextWorkspace);
     setStartupError("");
@@ -384,31 +414,47 @@ const App: React.FC = () => {
     };
   }, [org?.id]);
 
-  const handleLogin = async (email: string, password: string) => {
-    const response = await api.login(email, password);
-    setSessionToken(response.token);
-    await loadWorkspace();
-  };
+  /*
+   * Authentication is two steps now, and only the second one produces a token.
+   *
+   * handleLogin and handleRegister deliberately do NOT touch session storage:
+   * what they return is a challenge, not a session. Storing anything here was
+   * the old bug — the client treated "we sent you something" as "you are signed
+   * in", which is how the magic-link flow ended up bypassing the mailbox
+   * entirely.
+   */
+  const handleLogin = async (email: string, password: string) =>
+    api.login(email, password);
 
   const handleRegister = async (payload: {
     name: string;
     companyName: string;
     email: string;
     password: string;
-  }) => {
-    const response = await api.register(payload);
+  }) => api.register(payload);
+
+  /** Step 2 of signup. The first point at which a session exists. */
+  const handleVerifyEmail = async (pendingToken: string, code: string) => {
+    const response = await api.verifyEmail(pendingToken, code);
     setSessionToken(response.token);
     await loadWorkspace();
   };
 
-  const handleSendMagicLink = async (email: string) => {
-    return api.sendMagicLink(email);
-  };
-
-  const handleVerifyMagicLink = async (token: string) => {
-    const response = await api.verifyMagicLink(token);
+  /** Step 2 of sign-in. */
+  const handleVerifyLoginOtp = async (pendingToken: string, code: string) => {
+    const response = await api.verifyLoginOtp(pendingToken, code);
     setSessionToken(response.token);
     await loadWorkspace();
+  };
+
+  const handleResendCode = async (pendingToken: string) =>
+    api.resendAuthCode(pendingToken);
+
+  const handleAcceptInvitation = async (token: string) => {
+    const response = await api.acceptInvitation(token);
+    setSessionToken(response.token);
+    await loadWorkspace();
+    return { mustSetPassword: response.mustSetPassword };
   };
 
   const handleLogout = async () => {
@@ -777,7 +823,14 @@ const App: React.FC = () => {
     currentPassword: string;
     newPassword: string;
   }) => {
-    await api.changePassword(payload);
+    /*
+     * Changing a password revokes every session for the account, including the
+     * one this tab is holding. The API hands back a replacement token for
+     * exactly that reason; storing it is what keeps the user in Settings
+     * instead of bouncing them to the sign-in form a second later.
+     */
+    const response = await api.changePassword(payload);
+    if (response?.token) setSessionToken(response.token);
   };
 
   const protectedRouteProps: Omit<ProtectedRouteProps, "children"> = {
@@ -922,14 +975,20 @@ const App: React.FC = () => {
                 <Login
                   onLogin={handleLogin}
                   onRegister={handleRegister}
-                  onSendMagicLink={handleSendMagicLink}
-                  onVerifyMagicLink={handleVerifyMagicLink}
+                  onVerifyEmail={handleVerifyEmail}
+                  onVerifyLoginOtp={handleVerifyLoginOtp}
+                  onResendCode={handleResendCode}
+                  resendCooldownSeconds={authConfig?.resendCooldownSeconds ?? 60}
                 />
               )
             }
           />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ForgotPassword />} />
+          <Route
+            path="/accept-invite"
+            element={<AcceptInvite onAccept={handleAcceptInvitation} />}
+          />
           <Route
             path="/features"
             element={
