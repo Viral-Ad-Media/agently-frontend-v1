@@ -602,6 +602,16 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
     if (target) await handlePurchase(target);
   };
 
+  /*
+   * Derived once, null-safe. The modal body renders on every pass — AppModal
+   * evaluates its children even when open is false — so calling
+   * getPhoneNumber(releaseTarget) directly threw on null and took the whole
+   * Phone Numbers screen down. TypeScript did not catch it because the call
+   * site used `as TwilioNumberRecord`, a cast that asserts a lie; the fix is
+   * to stop lying rather than to add another guard at each call.
+   */
+  const releasePhoneNumber = releaseTarget ? getPhoneNumber(releaseTarget) : "";
+
   const confirmRelease = async () => {
     const target = releaseTarget;
     if (!target) return;
@@ -1196,12 +1206,10 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
             <button
               onClick={() => void confirmRelease()}
               disabled={
+                !releaseTarget ||
                 !!busy ||
                 releaseConfirmText.replace(/\D/g, "") !==
-                  String(getPhoneNumber(releaseTarget as TwilioNumberRecord) || "").replace(
-                    /\D/g,
-                    "",
-                  )
+                  releasePhoneNumber.replace(/\D/g, "")
               }
               className="rounded-xl bg-red-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -1211,9 +1219,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         }
       >
         <p className="text-sm text-slate-600">
-          <span className="font-black text-slate-900">
-            {getPhoneNumber(releaseTarget as TwilioNumberRecord)}
-          </span>{" "}
+          <span className="font-black text-slate-900">{releasePhoneNumber}</span>{" "}
           goes back to the carrier. Your monthly charge for it stops, and any
           agent using it is detached.
         </p>
@@ -1228,7 +1234,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
         <input
           value={releaseConfirmText}
           onChange={(event) => setReleaseConfirmText(event.target.value)}
-          placeholder={getPhoneNumber(releaseTarget as TwilioNumberRecord) || ""}
+          placeholder={releasePhoneNumber}
           autoComplete="off"
           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono text-sm focus:border-red-400 focus:outline-none"
         />
