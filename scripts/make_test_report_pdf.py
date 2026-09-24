@@ -10,6 +10,7 @@ hand except the findings register, which mirrors docs/model-risk/VALIDATION_REPO
 """
 import io
 import json
+import os
 import subprocess
 import sys
 from datetime import date
@@ -52,6 +53,7 @@ def git(*args):
         return "n/a"
 
 
+AUTHOR = os.environ.get("REPORT_AUTHOR", "Abdulmalik Ajisegiri")
 COMMIT = git("rev-parse", "--short", "HEAD")
 BRANCH = git("rev-parse", "--abbrev-ref", "HEAD")
 
@@ -163,6 +165,7 @@ story += [
     Spacer(1, 0.5 * inch),
     table(
         [
+            ["Prepared by", f"<b>{AUTHOR}</b>"],
             ["Repository", "Viral-Ad-Media/agently-frontend-v1"],
             ["Branch / commit", f"{BRANCH} @ {COMMIT}"],
             ["Report date", date.today().isoformat()],
@@ -433,13 +436,13 @@ def on_page(canvas, doc):
     canvas.setFont("Helvetica", 7.5)
     canvas.setFillColor(colors.HexColor(MUTED))
     if doc.page > 1:
-        canvas.drawString(0.75 * inch, 0.35 * inch, f"Agently Frontend · Test Results Report · {COMMIT}")
+        canvas.drawString(0.75 * inch, 0.35 * inch, f"Agently Frontend · Test Results Report · {AUTHOR} · {COMMIT}")
         canvas.drawRightString(letter[0] - 0.75 * inch, 0.35 * inch, f"Page {doc.page}")
     canvas.restoreState()
 
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 doc = SimpleDocTemplate(str(OUT), pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
-                        title="Agently Frontend — Test Results Report", author="Agently engineering")
+                        title="Agently Frontend — Test Results Report", author=AUTHOR)
 doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
 print(f"wrote {OUT}")
