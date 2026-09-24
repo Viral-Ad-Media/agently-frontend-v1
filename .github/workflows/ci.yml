@@ -1,5 +1,12 @@
 name: Frontend CI
 
+# The build step alone was not enough, and there is a specific reason this file
+# now has a test step. On 24 Sep a null dereference in a modal body shipped to
+# production and took the Phone Numbers screen down. `tsc --noEmit` passed and
+# `vite build` passed — neither of them renders a component, so neither could
+# have known. A green pipeline that cannot catch a blank screen is a pipeline
+# that teaches people the screen is fine.
+
 on:
   push:
   pull_request:
@@ -9,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Frontend build
+    name: Frontend build and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,4 +25,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Tests before the build: a render failure is the more informative one,
+      # and waiting on a two-minute bundle to hear about it wastes the signal.
+      - run: npm test
       - run: npm run build
