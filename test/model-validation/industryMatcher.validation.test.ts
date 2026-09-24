@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { INDUSTRIES, searchIndustries, type IndustryMatch } from "../../lib/industries";
 import { INDUSTRY_BENCHMARK, type BenchmarkBucket, type BenchmarkCase } from "./fixtures/industryBenchmark";
+import { record } from "../performance/metrics";
 
 /*
  * MRM-001 — Industry matcher (lib/industries.ts → searchIndustries).
@@ -182,15 +183,23 @@ describe("MRM-001 industry matcher — outcomes analysis (benchmark)", () => {
     expect(champ.top1).toBeGreaterThan(chall.top1);
     expect(champ.top3).toBeGreaterThan(chall.top3);
     expect(champ.mrr).toBeGreaterThan(chall.mrr);
+    const rows: Record<string, { champion: Metrics; challenger: Metrics }> = {};
+    for (const b of ["alias", "paraphrase", "typo", "sentence", "ambiguous"] as const) {
+      rows[b] = { champion: evaluate(champion, bucket(b)), challenger: evaluate(challenger, bucket(b)) };
+    }
+    rows.ALL = { champion: champ, challenger: chall };
+    const tied = inDomain.filter((c) => {
+      const r = searchIndustries(c.query);
+      return r[1] && r[0].score === r[1].score;
+    }).length;
+    const oodMax = Math.max(...bucket("ood").map((c) => searchIndustries(c.query)[0]?.score ?? 0));
+    record("industryBenchmark", { buckets: rows, tiedTop1: tied, inDomain: inDomain.length, oodMaxScore: oodMax, thresholds: THRESHOLDS });
     if (process.env.MRM_REPORT) {
-      const rows: Record<string, unknown> = {};
-      for (const b of ["alias", "paraphrase", "typo", "sentence", "ambiguous"] as const) {
-        const c1 = evaluate(champion, bucket(b));
-        const c2 = evaluate(challenger, bucket(b));
-        rows[b] = { n: c1.n, top1: c1.top1.toFixed(3), top3: c1.top3.toFixed(3), mrr: c1.mrr.toFixed(3), challengerTop1: c2.top1.toFixed(3) };
-      }
-      rows.ALL = { n: champ.n, top1: champ.top1.toFixed(3), top3: champ.top3.toFixed(3), mrr: champ.mrr.toFixed(3), challengerTop1: chall.top1.toFixed(3) };
-      console.table(rows);
+      console.table(
+        Object.fromEntries(
+          Object.entries(rows).map(([k, v]) => [k, { n: v.champion.n, top1: v.champion.top1.toFixed(3), top3: v.champion.top3.toFixed(3), mrr: v.champion.mrr.toFixed(3), challengerTop1: v.challenger.top1.toFixed(3) }]),
+        ),
+      );
     }
   });
 

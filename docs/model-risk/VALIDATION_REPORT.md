@@ -15,7 +15,7 @@
 |---|---|---|
 | MRM-001 Industry matcher | **Fit for purpose, with limitations.** Strong on the input it was designed for (aliases, typos). Weak on paraphrase. | F-01 – F-04 (all Low/Medium) |
 | MRM-002 Margin multiple | **Formula sound. Controls need fixing.** The previews don't match what gets saved. | F-05a, F-05b (Medium) |
-| MRM-003 Usage metrics | **Sound for well-formed input.** Edge cases can mislead customers. | F-06 (Medium), F-07, F-08 (Low) |
+| MRM-003 Usage metrics | **Sound for well-formed input.** Edge cases can mislead customers, and one malformed list response wipes the dashboard. | **F-09 (High)**, F-06 (Medium), F-07, F-08 (Low) |
 
 Each open finding is pinned by an `it.fails` test. The test passes while the defect exists and goes red when someone fixes it. The finding can't be closed silently: whoever fixes it must flip the test to a plain `it` and update this report.
 
@@ -82,6 +82,7 @@ The benchmark has 128 labelled queries in `test/model-validation/fixtures/indust
 | F-06 | Medium | An explicit `minuteLimit: 0` is treated as missing (`\|\|` chain), so a plan with no included minutes shows "490 of 500 remaining". | Use `??` for the limit, or check `Number.isFinite` explicitly. |
 | F-07 | Low | Conversion rate isn't bounded. 6 converted out of 4 total shows 150%. | Clamp to [0, 100] and log the inconsistency. |
 | F-08 | Low | Negative usage from the API gives a negative % used and more minutes remaining than the plan includes. | Floor usage at 0. |
+| F-09 | **High** | Found by the mock suite (`test/mock/dashboard.mock.test.tsx`). `getArrayPayload` recurses into `record[key]` even when it is undefined, so a list response with no array in it (`{}`, `{ok:true}`, `null`) never bottoms out. The resulting "Maximum call stack size exceeded" aborts the whole dashboard load: every KPI reads 0 and the error text is shown to the tenant. | Only recurse into plain objects. Fix first. |
 
 ---
 

@@ -37,3 +37,7 @@ if (!(window as unknown as { ResizeObserver?: unknown }).ResizeObserver) {
 if (!(window as unknown as { scrollTo?: unknown }).scrollTo) {
   (window as unknown as { scrollTo: unknown }).scrollTo = () => {};
 }
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

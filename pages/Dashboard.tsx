@@ -346,7 +346,7 @@ const normalizeSchedule = (value: unknown): ScheduleRow | null => {
   };
 };
 
-const normalizeCallsResponse = (
+export const normalizeCallsResponse = (
   payload: unknown,
 ): { calls: CallRow[]; metrics: Partial<DashboardLiveState> } => {
   const record = getObject(payload);

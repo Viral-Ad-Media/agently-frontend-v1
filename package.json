@@ -10,6 +10,10 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:mrm": "vitest run test/model-validation",
+    "test:mock": "vitest run test/mock",
+    "test:perf": "vitest run test/performance",
+    "bench": "vitest bench --run",
+    "report": "bash scripts/test-report.sh",
     "test:watch": "vitest"
   },
   "dependencies": {
