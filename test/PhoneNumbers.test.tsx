@@ -90,7 +90,7 @@ describe("Phone Numbers screen", () => {
 
   it("shows the release control on an owned number", async () => {
     renderPage();
-    expect(await screen.findByText(/release this number/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^release$/i })).toBeInTheDocument();
   });
 
   it("offers Canada before any search has run", async () => {
@@ -115,7 +115,7 @@ describe("Phone Numbers screen", () => {
     getNumberCountries.mockRejectedValue(new Error("network"));
     expect(() => renderPage()).not.toThrow();
     await waitFor(() => expect(getTwilioNumbers).toHaveBeenCalled());
-    expect(await screen.findByText(/release this number/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^release$/i })).toBeInTheDocument();
   });
 
   it("still renders when the numbers list fails to load", async () => {

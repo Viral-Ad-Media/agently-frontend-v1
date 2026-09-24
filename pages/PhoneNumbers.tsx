@@ -684,11 +684,28 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
                 "No SID returned"}
             </p>
           </div>
-          {shouldShowTypeLabel && (
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
-              {typeLabel}
-            </span>
-          )}
+          {/* Top right, red, and still set apart from the assignment controls
+              below: it is the only action on this card that cannot be undone.
+              The confirmation is a separate modal requiring the number to be
+              typed, so being prominent does not make it easy to fire. */}
+          <div className="flex shrink-0 items-center gap-2">
+            {shouldShowTypeLabel && (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                {typeLabel}
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setReleaseTarget(number);
+                setReleaseConfirmText("");
+              }}
+              disabled={!!busy}
+              title="Gives the number back to the carrier and stops its monthly charge. This cannot be undone."
+              className="rounded-xl border border-red-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:border-red-400 hover:bg-red-50 disabled:opacity-50"
+            >
+              Release
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -841,26 +858,6 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
           )}
         </div>
 
-        {/* Release. Deliberately the quietest control on the card and set
-            apart from everything else: it is the only action here that cannot
-            be undone. The confirmation is a separate modal that requires
-            typing the number, not a button that fires on one click. */}
-        <div className="border-t border-slate-100 pt-3">
-          <button
-            onClick={() => {
-              setReleaseTarget(number);
-              setReleaseConfirmText("");
-            }}
-            disabled={!!busy}
-            className="text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:text-red-600 disabled:opacity-50"
-          >
-            Release this number
-          </button>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Gives the number back to the carrier and stops its monthly charge.
-            This cannot be undone.
-          </p>
-        </div>
       </div>
     );
   };
