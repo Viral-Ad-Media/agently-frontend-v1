@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "test:mrm": "vitest run test/model-validation",
     "test:watch": "vitest"
   },
   "dependencies": {

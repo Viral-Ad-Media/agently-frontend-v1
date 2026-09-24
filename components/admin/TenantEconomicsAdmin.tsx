@@ -5,6 +5,7 @@ import {
   type TenantEconomicsResponse,
   type TenantEconomicsRow,
 } from "../../services/adminApi";
+import { tenantMarginMultiple } from "../../lib/pricingMath";
 
 /**
  * Owner-only economics panel: what every tenant has spent, what those services
@@ -109,11 +110,10 @@ const TenantEconomicsAdmin: React.FC = () => {
   };
 
   const totals = data?.totals;
-  const marginMultiple = useMemo(() => {
-    const value = Number(marginInput);
-    if (!Number.isFinite(value) || value <= 0 || value >= 100) return null;
-    return Math.round((100 / (100 - value)) * 1000) / 1000;
-  }, [marginInput]);
+  const marginMultiple = useMemo(
+    () => tenantMarginMultiple(marginInput),
+    [marginInput],
+  );
 
   return (
     <div className="space-y-6">

@@ -3,6 +3,7 @@ import {
   adminApi,
   type PlatformBillingPricing,
 } from "../../services/adminApi";
+import { marginMultiplier } from "../../lib/pricingMath";
 
 const DEFAULTS: PlatformBillingPricing = {
   minimumTopUpUsd: 10,
@@ -24,11 +25,6 @@ type NumericKey =
   | "elevenLabsMarginPercent"
   | "twilioCallMarginPercent"
   | "twilioNumberMarginPercent";
-
-const marginMultiplier = (margin: number) => {
-  const safe = Math.min(Math.max(Number(margin) || 0, 0), 95);
-  return 1 / (1 - safe / 100);
-};
 
 const BillingPricingAdmin: React.FC = () => {
   const [pricing, setPricing] = useState<PlatformBillingPricing>(DEFAULTS);

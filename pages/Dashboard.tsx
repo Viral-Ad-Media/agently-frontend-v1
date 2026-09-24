@@ -387,7 +387,7 @@ const normalizeCallsResponse = (
   };
 };
 
-const normalizeDashboardMetrics = (
+export const normalizeDashboardMetrics = (
   payload: unknown,
   fallbackMinuteLimit: number,
 ): ExtraDashboardMetrics => {
