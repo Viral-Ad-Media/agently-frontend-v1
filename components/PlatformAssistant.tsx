@@ -453,9 +453,16 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
       `}</style>
 
       {/* ── Launcher ───────────────────────────────────────────────────── */}
+      {/*
+        The wrapper carries `group` so the dismiss badge below only appears on
+        deliberate hover of the launcher. It used to rely on self-hover
+        (md:hover:opacity-100) with no .group ancestor, so the invisible badge
+        popped in whenever the pointer merely crossed its corner on the way to
+        the launcher — reading as a second, conflicting control next to "Open".
+      */}
       {!open ? (
         <div
-          className="fixed z-[70]"
+          className="group fixed z-[70]"
           style={{ left: position.x, top: position.y }}
         >
           {/* Expanding halo, behind the disc — the "live" signal. */}
@@ -503,7 +510,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
             type="button"
             onClick={() => setHiddenPersisted(true)}
             aria-label="Hide the assistant"
-            className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] leading-none text-slate-400 opacity-0 shadow-sm transition hover:text-slate-700 focus-visible:opacity-100 group-hover:opacity-100 md:opacity-0 md:hover:opacity-100"
+            className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] leading-none text-slate-400 opacity-0 shadow-sm transition hover:text-slate-700 focus-visible:opacity-100 group-hover:opacity-100 md:opacity-0"
             style={{ opacity: dragging ? 0 : undefined }}
           >
             ×

@@ -40,6 +40,32 @@
         document.addEventListener("visibilitychange", applyMobileViewport);
       })();
     </script>
+    <!--
+      Deep-link normalization: the app reads routes from the URL hash and the
+      static host rewrites every path to this document, so a shared plain link
+      like /pricing would boot the router on an empty hash and render the
+      homepage. This folds the plain path into the hash before React boots,
+      with no reload and the query string preserved: /pricing?x=1 -> /#/pricing?x=1
+      Classic inline script (not a module): it must run synchronously during
+      parsing, before the app entry, with zero build or chunk dependencies.
+      The exact shipped code is executed by test/deepLink.test.ts — keep the
+      marker comments intact.
+    -->
+    <script>
+      /* deep-link-normalize:start */
+      (() => {
+        try {
+          const loc = window.location;
+          const path = loc.pathname;
+          if (!loc.hash && path && path !== "/" && path !== "/index.html") {
+            window.history.replaceState(null, "", "/#" + path + loc.search);
+          }
+        } catch {
+          /* storage/history quirks must never block the boot */
+        }
+      })();
+      /* deep-link-normalize:end */
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

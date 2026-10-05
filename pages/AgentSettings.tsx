@@ -1897,7 +1897,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 "Agent created",
               )
             }
-            className="ag-button-soft"
+            disabled={busy === "create-in" || busy === "create-out"}
+            className="ag-button-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             + Inbound
           </button>
@@ -1909,7 +1910,8 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                 "Agent created",
               )
             }
-            className="ag-button-soft"
+            disabled={busy === "create-in" || busy === "create-out"}
+            className="ag-button-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             + Outbound
           </button>

@@ -236,6 +236,13 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     Number(wallet.minimums?.activeUsd || 0),
     1,
   );
+  /*
+   * The balance is unknown until the summary lands. While it is unknown we
+   * must not assert "Top-up needed" — with balance defaulting to 0 that badge
+   * used to present a guess as fact whenever the summary was slow or failed.
+   */
+  const balanceUnknown = wallet.balanceUsd === undefined;
+  const lowCredit = !balanceUnknown && balance < minimumActive;
 
   const loadBilling = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -542,8 +549,6 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
     );
   }, [activity, usageRange]);
 
-  const lowCredit = balance < minimumActive;
-
   return (
     <div className="space-y-6 pb-12 text-[#0F172A]">
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-5">
@@ -598,25 +603,45 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
               <p className="text-[13px] font-medium text-slate-500">
                 Available balance
               </p>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  lowCredit
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-emerald-50 text-emerald-700"
-                }`}
-              >
-                {lowCredit ? "Top-up needed" : "Active"}
-              </span>
+              {!balanceUnknown && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    lowCredit
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {lowCredit ? "Top-up needed" : "Active"}
+                </span>
+              )}
             </div>
 
-            {wallet.balanceUsd === undefined ? (
-              // A 44px em-dash renders as a black bar and reads as a broken
-              // value. A skeleton of the same height reads as "still loading".
-              <div
-                className="mt-2 h-10 w-40 animate-pulse rounded-lg bg-slate-200"
-                role="status"
-                aria-label="Loading balance"
-              />
+            {balanceUnknown ? (
+              loading ? (
+                // A 44px em-dash renders as a black bar and reads as a broken
+                // value. A skeleton of the same height reads as "still loading".
+                <div
+                  className="mt-2 h-10 w-40 animate-pulse rounded-lg bg-slate-200"
+                  role="status"
+                  aria-label="Loading balance"
+                />
+              ) : (
+                // The summary finished (or failed — see the banner above)
+                // without a balance. Say so and offer a retry instead of
+                // holding the skeleton forever.
+                <div className="mt-2">
+                  <p className="text-[15px] font-medium text-slate-500">
+                    Balance unavailable
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void loadBilling()}
+                    className="mt-1.5 text-[13px] font-semibold text-[#B45309] underline underline-offset-2 hover:text-[#92400E]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )
             ) : (
               <p className="mt-1.5 text-[32px] font-semibold leading-none tracking-[-0.02em] text-[#0F172A] tabular-nums">
                 {money(balance)}

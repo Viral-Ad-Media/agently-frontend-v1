@@ -521,6 +521,16 @@ const MarqueeText: React.FC<{
   </span>
 );
 
+/*
+ * Stat values must always render a number. Every data path already funnels
+ * through safeNumber, but a stat card is the worst place for "undefined" or
+ * "NaN" to ever leak through, so this is belt and braces at the render site.
+ */
+const statNumber = (value: unknown): string => {
+  const num = Number(value);
+  return String(Number.isFinite(num) ? num : 0);
+};
+
 const StatCard: React.FC<{
   label: string;
   value: string;
@@ -1110,21 +1120,21 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       >
         <StatCard
           label="Total calls"
-          value={String(selectedStats.totalCalls)}
+          value={statNumber(selectedStats.totalCalls)}
           icon="fa-sharp fa-solid fa-phone-volume"
           tone="orange"
           sub="All call records"
         />
         <StatCard
           label="Completed"
-          value={String(selectedStats.completedCalls)}
+          value={statNumber(selectedStats.completedCalls)}
           icon="fa-sharp fa-solid fa-check"
           tone="mint"
           sub="Finished calls"
         />
         <StatCard
           label="Failed"
-          value={String(selectedStats.failedCalls)}
+          value={statNumber(selectedStats.failedCalls)}
           icon="fa-sharp fa-solid fa-triangle-exclamation"
           tone="rose"
           sub="Failed/cancelled"
@@ -1140,14 +1150,14 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         />
         <StatCard
           label="Chatbot answers"
-          value={String(live.chatbotMessagesAnswered)}
+          value={statNumber(live.chatbotMessagesAnswered)}
           icon="fa-sharp fa-solid fa-comments"
           tone="gold"
           sub={`${live.chatbotTotalMessages} messages`}
         />
         <StatCard
           label="Leads captured"
-          value={String(live.totalLeadsCaptured)}
+          value={statNumber(live.totalLeadsCaptured)}
           icon="fa-sharp fa-solid fa-bullseye"
           tone="slate"
           sub={`${live.chatbotLeadsCaptured} bot · ${live.callLeadsCaptured} call`}
