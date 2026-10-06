@@ -96,22 +96,34 @@ interface PickerOption {
   slug?: string;
 }
 
+/*
+ * Each provider's own mark, served from public/integrations/.
+ *
+ * These were Font Awesome glyphs: a generic Google "G" for Google Calendar,
+ * and fa-calendar-check — a plain calendar tick — standing in for Calendly.
+ * Neither is the product it names, and a tenant deciding whether to hand over
+ * calendar access should see the brand they are actually authorising.
+ *
+ * The files are the canonical single-path marks in each brand's primary colour
+ * (Google Blue #4285F4, Calendly Blue #006BFF), so they stay crisp at any size
+ * and need no icon-font request.
+ */
 const PROVIDER_META: Record<
   Provider,
-  { title: string; blurb: string; icon: string; note: string }
+  { title: string; blurb: string; logo: string; note: string }
 > = {
   google: {
     title: "Google Calendar",
     blurb:
       "Let the agent check your availability and book straight into your Google calendar during a call.",
-    icon: "fa-brands fa-google",
+    logo: "/integrations/google-calendar.svg",
     note: "Uses your Google account. Agently only asks for availability + event access — never full mailbox scope.",
   },
   calendly: {
     title: "Calendly",
     blurb:
       "Let the agent book directly into your Calendly event types. Used first whenever it's connected.",
-    icon: "fa-sharp fa-solid fa-calendar-check",
+    logo: "/integrations/calendly.svg",
     note: "Calendly requires a paid plan on your Calendly account for API booking.",
   },
 };
@@ -848,8 +860,15 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-lg text-white">
-              <i className={meta.icon} aria-hidden="true" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white">
+              <img
+                src={meta.logo}
+                alt=""
+                aria-hidden="true"
+                width={24}
+                height={24}
+                className="h-6 w-6"
+              />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
