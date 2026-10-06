@@ -45,8 +45,73 @@ const Privacy: React.FC = () => {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-3xl font-black text-slate-900 mb-6 tracking-tight">7. Contact Us</h2>
-            <p>If you have any questions about our Privacy Policy, please contact us at privacy@agently.ai.</p>
+            <h2 className="text-3xl font-black text-slate-900 mb-6 tracking-tight">7. Calendar Integrations</h2>
+            <p>
+              If you connect your Google Calendar or Calendly account in Settings &rarr; Integrations, Agently accesses that
+              account solely to book and manage appointments during phone calls handled by your AI voice agents. Connecting is
+              optional, and Agently never accesses a calendar you have not explicitly connected.
+            </p>
+            <p className="mt-6"><strong className="text-slate-900">What we access from Google, and why:</strong></p>
+            <ul className="mt-4 space-y-3">
+              <li>
+                <strong className="text-slate-900">Free/busy information</strong> (<code>calendar.freebusy</code>) &mdash; to check which
+                time slots are open before the agent offers them to a caller. We do not read the titles, attendees or details of
+                your existing events for this purpose, only whether a time range is free or busy.
+              </li>
+              <li>
+                <strong className="text-slate-900">Calendar events</strong> (<code>calendar.events</code>) &mdash; to create an event when a
+                caller books, and to cancel it if the booking is cancelled. Agently only creates, updates or deletes events it
+                created itself, or that are directly tied to a booking made through Agently. It does not modify your other events.
+              </li>
+              <li>
+                <strong className="text-slate-900">Basic profile</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>) &mdash; to
+                show which Google account is connected, so you can confirm the right calendar is linked.
+              </li>
+            </ul>
+            <p className="mt-6">
+              <strong className="text-slate-900">From Calendly</strong>, we request only what booking requires: reading your user
+              profile, event types and availability, creating and cancelling scheduled events, and subscribing to webhooks so we
+              learn about changes made outside Agently.
+            </p>
+            <p className="mt-6">
+              Agently's use of information received from Google APIs adheres to the{' '}
+              <a
+                className="text-indigo-600 underline"
+                href="https://developers.google.com/terms/api-services-user-data-policy"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google API Services User Data Policy
+              </a>
+              , including the Limited Use requirements. We do not use calendar data for advertising, we do not sell it, and we do
+              not allow humans to read it except where required for security, to comply with the law, or with your explicit consent.
+            </p>
+            <p className="mt-6">
+              <strong className="text-slate-900">What we store.</strong> Your calendar credentials are encrypted at rest with
+              AES-256-GCM and are bound to your organisation, so a stored credential cannot be read in another tenant's context. For
+              each appointment booked through Agently we also store the booking details supplied by the caller &mdash; typically a
+              name, email address and phone number &mdash; together with the appointment time, so the booking can be shown to you,
+              reconciled with your calendar and cancelled if needed.
+            </p>
+            <p className="mt-6">
+              <strong className="text-slate-900">Disconnecting.</strong> You can disconnect at any time in Settings &rarr;
+              Integrations. Doing so revokes Agently's access at the provider and deletes the stored credentials. You can also revoke
+              access directly at{' '}
+              <a
+                className="text-indigo-600 underline"
+                href="https://myaccount.google.com/permissions"
+                target="_blank"
+                rel="noreferrer"
+              >
+                myaccount.google.com/permissions
+              </a>{' '}
+              for Google, or in your Calendly account settings.
+            </p>
+          </section>
+
+          <section className="mb-12">
+            <h2 className="text-3xl font-black text-slate-900 mb-6 tracking-tight">8. Contact Us</h2>
+            <p>If you have any questions about our Privacy Policy, please contact us at agentlycallsupport@gmail.com.</p>
           </section>
         </div>
       </div>
