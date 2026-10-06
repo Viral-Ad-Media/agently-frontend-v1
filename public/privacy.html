@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Agently</title>
+    <meta
+      name="description"
+      content="How Agently collects, uses and protects your information, including the calendar data used for appointment booking."
+    />
+    <link rel="canonical" href="https://www.agentlycall.com/privacy" />
+    <link rel="icon" href="/agently-favicon.png" />
+    <!--
+      This is the CANONICAL, server-served privacy policy.
+
+      The app is a hash-router SPA behind a catch-all rewrite, so
+      /privacy used to return the marketing landing page with HTTP 200 while
+      only /#/privacy showed the policy. Google's OAuth consent screen wants a
+      privacy-policy URL on the verified domain, and its checks do not reliably
+      execute JavaScript or follow a fragment — a 200 that renders marketing
+      copy is exactly how a verification submission stalls.
+
+      A vercel.json rewrite maps /privacy to this file ahead of the catch-all.
+
+      pages/Privacy.tsx renders the same policy inside the app. Keep the two in
+      step: if you change one, change the other.
+    -->
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #0f172a;
+        --muted: #64748b;
+        --accent: #4f46e5;
+        --rule: #e2e8f0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--muted);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.7;
+      }
+      .wrap { max-width: 56rem; margin: 0 auto; padding: 5rem 1rem 6rem; }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.75rem;
+        font-weight: 900;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        margin: 0 0 1rem;
+        text-align: center;
+      }
+      h1 {
+        color: var(--fg);
+        font-size: clamp(2.5rem, 7vw, 4.5rem);
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+        margin: 0 0 1.5rem;
+        text-align: center;
+      }
+      .lede { font-size: 1.125rem; text-align: center; margin: 0 auto 4rem; max-width: 42rem; }
+      h2 {
+        color: var(--fg);
+        font-size: 1.5rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        margin: 3rem 0 1rem;
+      }
+      ul { padding-left: 1.25rem; }
+      li { margin-bottom: 0.75rem; }
+      strong { color: var(--fg); }
+      code {
+        background: #f1f5f9;
+        border-radius: 0.25rem;
+        padding: 0.1rem 0.35rem;
+        font-size: 0.9em;
+      }
+      a { color: var(--accent); }
+      footer {
+        margin-top: 4rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--rule);
+        font-size: 0.9rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0b1120;
+          --fg: #f8fafc;
+          --muted: #94a3b8;
+          --accent: #818cf8;
+          --rule: #1e293b;
+        }
+        :root:not([data-theme="light"]) code { background: #1e293b; }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0b1120;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #818cf8;
+        --rule: #1e293b;
+      }
+      :root[data-theme="dark"] code { background: #1e293b; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <p class="eyebrow">Legal</p>
+      <h1>Privacy Policy.</h1>
+      <p class="lede">
+        Your privacy is important to us. It is Agently's policy to respect your privacy
+        regarding any information we may collect from you across our website.
+      </p>
+
+      <h2>1. Information We Collect</h2>
+      <p>
+        We only ask for personal information when we truly need it to provide a service to
+        you. We collect it by fair and lawful means, with your knowledge and consent. We
+        also let you know why we're collecting it and how it will be used.
+      </p>
+
+      <h2>2. Use of Information</h2>
+      <p>
+        We use your personal information to provide and improve our services, to
+        communicate with you, and to comply with legal obligations. We may also use your
+        information to personalize your experience and to send you promotional
+        communications.
+      </p>
+
+      <h2>3. Data Retention</h2>
+      <p>
+        We only retain collected information for as long as necessary to provide you with
+        your requested service. What data we store, we'll protect within commercially
+        acceptable means to prevent loss and theft, as well as unauthorized access,
+        disclosure, copying, use or modification.
+      </p>
+
+      <h2>4. Third-Party Sharing</h2>
+      <p>
+        We don't share any personally identifying information publicly or with
+        third-parties, except when required to by law.
+      </p>
+
+      <h2>5. Cookies</h2>
+      <p>
+        Our website uses cookies to enhance your experience. You can choose to disable
+        cookies in your browser settings, but this may affect the functionality of our
+        website.
+      </p>
+
+      <h2>6. Your Rights</h2>
+      <p>
+        You have the right to access, correct, or delete your personal information. You can
+        also object to the processing of your information and request that we restrict the
+        processing of your information.
+      </p>
+
+      <h2>7. Calendar Integrations</h2>
+      <p>
+        If you connect your Google Calendar or Calendly account in Settings &rarr;
+        Integrations, Agently accesses that account solely to book and manage appointments
+        during phone calls handled by your AI voice agents. Connecting is optional, and
+        Agently never accesses a calendar you have not explicitly connected.
+      </p>
+      <p><strong>What we access from Google, and why:</strong></p>
+      <ul>
+        <li>
+          <strong>Free/busy information</strong> (<code>calendar.freebusy</code>) — to check
+          which time slots are open before the agent offers them to a caller. We do not read
+          the titles, attendees or details of your existing events for this purpose, only
+          whether a time range is free or busy.
+        </li>
+        <li>
+          <strong>Calendar events</strong> (<code>calendar.events</code>) — to create an
+          event when a caller books, and to cancel it if the booking is cancelled. Agently
+          only creates, updates or deletes events it created itself, or that are directly
+          tied to a booking made through Agently. It does not modify your other events.
+        </li>
+        <li>
+          <strong>Basic profile</strong> (<code>openid</code>, <code>email</code>,
+          <code>profile</code>) — to show which Google account is connected, so you can
+          confirm the right calendar is linked.
+        </li>
+      </ul>
+      <p>
+        <strong>From Calendly</strong>, we request only what booking requires: reading your
+        user profile, event types and availability, creating and cancelling scheduled
+        events, and subscribing to webhooks so we learn about changes made outside Agently.
+      </p>
+      <p>
+        Agently's use of information received from Google APIs adheres to the
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          target="_blank"
+          rel="noreferrer"
+          >Google API Services User Data Policy</a
+        >, including the Limited Use requirements. We do not use calendar data for
+        advertising, we do not sell it, and we do not allow humans to read it except where
+        required for security, to comply with the law, or with your explicit consent.
+      </p>
+      <p>
+        <strong>What we store.</strong> Your calendar credentials are encrypted at rest with
+        AES-256-GCM and are bound to your organisation, so a stored credential cannot be
+        read in another tenant's context. For each appointment booked through Agently we
+        also store the booking details supplied by the caller — typically a name, email
+        address and phone number — together with the appointment time, so the booking can be
+        shown to you, reconciled with your calendar and cancelled if needed.
+      </p>
+      <p>
+        <strong>Disconnecting.</strong> You can disconnect at any time in Settings &rarr;
+        Integrations. Doing so revokes Agently's access at the provider and deletes the
+        stored credentials. You can also revoke access directly at
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer"
+          >myaccount.google.com/permissions</a
+        >
+        for Google, or in your Calendly account settings.
+      </p>
+
+      <h2>8. Contact Us</h2>
+      <p>
+        If you have any questions about our Privacy Policy, please contact us at
+        <a href="mailto:agentlycallsupport@gmail.com">agentlycallsupport@gmail.com</a>.
+      </p>
+
+      <footer>
+        <a href="/">&larr; Back to Agently</a>
+      </footer>
+    </main>
+  </body>
+</html>
