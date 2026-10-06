@@ -32,32 +32,39 @@ function runScript(pathname: string, search: string, hash: string) {
   return calls;
 }
 
-describe("index.html deep-link normalization (shipped code)", () => {
-  it("folds plain marketing paths into the hash", () => {
-    expect(runScript("/pricing", "", "")).toEqual([[null, "", "/#/pricing"]]);
-    expect(runScript("/terms", "", "")).toEqual([[null, "", "/#/terms"]]);
-    expect(runScript("/features", "", "")).toEqual([[null, "", "/#/features"]]);
+describe("index.html legacy-hash normalization (shipped code)", () => {
+  it("rewrites a legacy fragment route to the real path", () => {
+    expect(runScript("/", "", "#/pricing")).toEqual([[null, "", "/pricing"]]);
+    expect(runScript("/", "", "#/terms")).toEqual([[null, "", "/terms"]]);
+    expect(runScript("/", "", "#/billing")).toEqual([[null, "", "/billing"]]);
   });
 
-  it("handles nested app routes and preserves the query string", () => {
-    expect(runScript("/blog/some-article", "", "")).toEqual([
-      [null, "", "/#/blog/some-article"],
+  it("handles nested routes and preserves the query string", () => {
+    expect(runScript("/", "", "#/blog/some-article")).toEqual([
+      [null, "", "/blog/some-article"],
     ]);
-    expect(runScript("/pricing", "?plan=pro", "")).toEqual([
-      [null, "", "/#/pricing?plan=pro"],
+    // The query rides inside the fragment on a legacy URL, so it survives the
+    // slice without any extra handling — this is the case that breaks a
+    // password-reset or top-up link if the rewrite is done naively.
+    expect(runScript("/", "", "#/billing?tab=usage")).toEqual([
+      [null, "", "/billing?tab=usage"],
     ]);
   });
 
-  it("leaves the homepage, index.html and existing hash routes alone", () => {
+  it("leaves real paths and non-route fragments alone", () => {
     expect(runScript("/", "", "")).toEqual([]);
-    expect(runScript("/index.html", "", "")).toEqual([]);
-    expect(runScript("/pricing", "", "#/pricing")).toEqual([]);
-    expect(runScript("/", "", "#/dashboard")).toEqual([]);
+    expect(runScript("/pricing", "", "")).toEqual([]);
+    expect(runScript("/blog/some-article", "?plan=pro", "")).toEqual([]);
+    // An in-page anchor is not a route. The landing page uses these for its
+    // scroll links, so rewriting one would navigate away mid-scroll.
+    expect(runScript("/", "", "#features")).toEqual([]);
   });
 
   it("never throws when history.replaceState is hostile", () => {
     const fakeWindow = {
-      location: { pathname: "/pricing", search: "", hash: "" },
+      // Must carry a legacy fragment, or replaceState is never reached and
+      // this asserts nothing.
+      location: { pathname: "/", search: "", hash: "#/pricing" },
       history: {
         replaceState: () => {
           throw new Error("denied");

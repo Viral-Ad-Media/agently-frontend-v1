@@ -726,7 +726,7 @@ const TOUR_VERSION = 1;
  * so the current session behaves correctly while offline or if the write fails.
  *
  * The earlier note here warned against fetching state because of a 300ms route
- * poll — that poll is gone (see useHashRoute), so the objection no longer
+ * poll — that poll is gone (see useRoute), so the objection no longer
  * applies. This is one request per session, not per route.
  */
 type ServerTourState = {
@@ -802,10 +802,11 @@ const writeProgress = (progress: ProgressMap) => {
  * Location tracking (no polling)
  * ══════════════════════════════════════════════════════════════════════════
  * App mounts this hook OUTSIDE <Router>, so it cannot read the router's
- * location. The previous version polled `window.location.hash` every 300ms
- * because HashRouter navigations that go through history.replaceState do not
- * fire `hashchange`. Patching the two history methods once to emit an event
- * covers that case exactly, with no timer.
+ * location. An earlier version polled every 300ms because a navigation made
+ * through history.pushState/replaceState fires no event of its own. Patching
+ * the two methods once to emit one covers it exactly, with no timer — and it
+ * is the only mechanism now that routes are real paths, where there is no
+ * `hashchange` to fall back on.
  */
 const LOCATION_EVENT = "agently:locationchange";
 let historyPatched = false;
@@ -829,30 +830,28 @@ const patchHistory = () => {
 const readRoute = () =>
   typeof window === "undefined"
     ? "/"
-    : window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+    : window.location.pathname.split("?")[0] || "/";
 
-function useHashRoute(explicit?: string) {
-  const [hash, setHash] = useState(readRoute);
+function useRoute(explicit?: string) {
+  const [route, setRoute] = useState(readRoute);
 
   useEffect(() => {
     if (explicit) return;
     patchHistory();
-    const onChange = () => setHash(readRoute());
-    window.addEventListener("hashchange", onChange);
+    const onChange = () => setRoute(readRoute());
     window.addEventListener("popstate", onChange);
     window.addEventListener(LOCATION_EVENT, onChange);
     return () => {
-      window.removeEventListener("hashchange", onChange);
       window.removeEventListener("popstate", onChange);
       window.removeEventListener(LOCATION_EVENT, onChange);
     };
   }, [explicit]);
 
-  return explicit || hash;
+  return explicit || route;
 }
 
 export function usePageTour(explicitPathname?: string) {
-  const pathname = useHashRoute(explicitPathname);
+  const pathname = useRoute(explicitPathname);
   const [progress, setProgress] = useState<ProgressMap>(() =>
     typeof window === "undefined" ? {} : readProgress(),
   );
@@ -1312,9 +1311,12 @@ export const PageTour: React.FC<{
         const leavesRoute = (() => {
           if (!(trigger instanceof HTMLAnchorElement)) return false;
           const href = trigger.getAttribute("href") || "";
-          if (!href.startsWith("#")) return href.length > 0;
-          const to = href.replace(/^#/, "").split("?")[0];
-          const here = window.location.hash.replace(/^#/, "").split("?")[0];
+          // A bare "#…" is an in-page anchor now that routes are real paths,
+          // so it never counts as leaving the current screen.
+          if (href.startsWith("#")) return false;
+          if (!href.startsWith("/")) return href.length > 0;
+          const to = href.split("?")[0];
+          const here = window.location.pathname.split("?")[0];
           return Boolean(to) && to !== here;
         })();
 

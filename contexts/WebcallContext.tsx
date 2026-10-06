@@ -19,7 +19,7 @@ import { WebcallClient, WebcallStatus } from "../lib/webcallClient";
  * <Outlet/> — so MainLayout (and anything mounted inside it) fully unmounts
  * and remounts on every navigation. A WebcallClient owned there would die
  * the moment the tenant switched pages, same as it does today. This context
- * is mounted in App.tsx, above <StableHashRouter>, specifically so the call
+ * is mounted in App.tsx, above <StableRouter>, specifically so the call
  * survives navigation. The modal is a VIEW of this state, not its owner —
  * closing the modal only hides it; only endCall() actually hangs up.
  */

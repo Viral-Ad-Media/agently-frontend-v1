@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppModal from "../components/AppModal";
 import { api } from "../services/api";
 import {
@@ -338,6 +339,7 @@ const Leads: React.FC<LeadsProps> = ({
   org,
   onRefresh,
 }) => {
+  const navigate = useNavigate();
   const [localLeads, setLocalLeads] = useState<Lead[]>(externalLeads);
   // Smart merge: when the parent refreshes (realtime debounce → bootstrap), merge server data
   // with any in-flight optimistic updates instead of blindly overwriting local state.
@@ -971,7 +973,7 @@ const Leads: React.FC<LeadsProps> = ({
   const openTagSchedule = (tag: string) => {
     // Use the main Outreach builder so lead-tag campaigns support the same call types,
     // direct/lead modes, timing options, and preview/create flow as the Outreach page.
-    window.location.hash = `/outreach?tag=${encodeURIComponent(tag)}`;
+    navigate(`/outreach?tag=${encodeURIComponent(tag)}`);
   };
 
   const saveSchedule = async () => {

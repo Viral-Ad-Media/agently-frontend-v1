@@ -95,7 +95,7 @@ export const CreditModal: React.FC<{
             Not now
           </button>
           <a
-            href={block.topUpPath || "#/billing"}
+            href={block.topUpPath || "/billing"}
             className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
           >
             {block.ctaLabel || "Add credit"}
@@ -156,7 +156,7 @@ export function useCreditGuard() {
             ? "You need usage credit before running this."
             : "Something went wrong. Try again in a moment."),
         ctaLabel: options.ctaLabel || d.ctaLabel || fallbackCta,
-        topUpPath: options.topUpPath || d.topUpPath || "#/billing",
+        topUpPath: options.topUpPath || d.topUpPath || "/billing",
         requiredUsd:
           typeof d.minimumUsd === "number"
             ? d.minimumUsd

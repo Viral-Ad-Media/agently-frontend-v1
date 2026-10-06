@@ -1,25 +1,31 @@
 import React, { Suspense, useLayoutEffect, type ReactNode } from "react";
-import { HashRouter, useLocation } from "react-router-dom";
+import { BrowserRouter, useLocation } from "react-router-dom";
 
-interface StableHashRouterProps {
+interface StableRouterProps {
   children: ReactNode;
   basename?: string;
 }
 
 /**
- * Use React Router's supported hash-history integration, but make route
- * updates blocking/synchronous. The previous custom useSyncExternalStore
- * implementation returned history.location directly; createHashHistory may
- * expose a new location object on repeated reads, which causes React error
- * #185 (maximum update depth exceeded) in production.
+ * Real paths, not fragments: /billing, not /#/billing.
+ *
+ * This was a HashRouter. The fragment never reaches the server, which meant
+ * every URL outside the app was a lie about what the server would return —
+ * https://www.agentlycall.com/privacy answered 200 and rendered the marketing
+ * page, because the path was ignored and the empty hash routed to the landing
+ * screen. That breaks anything that reads a URL without executing JavaScript:
+ * Google's OAuth verification review, link previews, crawlers.
+ *
+ * Deep links work because the Vercel catch-all rewrite serves index.html for
+ * any path, and Vite's dev server does history fallback by default.
+ *
+ * Route updates stay blocking/synchronous. The transitions flag is what the
+ * HashRouter needed to avoid React error #185 (maximum update depth) from
+ * createHashHistory handing back a fresh location object on repeated reads;
+ * BrowserRouter does not have that problem, so the flag goes with the hash.
  */
-const StableHashRouter: React.FC<StableHashRouterProps> = ({
-  children,
-  basename,
-}) => (
-  <HashRouter basename={basename} unstable_useTransitions={false}>
-    {children}
-  </HashRouter>
+const StableRouter: React.FC<StableRouterProps> = ({ children, basename }) => (
+  <BrowserRouter basename={basename}>{children}</BrowserRouter>
 );
 
 interface RouteCommitBoundaryProps {
@@ -70,7 +76,7 @@ class RouteErrorBoundary extends React.Component<
               Reload
             </button>
             <a
-              href="#/dashboard"
+              href="/dashboard"
               className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700"
             >
               Dashboard
@@ -117,4 +123,4 @@ export const RouteCommitBoundary: React.FC<RouteCommitBoundaryProps> = ({
   );
 };
 
-export default StableHashRouter;
+export default StableRouter;

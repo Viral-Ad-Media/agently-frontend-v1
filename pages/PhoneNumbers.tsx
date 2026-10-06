@@ -431,7 +431,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
             error?.message ||
             "Add credit to your balance before buying a number.",
           ctaLabel: details?.ctaLabel || "Go to billing",
-          topUpPath: details?.topUpPath || "#/billing",
+          topUpPath: details?.topUpPath || "/billing",
         });
       } else {
         showToast(
@@ -1255,7 +1255,7 @@ const PhoneNumbers: React.FC<PhoneNumbersProps> = ({
               Not now
             </button>
             <a
-              href={creditBlock?.topUpPath || "#/billing"}
+              href={creditBlock?.topUpPath || "/billing"}
               className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600"
             >
               {creditBlock?.ctaLabel || "Go to billing"}

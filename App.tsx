@@ -16,9 +16,9 @@ import {
   setSessionToken,
 } from "./services/session";
 import { AppLoading, MainLayout, PublicLayout } from "./components/Shell";
-import StableHashRouter, {
+import StableRouter, {
   RouteCommitBoundary,
-} from "./components/StableHashRouter";
+} from "./components/StableRouter";
 import AgentSettings from "./pages/AgentSettings";
 import CallSimulator from "./components/CallSimulator";
 import WebcallBadge from "./components/WebcallBadge";
@@ -229,6 +229,10 @@ const App: React.FC = () => {
     const readTokenFromUrl = () => {
       const candidates: string[] = [];
       candidates.push(window.location.search || "");
+      // Reset links sent while the app routed on the fragment still arrive as
+      // /#/forgot-password?resetToken=… The hash shim in index.tsx converts
+      // those before React mounts, but an email client that rewrites the URL
+      // can still deliver one here, so keep reading it.
       candidates.push(
         window.location.hash.includes("?")
           ? window.location.hash.slice(window.location.hash.indexOf("?"))
@@ -245,13 +249,14 @@ const App: React.FC = () => {
 
     const resetToken = readTokenFromUrl();
     const isAlreadyResetRoute =
-      window.location.hash.startsWith("#/forgot-password") ||
-      window.location.hash.startsWith("#/reset-password");
+      window.location.pathname.startsWith("/forgot-password") ||
+      window.location.pathname.startsWith("/reset-password");
     if (!resetToken || isAlreadyResetRoute) return;
 
-    const nextUrl = `${window.location.origin}${window.location.pathname}#/forgot-password?resetToken=${encodeURIComponent(resetToken)}`;
-    // Use replace() instead of history.replaceState so HashRouter reliably re-hydrates
-    // into the reset route even when the email client opened /?resetToken=... first.
+    const nextUrl = `${window.location.origin}/forgot-password?resetToken=${encodeURIComponent(resetToken)}`;
+    // Still a full replace() rather than history.replaceState: the email client
+    // opens /?resetToken=… before React mounts, and replacing the document is
+    // what guarantees the router boots straight into the reset route.
     window.location.replace(nextUrl);
   }, []);
 
@@ -264,7 +269,7 @@ const App: React.FC = () => {
         balanceUsd: Number(detail.balanceUsd || 0),
         minimumRequiredUsd: Number(detail.minimumRequiredUsd || 0),
         action: detail.action || "usage",
-        topUpPath: detail.topUpPath || "#/billing",
+        topUpPath: detail.topUpPath || "/billing",
       });
     };
     window.addEventListener(
@@ -890,7 +895,7 @@ const App: React.FC = () => {
     // navigation (see contexts/WebcallContext.tsx) — anything owning live
     // call state has to live outside that remount boundary to survive it.
     <WebcallProvider>
-      <StableHashRouter>
+      <StableRouter>
         <RouteCommitBoundary fallback={<AppLoading />}>
           <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -1353,7 +1358,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex gap-3 pt-2">
                 <a
-                  href={creditAlert.topUpPath || "#/billing"}
+                  href={creditAlert.topUpPath || "/billing"}
                   onClick={() => setCreditAlert(null)}
                   className="flex-1 rounded-2xl bg-[#ff5527] px-4 py-3 text-center text-sm font-black text-white shadow-[0_16px_36px_rgba(255,85,39,0.24)]"
                 >
@@ -1371,7 +1376,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      </StableHashRouter>
+      </StableRouter>
       <CallSimulator />
       <WebcallBadge />
     </WebcallProvider>

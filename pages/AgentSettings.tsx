@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import BackLink from "../components/BackLink";
 import {
   Organization,
@@ -300,6 +300,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
   knowledgeBases = [],
   onAssignKnowledgeBase,
 }) => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("persona");
   const [draft, setDraft] = useState(org.agent);
   const [savedAgentBaseline, setSavedAgentBaseline] = useState(org.agent);
@@ -1544,7 +1545,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     if (callInstructions) params.set("instructions", callInstructions);
 
     window.requestAnimationFrame(() => {
-      window.location.hash = `#/outreach?${params.toString()}`;
+      navigate(`/outreach?${params.toString()}`);
     });
   };
 
@@ -2272,7 +2273,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     <button
                       onClick={() => {
                         window.requestAnimationFrame(() => {
-                          window.location.hash = "#/phone-numbers";
+                          navigate("/phone-numbers");
                         });
                       }}
                       className="shrink-0 whitespace-nowrap rounded-xl border border-amber-200 text-amber-700 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.18em] hover:bg-amber-50 hover:border-amber-300 transition-all"
