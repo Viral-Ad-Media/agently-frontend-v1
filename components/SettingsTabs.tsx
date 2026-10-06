@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-type SettingsTabKey = "profile" | "knowledge" | "team" | "billing";
+type SettingsTabKey = "profile" | "knowledge" | "team" | "billing" | "integrations";
 
 interface SettingsTabsProps {
   active: SettingsTabKey;
@@ -42,12 +42,19 @@ const settingsTabs: Array<{
     href: "/billing",
     icon: "fa-credit-card",
   },
+  {
+    key: "integrations",
+    label: "Integrations",
+    mobileLabel: "Integrations",
+    href: "/integrations",
+    icon: "fa-plug",
+  },
 ];
 
 const SettingsTabs: React.FC<SettingsTabsProps> = ({ active }) => {
   return (
     <nav
-      className="grid w-full min-w-0 grid-cols-4 gap-1 border-b border-slate-200 py-3 sm:flex sm:gap-5 sm:py-4"
+      className="grid w-full min-w-0 grid-cols-5 gap-1 border-b border-slate-200 py-3 sm:flex sm:gap-5 sm:py-4"
       aria-label="Settings sections"
     >
       {settingsTabs.map((tab) => {

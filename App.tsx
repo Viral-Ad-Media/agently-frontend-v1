@@ -34,6 +34,7 @@ import OutreachScheduler from "./pages/OutreachScheduler";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
+import Integrations from "./pages/Integrations";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
 // ─────────────────────────────────────────────────────────────────────────
@@ -1178,6 +1179,25 @@ const App: React.FC = () => {
                     onInvite={handleInviteMember}
                     onRemoveMember={handleRemoveMember}
                   />
+                </ProtectedRoute>
+              ) : user || authPending ? (
+                // org can be null both while bootstrapping AND briefly after,
+                // while the workspace loads. Only a genuinely signed-OUT user
+                // should be redirected: sending a signed-in one to /login
+                // bounced them straight on to /dashboard, losing the route
+                // they actually asked for.
+                <AppLoading />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/integrations"
+            element={
+              org ? (
+                <ProtectedRoute {...protectedRouteProps}>
+                  <Integrations user={user} />
                 </ProtectedRoute>
               ) : user || authPending ? (
                 // org can be null both while bootstrapping AND briefly after,
