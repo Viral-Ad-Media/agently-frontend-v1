@@ -67,6 +67,11 @@ const Privacy: React.FC = () => {
                 <strong className="text-slate-900">Basic profile</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>) &mdash; to
                 show which Google account is connected, so you can confirm the right calendar is linked.
               </li>
+              <li>
+                <strong className="text-slate-900">Your list of calendars</strong> (<code>calendar.calendarlist.readonly</code>) &mdash; to
+                show which calendars the account has, so you can choose which one the agent books into. This is the
+                names of your calendars, not what is in them.
+              </li>
             </ul>
             <p className="mt-6">
               <strong className="text-slate-900">From Calendly</strong>, we request only what booking requires: reading your user
