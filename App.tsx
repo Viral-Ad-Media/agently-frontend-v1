@@ -91,7 +91,7 @@ const AcceptInvite = lazyRoute(
   "accept-invite",
 );
 const Features = lazyRoute(() => import("./pages/Features"), "features");
-const Home = lazyRoute(() => import("./pages/Home"), "home");
+const LandingPage = lazyRoute(() => import("./pages/LandingPage"), "landing-page");
 const About = lazyRoute(() => import("./pages/About"), "about");
 const Contact = lazyRoute(() => import("./pages/Contact"), "contact");
 const FAQs = lazyRoute(() => import("./pages/FAQs"), "faqs");
@@ -893,14 +893,7 @@ const App: React.FC = () => {
       <StableHashRouter>
         <RouteCommitBoundary fallback={<AppLoading />}>
           <Routes>
-          <Route
-            path="/"
-            element={
-              <PublicLayout>
-                <Home />
-              </PublicLayout>
-            }
-          />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/admin" element={<SuperAdmin />} />
           <Route
             path="/blog"

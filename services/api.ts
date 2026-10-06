@@ -1114,6 +1114,134 @@ export const api = {
       body: payload,
     });
   },
+
+  // -------------------------------------------------------------------------
+  // Calendar integrations (Google Calendar + Calendly)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Starts the OAuth connect flow. The SPA cannot send its Authorization
+   * header on a full-page navigation, so this fetches a short-lived,
+   * single-purpose start token (authenticated) whose URL the page navigates to.
+   */
+  async createIntegrationStartToken(provider: 'google' | 'calendly') {
+    return request<{ url: string }>(`/api/integrations/${provider}/start-token`, {
+      method: 'POST',
+    });
+  },
+
+  async getIntegrationsStatus() {
+    return request<{
+      encryptionConfigured: boolean;
+      encryptionHelp: string | null;
+      googleConfigured: boolean;
+      calendlyConfigured: boolean;
+      connections: Array<{
+        id: string;
+        provider: 'google' | 'calendly';
+        status: 'connected' | 'needs_reconnect' | 'disconnected' | 'error';
+        provider_user_id: string | null;
+        provider_user_email: string | null;
+        provider_user_name: string | null;
+        calendar_id: string | null;
+        event_type_uri: string | null;
+        event_type_name: string | null;
+        scopes: string | null;
+        timezone: string | null;
+        last_error: string | null;
+        connected_at: string;
+        updated_at: string;
+        booking_settings: {
+          slotMinutes?: number;
+          windowDays?: number;
+          workingHours?: Record<string, Array<[string, string]>>;
+          sendUpdates?: 'all' | 'none';
+        } | null;
+      }>;
+    }>('/api/integrations/status');
+  },
+
+  async getIntegrationOptions(provider: 'google' | 'calendly') {
+    return request<{
+      options: Array<{ id: string; name: string; primary?: boolean; slug?: string }>;
+      selected: string | null;
+    }>(`/api/integrations/${provider}/options`);
+  },
+
+  async saveIntegrationSelection(
+    provider: 'google' | 'calendly',
+    selection: { calendarId?: string; eventTypeUri?: string; eventTypeName?: string },
+  ) {
+    return request<{ connection: unknown }>(`/api/integrations/${provider}/selection`, {
+      method: 'PUT',
+      body: selection,
+    });
+  },
+
+  async saveBookingSettings(
+    provider: 'google' | 'calendly',
+    settings: {
+      slotMinutes?: number;
+      windowDays?: number;
+      workingHours?: Record<string, Array<[string, string]>>;
+      sendUpdates?: 'all' | 'none';
+    },
+  ) {
+    return request<{ connection: { booking_settings: unknown } }>(
+      `/api/integrations/${provider}/booking-settings`,
+      { method: 'PUT', body: settings },
+    );
+  },
+
+  async getBusinessGroups() {
+    return request<{
+      groups: Array<{
+        id: string;
+        owner_label: string;
+        policy: 'block' | 'flag_for_review';
+        invite_code: string | null;
+        invite_expires_at: string | null;
+        members: Array<{ organization_id: string; name: string; joined_at: string }>;
+      }>;
+    }>('/api/integrations/business-groups');
+  },
+
+  async createBusinessGroup(ownerLabel?: string) {
+    return request<{ group: unknown }>('/api/integrations/business-groups', {
+      method: 'POST',
+      body: { owner_label: ownerLabel || '' },
+    });
+  },
+
+  async joinBusinessGroup(code: string) {
+    return request<{ group: unknown }>('/api/integrations/business-groups/join', {
+      method: 'POST',
+      body: { code },
+    });
+  },
+
+  async updateBusinessGroup(
+    id: string,
+    update: { policy?: 'block' | 'flag_for_review'; owner_label?: string; regenerate_code?: boolean },
+  ) {
+    return request<{ group: unknown }>(`/api/integrations/business-groups/${id}`, {
+      method: 'PUT',
+      body: update,
+    });
+  },
+
+  async leaveBusinessGroup(id: string) {
+    return request<{ left: boolean }>(`/api/integrations/business-groups/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async disconnectIntegration(provider: 'google' | 'calendly') {
+    return request<{ disconnected: boolean; provider?: string; message?: string }>(
+      `/api/integrations/${provider}/disconnect`,
+      { method: 'POST' },
+    );
+  },
 };
 // ─────────────────────────────────────────────────────────────
 // Twilio Phone Number Management  (appended)

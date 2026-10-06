@@ -1,8 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, NETWORK_OFFLINE_MESSAGE } from "../services/api";
 import type { AuthChallenge } from "../services/api";
 import AuthCodePanel from "../components/AuthCodePanel";
+import {
+  AuthShell,
+  Field,
+  PasswordRevealButton,
+  PrimaryButton,
+  SectionHeading,
+  TextButton,
+  TextInput,
+  ErrorAlert,
+} from "../components/AuthShell";
 
 interface LoginProps {
   /** Verifies the password and returns the OTP challenge. Never a session. */
@@ -25,79 +35,6 @@ interface LoginProps {
   resendCooldownSeconds?: number;
 }
 
-const EyeIcon = ({ hidden }: { hidden: boolean }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    {hidden ? (
-      <>
-        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-        <path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-        <path d="m2 2 20 20" />
-        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-      </>
-    ) : (
-      <>
-        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </>
-    )}
-  </svg>
-);
-
-const PasswordVisibilityButton = ({
-  visible,
-  onToggle,
-  label,
-}: {
-  visible: boolean;
-  onToggle: () => void;
-  label: string;
-}) => (
-  <button
-    type="button"
-    onClick={onToggle}
-    /* Was an 18px-wide hit area. Measured at 375px it was the smallest
-       control on the form; 44px square is the accessible minimum and matches
-       the reference auth forms. */
-    className="absolute inset-y-0 right-1 flex w-11 items-center justify-center rounded-lg text-[#0F172A]/42 transition hover:text-[#0F172A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B]/45"
-    aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-    title={visible ? `Hide ${label}` : `Show ${label}`}
-  >
-    <EyeIcon hidden={visible} />
-  </button>
-);
-
-const AccessIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M12 3v18" />
-    <path d="M7 7v10" />
-    <path d="M17 7v10" />
-    <path d="M3 10v4" />
-    <path d="M21 10v4" />
-  </svg>
-);
-
 /** True when the error should be accompanied by a "create an account" CTA. */
 export const isLikelyMissingAccount = (error: unknown) =>
   error instanceof ApiError && error.status === 401;
@@ -106,11 +43,9 @@ const formatAuthError = (error: unknown) => {
   console.error("[auth] login/register submission failed:", error);
 
   /*
-   * ISSUE 2 - "mentioning frontend and backend on errors makes an incoming
-   * tenant lose trust in the stability of the platform". Agreed. Every message
-   * below is now written for the person signing in, not for whoever is
-   * debugging. The technical detail still goes to console.error above, where
-   * it is useful and invisible.
+   * Every message below is written for the person signing in, not for
+   * whoever is debugging. The technical detail still goes to console.error
+   * above, where it is useful and invisible.
    */
   if (error instanceof ApiError) {
     if (error.status === 0 || error.message === NETWORK_OFFLINE_MESSAGE) {
@@ -118,20 +53,12 @@ const formatAuthError = (error: unknown) => {
     }
     if (error.status === 401) {
       /*
-       * ISSUE 2b - you asked for "account not found, please sign up instead".
-       *
-       * I have NOT made the message say that, and I want to flag why rather
-       * than quietly ignore it. If sign-in distinguishes "no such account"
-       * from "wrong password", anyone can type addresses at the login form and
-       * learn which of your customers are registered. That is a real
-       * enumeration weakness, and for a platform holding business phone
-       * records it is worth avoiding.
-       *
-       * The UX problem you described is real though, so it is solved a
-       * different way: the message now explicitly points at signing up, and
-       * the form renders a prominent "Create an account" action underneath it
-       * (see AUTH_ERROR_SIGNUP_HINT below). Someone without an account is
-       * pointed to the right place; someone probing addresses learns nothing.
+       * Deliberately NOT distinguishing "no such account" from "wrong
+       * password": if sign-in did, anyone could type addresses at the login
+       * form and learn which of your customers are registered. That is a
+       * real enumeration weakness for a platform holding business phone
+       * records. The message instead points at signing up, and the form
+       * renders a "Create an account" action underneath it.
        */
       return "We couldn't sign you in with those details. Check your email and password — or if you're new here, create an account to get started.";
     }
@@ -165,6 +92,24 @@ const formatAuthError = (error: unknown) => {
     : "Something went wrong. Please try again.";
 };
 
+const scorePassword = (value: string) => {
+  let score = 0;
+  if (value.length >= 8) score++;
+  if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score++;
+  if (/\d/.test(value)) score++;
+  if (/[^A-Za-z0-9]/.test(value) && value.length >= 10) score++;
+  return score;
+};
+
+const strengthHint = (value: string, score: number) => {
+  if (value.length === 0)
+    return "Use 8 or more characters with a mix of letters and numbers.";
+  if (score < 2) return "Keep going — add length, numbers or mixed case.";
+  if (score < 4)
+    return "Good start. A symbol or extra length will make it stronger.";
+  return "Strong password.";
+};
+
 const Login: React.FC<LoginProps> = ({
   onLogin,
   onRegister,
@@ -181,6 +126,7 @@ const Login: React.FC<LoginProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showSignupHint, setShowSignupHint] = useState(false);
 
   /*
    * The pending challenge, or null when we are showing the form.
@@ -199,6 +145,7 @@ const Login: React.FC<LoginProps> = ({
   const resetToForm = () => {
     setChallenge(null);
     setError("");
+    setShowSignupHint(false);
     setPassword("");
   };
 
@@ -206,6 +153,7 @@ const Login: React.FC<LoginProps> = ({
     e.preventDefault();
     setLoading(true);
     setError("");
+    setShowSignupHint(false);
 
     try {
       /*
@@ -223,6 +171,7 @@ const Login: React.FC<LoginProps> = ({
       setPassword("");
     } catch (submitError) {
       setError(formatAuthError(submitError));
+      setShowSignupHint(isLikelyMissingAccount(submitError));
     } finally {
       setLoading(false);
     }
@@ -251,326 +200,262 @@ const Login: React.FC<LoginProps> = ({
     );
   };
 
-  const heading =
-    authMode === "signup" ? "Create your workspace" : "Welcome back";
-  const description =
-    authMode === "signup"
-      ? "Launch a workspace for voice agents, chatbots, follow-ups, and customer conversation intelligence."
-      : "Sign in to manage agents, numbers, knowledge bases, campaigns, and live customer conversations.";
+  const passwordScore = scorePassword(password);
+
+  const switchMode = (mode: "signin" | "signup") => {
+    setAuthMode(mode);
+    setError("");
+  };
 
   return (
-    <main className="auth-page min-h-svh lg:h-svh lg:overflow-hidden">
-      <div className="mx-auto flex min-h-svh w-full max-w-[1160px] flex-col px-2.5 py-2.5 sm:px-4 lg:h-svh lg:min-h-0 lg:py-3">
-        <div className="mb-2 flex h-11 items-center justify-between rounded-full border border-[#0F172A]/10 bg-white/78 px-4 shadow-[0_10px_28px_rgba(15,23,42,0.055)] backdrop-blur-xl">
-          <Link
-            to="/"
-            className="flex items-center gap-1.5"
-            aria-label="Go to Agently home"
-          >
-            <img
-              src="/agently-mark.png"
-              alt=""
-              className="h-6 w-auto object-contain sm:h-7"
-            />
-            <span className="text-lg font-bold text-[#0F172A] sm:text-xl">
-              Agently
-            </span>
-          </Link>
-          <Link
-            to="/"
-            className="rounded-full border border-[#0F172A]/12 px-4 py-2 text-[12px] font-medium text-[#0F172A]/72 transition hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
-          >
-            Back to site
-          </Link>
+    <AuthShell>
+      {!challenge && (
+        <div
+          role="tablist"
+          aria-label="Choose account action"
+          className="mb-[42px] grid grid-cols-2 gap-1 rounded-[12px] border border-[var(--line)] bg-[var(--surface-soft)] p-1 max-[760px]:mb-[34px]"
+        >
+          {(
+            [
+              ["signin", "Sign in"],
+              ["signup", "Create account"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={authMode === mode}
+              onClick={() => switchMode(mode)}
+              className={`min-h-[36px] rounded-lg border-0 text-[14px] font-medium transition ${
+                authMode === mode
+                  ? "bg-[var(--surface-raised)] text-[var(--text)] shadow-[0_1px_5px_rgba(12,16,27,0.08)]"
+                  : "bg-transparent text-[var(--muted)] hover:text-[var(--text)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+      )}
 
-        <div className="grid flex-1 overflow-hidden rounded-[2rem] border border-white/70 bg-white/74 shadow-[0_26px_78px_rgba(15,23,42,0.11)] backdrop-blur-xl lg:min-h-0 lg:grid-cols-[0.86fr_1.14fr]">
-          <section className="relative hidden overflow-hidden bg-[#0F172A] p-6 text-white lg:flex lg:flex-col lg:justify-between xl:p-6">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,0.42),transparent_28%),radial-gradient(circle_at_95%_15%,rgba(255,255,255,0.12),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.06),transparent_42%)]" />
-            <div className="relative">
-              <div className="flex items-center gap-1.5">
-                <img
-                  src="/agently-mark.png"
-                  alt=""
-                  className="h-7 w-auto object-contain"
+      {challenge ? (
+        <AuthCodePanel
+          purpose={challengePurpose}
+          email={challenge.email}
+          expiresInSeconds={challenge.expiresInSeconds}
+          resendCooldownSeconds={resendCooldownSeconds}
+          onSubmit={handleVerify}
+          onResend={handleResend}
+          onCancel={resetToForm}
+        />
+      ) : authMode === "signup" ? (
+        <div>
+          <SectionHeading
+            title="Build your workspace."
+            sub="Create your account and start with the tools your business needs."
+          />
+          <form onSubmit={handleSubmit} className="grid gap-[18px]">
+            <div className="grid grid-cols-2 gap-[14px] max-[760px]:grid-cols-1">
+              <Field label="Full name" htmlFor="auth-name">
+                <TextInput
+                  id="auth-name"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
-                <span className="text-lg font-bold text-white">Agently</span>
-              </div>
-              <p className="mt-4 text-[9px] font-medium uppercase tracking-[0.24em] text-white/50">
-                Your AI team, built around your business
-              </p>
-              <h1 className="font-display mt-3 max-w-[470px] text-[clamp(1.86rem,2.9vw,2.55rem)] font-medium leading-[1.02] tracking-[-0.055em] text-white">
-                Run every agent from one calm workspace.
-              </h1>
-              <p className="mt-2.5 max-w-[440px] text-[13px] font-normal leading-[18px] text-white/70">
-                Answer calls, qualify leads, recover missed opportunities, and
-                hand off cleanly to CRM without jumping between tools.
-              </p>
+              </Field>
+              <Field label="Business name" htmlFor="auth-company">
+                <TextInput
+                  id="auth-company"
+                  type="text"
+                  required
+                  autoComplete="organization"
+                  placeholder="Company name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                />
+              </Field>
             </div>
 
-            <div className="relative space-y-2.5">
-              {[
-                [
-                  "Inbound ready",
-                  "Route calls, capture intent, and escalate when a human should step in.",
-                ],
-                [
-                  "Outbound follow-up",
-                  "Run recovery, confirmations, and reactivation from the same workspace.",
-                ],
-              ].map(([label, copy], index) => (
-                <div
-                  key={label}
-                  className="group rounded-[1.25rem] border border-white/10 bg-white/[0.065] p-3 backdrop-blur transition hover:bg-white/[0.09]"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-[10px] font-medium text-[#0F172A]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <div>
-                      <p className="text-[13px] font-medium tracking-[-0.02em] text-white">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 text-[12px] font-normal leading-[16px] text-white/62">
-                        {copy}
-                      </p>
-                    </div>
+            <Field label="Email address" htmlFor="auth-email">
+              <TextInput
+                id="auth-email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Password"
+              htmlFor="auth-password"
+              hint={
+                <>
+                  <div
+                    className="mt-[2px] grid grid-cols-4 gap-[5px]"
+                    aria-hidden="true"
+                  >
+                    {[0, 1, 2, 3].map((i) => (
+                      <span
+                        key={i}
+                        className="h-[3px] rounded-full transition-colors"
+                        style={{
+                          background:
+                            i <
+                            (passwordScore <= 2
+                              ? passwordScore
+                              : passwordScore >= 4
+                                ? 4
+                                : 3)
+                              ? passwordScore >= 3
+                                ? "var(--success)"
+                                : "#d97932"
+                              : "var(--line)",
+                        }}
+                      />
+                    ))}
                   </div>
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {["Knowledge grounded", "CRM handoff", "Call summaries"].map(
-                  (item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[11px] font-medium text-white/68"
-                    >
-                      {item}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="flex min-h-0 items-center justify-center p-3.5 sm:p-4 lg:p-5 xl:p-5">
-            <div className="w-full max-w-[430px]">
-              <div className="mb-3 text-center lg:text-left">
-                <div className="mb-2 flex items-center justify-center gap-2 lg:justify-start">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#F59E0B] text-white shadow-[0_10px_24px_rgba(245,158,11,0.2)]">
-                    <AccessIcon />
-                  </span>
-                  <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-[#F59E0B]">
-                    Agently access
+                  <p className="m-0 text-[12px] leading-[1.45] text-[var(--muted)]">
+                    {strengthHint(password, passwordScore)}
                   </p>
-                </div>
-                <h1 className="font-display text-[clamp(1.82rem,3vw,2.35rem)] font-medium leading-[1.02] tracking-[-0.055em] text-[#0F172A]">
-                  {heading}
-                </h1>
-                <p className="mt-2 text-[13px] font-normal leading-[18px] text-[#0F172A]/70">
-                  {description}
-                </p>
+                </>
+              }
+            >
+              <div className="relative">
+                <TextInput
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Create a secure password"
+                  className="pr-[46px]"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <PasswordRevealButton
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                  label="password"
+                />
               </div>
+            </Field>
 
-              <div className="rounded-[1.45rem] border border-[#0F172A]/10 bg-[#F8FAFC]/94 p-3.5 shadow-[0_14px_42px_rgba(15,23,42,0.09)] backdrop-blur-xl sm:p-3.5">
-                {challenge ? (
-                  <AuthCodePanel
-                    purpose={challengePurpose}
-                    email={challenge.email}
-                    expiresInSeconds={challenge.expiresInSeconds}
-                    resendCooldownSeconds={resendCooldownSeconds}
-                    onSubmit={handleVerify}
-                    onResend={handleResend}
-                    onCancel={resetToForm}
-                  />
-                ) : (
-                  <>
-                    <div className="mb-2.5 grid grid-cols-2 rounded-full border border-[#0F172A]/8 bg-white p-1">
-                      <button
-                        onClick={() => {
-                          setAuthMode("signin");
-                          setError("");
-                        }}
-                        type="button"
-                        className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${authMode === "signin" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
-                      >
-                        Sign in
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAuthMode("signup");
-                          setError("");
-                        }}
-                        type="button"
-                        className={`min-h-[44px] rounded-full px-3 py-2.5 text-[13px] font-medium transition-all ${authMode === "signup" ? "bg-[#0F172A] text-white shadow-sm" : "text-[#0F172A]/58 hover:text-[#0F172A]"}`}
-                      >
-                        Create account
-                      </button>
-                    </div>
+            <ErrorAlert>{error}</ErrorAlert>
 
-                    <form onSubmit={handleSubmit} className="space-y-2.5">
-                      {authMode === "signup" && (
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-[12px] font-medium text-[#0F172A]">
-                              Full name
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              autoComplete="name"
-                              placeholder="Your name"
-                              className="auth-input"
-                              value={name}
-                              onChange={(e) => setName(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-[12px] font-medium text-[#0F172A]">
-                              Workspace name
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              autoComplete="organization"
-                              placeholder="Company or team"
-                              className="auth-input"
-                              value={companyName}
-                              onChange={(e) => setCompanyName(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="mb-1 block text-[12px] font-medium text-[#0F172A]">
-                          Email address
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          autoComplete="email"
-                          placeholder="name@company.com"
-                          className="auth-input"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <div className="mb-1 flex justify-between">
-                          <label className="block text-[12px] font-medium text-[#0F172A]">
-                            Password
-                          </label>
-                          {authMode === "signin" && (
-                            <Link
-                              to="/forgot-password"
-                              className="-my-1 inline-flex min-h-[32px] items-center px-1 text-xs font-medium text-[#F59E0B] hover:underline"
-                            >
-                              Forgot?
-                            </Link>
-                          )}
-                        </div>
-                        <div className="relative">
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            required
-                            minLength={authMode === "signup" ? 8 : undefined}
-                            autoComplete={
-                              authMode === "signup"
-                                ? "new-password"
-                                : "current-password"
-                            }
-                            placeholder="••••••••"
-                            className="auth-input"
-                            style={{ paddingRight: "2.85rem" }}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                          />
-                          <PasswordVisibilityButton
-                            visible={showPassword}
-                            onToggle={() => setShowPassword((value) => !value)}
-                            label="password"
-                          />
-                        </div>
-                        {authMode === "signup" && (
-                          <p className="mt-1 text-[11px] font-normal text-[#0F172A]/52">
-                            At least 8 characters.
-                          </p>
-                        )}
-                      </div>
-
-                      {error && (
-                        <div
-                          role="alert"
-                          className="rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-red-600"
-                        >
-                          {error}
-                        </div>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
-                      >
-                        {loading ? (
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        ) : authMode === "signup" ? (
-                          "Create workspace"
-                        ) : (
-                          "Continue"
-                        )}
-                      </button>
-
-                      {/* Both flows end at an emailed code, so say so before
-                          the button is pressed rather than surprising people
-                          with a screen they did not expect. */}
-                      <p className="text-center text-[11px] font-normal leading-[15px] text-[#0F172A]/52">
-                        {authMode === "signup"
-                          ? "We'll email you a 6-digit code to confirm your address."
-                          : "We'll email you a 6-digit code to finish signing in."}
-                      </p>
-                    </form>
-                  </>
-                )}
-              </div>
-
-              {!challenge && (
-                <p className="mt-2 text-center text-[12px] font-normal text-[#0F172A]/60">
-                  {authMode === "signup" ? (
-                    <>
-                      Already have an account?{" "}
-                      <button
-                        type="button"
-                        onClick={() => setAuthMode("signin")}
-                        className="-my-2 inline-flex min-h-[32px] items-center px-1 font-medium text-[#F59E0B] hover:underline"
-                      >
-                        Sign in
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      New to Agently?{" "}
-                      <button
-                        type="button"
-                        onClick={() => setAuthMode("signup")}
-                        /* Inline in a sentence, so it cannot be a 44px block;
-                           the negative margin keeps the sentence tight while
-                           giving the control a 32px hit area. */
-                        className="-my-2 inline-flex min-h-[32px] items-center px-1 font-medium text-[#F59E0B] hover:underline"
-                      >
-                        Create an account
-                      </button>
-                    </>
-                  )}
-                </p>
+            <PrimaryButton type="submit" disabled={loading}>
+              {loading ? (
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                "Create account"
               )}
-            </div>
-          </section>
+            </PrimaryButton>
+            <p className="m-0 text-[13px] leading-[1.55] text-[var(--muted)]">
+              By creating an account, you agree to Agently&apos;s{" "}
+              <Link
+                to="/terms"
+                className="font-medium text-[var(--accent)] no-underline hover:underline hover:underline-offset-[3px]"
+              >
+                Terms &amp; Privacy
+              </Link>
+              .
+            </p>
+          </form>
+          <p className="m-0 mt-[22px] text-center text-[14px] text-[var(--muted)]">
+            Already have an account?{" "}
+            <TextButton type="button" onClick={() => switchMode("signin")}>
+              Sign in
+            </TextButton>
+          </p>
         </div>
-      </div>
-    </main>
+      ) : (
+        <div>
+          <SectionHeading
+            title="Welcome back."
+            sub="Sign in to continue to your workspace."
+          />
+          <form onSubmit={handleSubmit} className="grid gap-[18px]">
+            <Field label="Email address" htmlFor="auth-email">
+              <TextInput
+                id="auth-email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Field>
+
+            <Field label="Password" htmlFor="auth-password">
+              <div className="relative">
+                <TextInput
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  className="pr-[46px]"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <PasswordRevealButton
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((v) => !v)}
+                  label="password"
+                />
+              </div>
+            </Field>
+
+            <div className="my-[1px] flex items-center justify-between gap-4">
+              <span />
+              <Link
+                to="/forgot-password"
+                className="text-[14px] font-medium text-[var(--accent)] no-underline hover:underline hover:underline-offset-[3px]"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            <ErrorAlert>{error}</ErrorAlert>
+            {showSignupHint && (
+              <p
+                data-testid="signup-hint"
+                className="m-0 text-center text-[13px] text-[var(--muted)]"
+              >
+                <TextButton type="button" onClick={() => switchMode("signup")}>
+                  Create an account
+                </TextButton>
+              </p>
+            )}
+
+            <PrimaryButton type="submit" disabled={loading}>
+              {loading ? (
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                "Sign in"
+              )}
+            </PrimaryButton>
+            <p className="m-0 text-center text-[13px] text-[var(--muted)]">
+              We&apos;ll email you a 6-digit code to finish signing in.
+            </p>
+          </form>
+          <p className="m-0 mt-[22px] text-center text-[14px] text-[var(--muted)]">
+            New to Agently?{" "}
+            <TextButton type="button" onClick={() => switchMode("signup")}>
+              Create an account
+            </TextButton>
+          </p>
+        </div>
+      )}
+    </AuthShell>
   );
 };
 

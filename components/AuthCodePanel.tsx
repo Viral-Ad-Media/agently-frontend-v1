@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../services/api";
+import {
+  BackButton,
+  ErrorAlert,
+  MailIcon,
+  PrimaryButton,
+  SectionHeading,
+} from "./AuthShell";
 
 /**
  * The one-time-code step, shared by both flows.
  *
  * Signup verification and login OTP look identical to a user — six boxes and a
- * Resend link — and differ only in copy and in which endpoint verifies them. So
+ * resend link — and differ only in copy and in which endpoint verifies them. So
  * this component owns the interaction and the caller owns the meaning: it is
  * handed a `purpose` for the wording and an `onSubmit` for the endpoint. There
  * is no branching on purpose anywhere below except the strings, which is the
@@ -25,6 +32,9 @@ import { ApiError } from "../services/api";
  *     which is what lets iOS and Android offer the code from the notification.
  *   - On an incorrect code the boxes clear and refocus. Making someone delete
  *     six wrong digits by hand is a small, avoidable insult.
+ *
+ * v1.8: markup re-skinned to the approved auth preview (single centered
+ * panel, Archivo headings, orange accents). No behaviour changed.
  */
 
 type CodePurpose = "email_verify" | "login_otp";
@@ -42,29 +52,17 @@ interface AuthCodePanelProps {
   onCancel: () => void;
 }
 
-const MailIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="26"
-    height="26"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <rect width="20" height="16" x="2" y="4" rx="2" />
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-  </svg>
-);
-
 const formatClock = (seconds: number) => {
   const safe = Math.max(0, Math.floor(seconds));
   const m = Math.floor(safe / 60);
   const s = safe % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+const maskEmail = (email: string) => {
+  const parts = email.split("@");
+  if (parts.length !== 2) return email;
+  return `${parts[0].slice(0, 2)}•••@${parts[1]}`;
 };
 
 const AuthCodePanel: React.FC<AuthCodePanelProps> = ({
@@ -92,15 +90,11 @@ const AuthCodePanel: React.FC<AuthCodePanelProps> = ({
     () =>
       purpose === "email_verify"
         ? {
-            heading: "Confirm your email",
-            body: "We sent a 6-digit code to",
-            tail: "Enter it to finish creating your workspace.",
+            heading: "Confirm your email.",
             action: "Verify email",
           }
         : {
-            heading: "Check your email",
-            body: "We sent a 6-digit sign-in code to",
-            tail: "Enter it to finish signing in.",
+            heading: "Check your inbox.",
             action: "Verify and sign in",
           },
     [purpose],
@@ -269,22 +263,27 @@ const AuthCodePanel: React.FC<AuthCodePanelProps> = ({
   const expired = secondsLeft <= 0;
 
   return (
-    <div className="py-1 animate-in fade-in">
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#F59E0B]/10 text-[#F59E0B]">
-        <MailIcon />
-      </div>
+    <div>
+      <BackButton onClick={onCancel}>
+        {purpose === "email_verify" ? "Back to account creation" : "Use another email"}
+      </BackButton>
 
-      <h2 className="text-center text-[19px] font-medium tracking-[-0.035em] text-[#0F172A]">
-        {copy.heading}
-      </h2>
-      <p className="mx-auto mt-1.5 max-w-sm text-center text-[13px] font-normal leading-[18px] text-[#0F172A]/68">
-        {copy.body}{" "}
-        <span className="font-medium text-[#0F172A]">{email}</span>.{" "}
-        {copy.tail}
-      </p>
+      <SectionHeading
+        title={copy.heading}
+        sub={
+          <>
+            Enter the six-digit code for{" "}
+            <strong className="font-semibold text-[var(--text)]">
+              {maskEmail(email)}
+            </strong>
+            .
+          </>
+        }
+      />
 
       <div
-        className="mt-4 flex justify-center gap-1.5 sm:gap-2"
+        className="grid gap-[10px] max-[390px]:gap-[6px]"
+        style={{ gridTemplateColumns: `repeat(${codeLength}, minmax(0, 1fr))` }}
         role="group"
         aria-label={`${codeLength}-digit verification code`}
       >
@@ -305,75 +304,66 @@ const AuthCodePanel: React.FC<AuthCodePanelProps> = ({
             onChange={(e) => handleChange(index, e.target.value)}
             onKeyDown={(e) => handleKeyDown(index, e)}
             onFocus={(e) => e.target.select()}
-            className={`h-12 w-10 rounded-xl border bg-white text-center text-[19px] font-medium tabular-nums text-[#0F172A] shadow-sm outline-none transition sm:h-[52px] sm:w-11 ${
+            style={{ fontFamily: '"Archivo", sans-serif' }}
+            className={`h-[58px] w-full min-w-0 rounded-[10px] border bg-[var(--field)] p-0 text-center text-[24px] font-semibold tabular-nums text-[var(--text)] outline-none transition max-[390px]:h-[52px] max-[390px]:text-[21px] disabled:opacity-60 ${
               error
-                ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                : "border-[#0F172A]/12 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20"
-            } disabled:opacity-60`}
+                ? "border-red-300 focus:border-red-400 focus:shadow-[0_0_0_4px_rgba(220,60,40,0.12)]"
+                : "border-[var(--line)] focus:border-[var(--accent)] focus:shadow-[0_0_0_4px_var(--focus)]"
+            }`}
           />
         ))}
       </div>
 
-      <p className="mt-2.5 text-center text-[11px] font-medium text-[#0F172A]/50">
-        {expired ? (
-          <span className="text-red-600">
-            This code has expired — request a new one.
-          </span>
-        ) : (
-          <>Code expires in {formatClock(secondsLeft)}</>
-        )}
-      </p>
+      <div className="mt-[18px] flex items-start gap-[11px] rounded-[10px] bg-[var(--accent-soft)] p-[13px_14px] text-[13px] text-[var(--text)]">
+        <span className="mt-[1px] flex-none text-[var(--accent)]">
+          <MailIcon />
+        </span>
+        <span>
+          {expired ? (
+            <span className="font-medium text-[#b63d28]">
+              This code has expired — request a new one below.
+            </span>
+          ) : (
+            <>
+              Codes are delivered by the account service and expire after{" "}
+              {formatClock(secondsLeft)}. Check spam if it hasn&apos;t arrived.
+            </>
+          )}
+        </span>
+      </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-red-600"
+      <div className="mt-[18px] grid gap-[10px]">
+        <PrimaryButton
+          type="button"
+          onClick={() => complete && void submit(code)}
+          disabled={!complete || busy}
         >
-          {error}
-        </div>
-      )}
-      {notice && !error && (
-        <div
-          role="status"
-          className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[12px] font-medium leading-[16px] text-emerald-700"
-        >
-          {notice}
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => complete && void submit(code)}
-        disabled={!complete || busy}
-        className="mt-3.5 flex w-full items-center justify-center gap-2 min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:translate-y-0 disabled:opacity-50"
-      >
-        {busy ? (
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-        ) : (
-          copy.action
-        )}
-      </button>
-
-      <div className="mt-2.5 flex items-center justify-center gap-3 text-[12px]">
+          {busy ? (
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            copy.action
+          )}
+        </PrimaryButton>
         <button
           type="button"
           onClick={() => void handleResend()}
           disabled={cooldown > 0 || busy}
-          className="-my-1 inline-flex min-h-[32px] items-center px-1 font-medium text-[#F59E0B] transition hover:underline disabled:text-[#0F172A]/38 disabled:no-underline"
+          className="min-h-[42px] w-full rounded-[12px] border border-[var(--line)] bg-[var(--surface-raised)] px-4 text-[14px] font-semibold text-[var(--text)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-soft)] disabled:opacity-50"
         >
-          {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+          {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
         </button>
-        <span className="text-[#0F172A]/20" aria-hidden="true">
-          •
-        </span>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="-my-1 inline-flex min-h-[32px] items-center px-1 font-medium text-[#0F172A]/60 transition hover:text-[#0F172A] disabled:opacity-50"
-        >
-          Use a different email
-        </button>
+      </div>
+
+      <div className="mt-[10px] grid gap-[10px]">
+        <ErrorAlert>{error}</ErrorAlert>
+        {notice && !error && (
+          <div
+            role="status"
+            className="rounded-[10px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-medium leading-[1.45] text-emerald-700"
+          >
+            {notice}
+          </div>
+        )}
       </div>
     </div>
   );

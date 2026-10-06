@@ -326,7 +326,7 @@ const CLIP_ARTS = [
   },
   {
     label: "Launch",
-    tone: "#F59E0B",
+    tone: "#f2572b",
     caption: "Send your first agent into the control room.",
   },
 ];
@@ -1030,7 +1030,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   };
 
   const inputClass =
-    "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#F59E0B]/60 focus:bg-white focus:ring-4 focus:ring-[#F59E0B]/10";
+    "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#f2572b]/60 focus:bg-white focus:ring-4 focus:ring-[#f2572b]/10";
   const labelClass =
     "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/55";
 
@@ -1045,7 +1045,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
     <div className="ag-onboarding-no-callout min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
       <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-6xl items-center gap-4 lg:grid-cols-[0.48fr_1.52fr]">
         <aside className="relative hidden overflow-hidden rounded-[2rem] border border-[#0F172A]/10 bg-[#0F172A] p-5 text-white shadow-2xl lg:flex lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px] lg:flex-col">
-          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#F59E0B]/30 blur-3xl" />
+          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#f2572b]/30 blur-3xl" />
           <div className="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
 
           <div className="relative z-10 flex items-center justify-between gap-4">
@@ -1116,7 +1116,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
                   <span
                     key={i}
-                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step > i ? "bg-[#F59E0B]" : "bg-[#0F172A]/10"}`}
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step > i ? "bg-[#f2572b]" : "bg-[#0F172A]/10"}`}
                   />
                 ))}
               </div>
@@ -1221,7 +1221,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                               <button
                                 key={ind}
                                 type="button"
-                                className={`w-full rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${profile.industry === ind ? "bg-[#F59E0B]/10 font-medium text-[#F59E0B]" : "text-[#0F172A]/75 hover:bg-[#F1F5F9]"}`}
+                                className={`w-full rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${profile.industry === ind ? "bg-[#f2572b]/10 font-medium text-[#f2572b]" : "text-[#0F172A]/75 hover:bg-[#F1F5F9]"}`}
                                 onClick={() => {
                                   setProfile((p) => ({ ...p, industry: ind }));
                                   setTouched((t) => ({ ...t, industry: true }));
@@ -1351,7 +1351,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
             {step === 2 && (
               <section className="mx-auto grid w-full max-w-[860px] gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
                 <div>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.5rem] bg-[#F59E0B]/10 text-[#F59E0B]">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.5rem] bg-[#f2572b]/10 text-[#f2572b]">
                     <i className="fa-sharp fa-solid fa-brain text-xl" />
                   </div>
                   <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
@@ -1408,7 +1408,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     These answers come from your homepage and are what your
                     agent will say to callers.
                   </p>
-                  <div className="mt-3 flex items-start gap-2.5 rounded-[1.35rem] border border-[#F59E0B]/25 bg-[#F59E0B]/8 px-4 py-3">
+                  <div className="mt-3 flex items-start gap-2.5 rounded-[1.35rem] border border-[#f2572b]/25 bg-[#f2572b]/8 px-4 py-3">
                     <i className="fa-sharp fa-solid fa-pen-to-square mt-0.5 text-[#D97706]" />
                     <p className="text-[12px] leading-4 text-[#0F172A]/70">
                       Tap any question or answer below to edit it — or leave
@@ -1445,7 +1445,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     agent.faqs.map((faq, i) => (
                       <div
                         key={faq.id}
-                        className="group px-4 py-3 transition-colors hover:bg-[#F59E0B]/[0.035]"
+                        className="group px-4 py-3 transition-colors hover:bg-[#f2572b]/[0.035]"
                       >
                         <div className="flex items-start gap-2.5">
                           <span className="mt-[3px] w-4 shrink-0 text-right text-[11px] font-bold tabular-nums text-[#D97706]">
@@ -1468,7 +1468,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                                   ),
                                 }))
                               }
-                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[14px] font-semibold leading-[1.35] text-[#0F172A] outline-none transition-colors focus:bg-[#F59E0B]/[0.06]"
+                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[14px] font-semibold leading-[1.35] text-[#0F172A] outline-none transition-colors focus:bg-[#f2572b]/[0.06]"
                             />
                             <textarea
                               rows={2}
@@ -1486,7 +1486,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                                   ),
                                 }))
                               }
-                              className="ag-onboarding-faq-answer mt-0.5 w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[13px] leading-[1.5] text-[#0F172A]/70 outline-none transition-colors focus:bg-[#F59E0B]/[0.06]"
+                              className="ag-onboarding-faq-answer mt-0.5 w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[13px] leading-[1.5] text-[#0F172A]/70 outline-none transition-colors focus:bg-[#f2572b]/[0.06]"
                             />
                           </div>
                         </div>
@@ -1541,10 +1541,10 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         key={t.id}
                         type="button"
                         onClick={() => setAgent((a) => ({ ...a, tone: t.id }))}
-                        className={`rounded-[1.25rem] border p-3 text-left transition-all ${agent.tone === t.id ? "border-[#F59E0B]/35 bg-[#F59E0B]/10 text-[#0F172A]" : "border-[#0F172A]/10 bg-white text-[#0F172A]/70 hover:border-[#0F172A]/18"}`}
+                        className={`rounded-[1.25rem] border p-3 text-left transition-all ${agent.tone === t.id ? "border-[#f2572b]/35 bg-[#f2572b]/10 text-[#0F172A]" : "border-[#0F172A]/10 bg-white text-[#0F172A]/70 hover:border-[#0F172A]/18"}`}
                       >
                         <span
-                          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-2xl ${agent.tone === t.id ? "bg-[#F59E0B] text-white" : "bg-[#F1F5F9] text-[#0F172A]/65"}`}
+                          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-2xl ${agent.tone === t.id ? "bg-[#f2572b] text-white" : "bg-[#F1F5F9] text-[#0F172A]/65"}`}
                         >
                           <i className={`fa-sharp fa-solid ${t.icon}`} />
                         </span>
@@ -1620,7 +1620,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         key={f}
                         type="button"
                         onClick={() => toggleField(f)}
-                        className={`ag-capture-field-chip rounded-full border px-3 py-1.5 text-[11px] font-semibold capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "ag-capture-field-chip--active border-[#F59E0B]/70 bg-[#F59E0B]/25 text-[#9A5B00]" : "ag-capture-field-chip--inactive border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
+                        className={`ag-capture-field-chip rounded-full border px-3 py-1.5 text-[11px] font-semibold capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "ag-capture-field-chip--active border-[#f2572b]/70 bg-[#f2572b]/25 text-[#9A5B00]" : "ag-capture-field-chip--inactive border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
                       >
                         {agent.dataCaptureFields.includes(f) && "✓ "}
                         {f}
@@ -1692,7 +1692,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
               onClick={handleNext}
               disabled={loading || !stepIsValid}
               title={stepIsValid ? undefined : Object.values(stepErrors)[0]}
-              className="flex-[2] rounded-[1.1rem] bg-[#0F172A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-[2] rounded-[1.1rem] bg-[#0F172A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#f2572b] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
