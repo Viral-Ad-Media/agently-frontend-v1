@@ -267,6 +267,132 @@ type MessengerResponse = {
 
 type LeadExportDownload = Promise<void>;
 
+// ---------------------------------------------------------------------------
+// Calendar connections (one row per CONNECTED ACCOUNT)
+// ---------------------------------------------------------------------------
+/*
+ * One Agently login can run several businesses, each with its own Google (or
+ * Calendly) account, so calendar_integrations is one row per connected
+ * ACCOUNT -- not one row per provider. Two fields carry that:
+ *
+ *   label             the tenant-facing name of the connection ("Nutra
+ *                     Wellness"). Defaults to the provider account's display
+ *                     name or email on connect; renameable.
+ *   is_booking_default  the ONE connection the voice agent books INTO. At most
+ *                     one true per organization (a partial unique index in
+ *                     Postgres enforces it, not this client).
+ *
+ * AVAILABILITY merges across every connection -- a slot is offered only when
+ * the owner is free on all of them. BOOKING writes only to the
+ * is_booking_default connection. Both of those are server behaviour; this
+ * client only reads and labels the result.
+ */
+
+export type CalendarProvider = 'google' | 'calendly';
+
+export type CalendarConnectionStatus =
+  | 'connected'
+  | 'needs_reconnect'
+  | 'disconnected'
+  | 'error';
+
+export interface CalendarBookingSettings {
+  slotMinutes?: number;
+  windowDays?: number;
+  workingHours?: Record<string, Array<[string, string]>>;
+  sendUpdates?: 'all' | 'none';
+}
+
+export interface CalendarConnection {
+  id: string;
+  provider: CalendarProvider;
+  status: CalendarConnectionStatus;
+  /** Tenant-facing name. Null on rows written before the label column. */
+  label: string | null;
+  is_booking_default: boolean;
+  provider_user_id: string | null;
+  provider_user_email: string | null;
+  provider_user_name: string | null;
+  calendar_id: string | null;
+  event_type_uri: string | null;
+  event_type_name: string | null;
+  scopes: string | null;
+  timezone: string | null;
+  last_error: string | null;
+  connected_at: string;
+  updated_at: string;
+  booking_settings: CalendarBookingSettings | null;
+}
+
+export interface IntegrationsStatus {
+  encryptionConfigured: boolean;
+  encryptionHelp: string | null;
+  googleConfigured: boolean;
+  calendlyConfigured: boolean;
+  connections: CalendarConnection[];
+}
+
+export type AppointmentStatus =
+  | 'booked'
+  | 'cancelled'
+  | 'rescheduled'
+  | 'no_show'
+  | 'completed';
+
+/**
+ * The connection facts the server exposes outside /status: a whitelist,
+ * because the underlying rows carry token ciphertext. Note the casing — these
+ * summaries are camelCase while /status returns the raw snake_case row, so the
+ * two are deliberately separate types rather than one with optional fields.
+ */
+export interface CalendarConnectionSummary {
+  id: string;
+  provider: CalendarProvider;
+  /** Never blank: the server falls back to the account email, then the provider. */
+  label: string;
+  email: string | null;
+  status: CalendarConnectionStatus;
+  isBookingDefault: boolean;
+}
+
+/**
+ * One appointment in the merged feed: the appointment row as stored, plus the
+ * connection fields the server joins on, so a single list can say which
+ * business each booking belongs to.
+ *
+ * connectionId is null for an appointment whose connection has since been
+ * removed — appointments.integration_id is ON DELETE SET NULL, so history
+ * survives a disconnect and the view has to render it unlabelled.
+ */
+export interface MergedBooking {
+  id: string;
+  integration_id: string | null;
+  provider: CalendarProvider;
+  title: string | null;
+  attendee_name: string | null;
+  attendee_email: string | null;
+  attendee_phone: string | null;
+  starts_at: string;
+  ends_at: string;
+  timezone: string;
+  status: AppointmentStatus;
+  cancel_url: string | null;
+  reschedule_url: string | null;
+  created_at: string;
+  connectionId: string | null;
+  connectionLabel: string | null;
+  connectionEmail: string | null;
+  isBookingDefault: boolean;
+}
+
+export interface MergedBookingsResponse {
+  bookings: MergedBooking[];
+  /** Every connection in the org, so the view can offer a per-account filter. */
+  connections: CalendarConnectionSummary[];
+  /** Rows matching the filter before `limit` was applied. */
+  total: number;
+}
+
 export const api = {
   /** Public. Which sign-in methods the backend actually offers right now. */
   async getAuthConfig() {
@@ -1130,47 +1256,44 @@ export const api = {
     });
   },
 
+  /**
+   * Every calendar connection the organization has -- one entry per connected
+   * ACCOUNT, so a tenant running three businesses from one login gets three
+   * google rows. Server-side this is scoped to req.orgId; the five calendar
+   * tables are RLS-enabled with zero policies and the API holds the service
+   * role, so that scoping is the only thing standing between tenants.
+   */
   async getIntegrationsStatus() {
-    return request<{
-      encryptionConfigured: boolean;
-      encryptionHelp: string | null;
-      googleConfigured: boolean;
-      calendlyConfigured: boolean;
-      connections: Array<{
-        id: string;
-        provider: 'google' | 'calendly';
-        status: 'connected' | 'needs_reconnect' | 'disconnected' | 'error';
-        provider_user_id: string | null;
-        provider_user_email: string | null;
-        provider_user_name: string | null;
-        calendar_id: string | null;
-        event_type_uri: string | null;
-        event_type_name: string | null;
-        scopes: string | null;
-        timezone: string | null;
-        last_error: string | null;
-        connected_at: string;
-        updated_at: string;
-        booking_settings: {
-          slotMinutes?: number;
-          windowDays?: number;
-          workingHours?: Record<string, Array<[string, string]>>;
-          sendUpdates?: 'all' | 'none';
-        } | null;
-      }>;
-    }>('/api/integrations/status');
+    return request<IntegrationsStatus>('/api/integrations/status');
   },
 
-  async getIntegrationOptions(provider: 'google' | 'calendly') {
+  /*
+   * These three routes address a provider by NAME, which predates several
+   * accounts per provider. Each now takes an optional connectionId naming which
+   * of that provider's accounts to read or write; omitting it falls back to the
+   * provider's booking default, which is what the single-account case always
+   * meant. Callers that know the connection should say so — the fallback is a
+   * compatibility path, not a choice.
+   */
+
+  async getIntegrationOptions(provider: 'google' | 'calendly', connectionId?: string) {
+    const suffix = connectionId
+      ? `?connectionId=${encodeURIComponent(connectionId)}`
+      : '';
     return request<{
       options: Array<{ id: string; name: string; primary?: boolean; slug?: string }>;
       selected: string | null;
-    }>(`/api/integrations/${provider}/options`);
+    }>(`/api/integrations/${provider}/options${suffix}`);
   },
 
   async saveIntegrationSelection(
     provider: 'google' | 'calendly',
-    selection: { calendarId?: string; eventTypeUri?: string; eventTypeName?: string },
+    selection: {
+      calendarId?: string;
+      eventTypeUri?: string;
+      eventTypeName?: string;
+      connectionId?: string;
+    },
   ) {
     return request<{ connection: unknown }>(`/api/integrations/${provider}/selection`, {
       method: 'PUT',
@@ -1185,6 +1308,7 @@ export const api = {
       windowDays?: number;
       workingHours?: Record<string, Array<[string, string]>>;
       sendUpdates?: 'all' | 'none';
+      connectionId?: string;
     },
   ) {
     return request<{ connection: { booking_settings: unknown } }>(
@@ -1236,11 +1360,115 @@ export const api = {
     });
   },
 
+  /**
+   * Legacy single-account disconnect, kept for the one-connection case and
+   * for callers that still hold only a provider. Prefer
+   * disconnectCalendarConnection: with several accounts per provider, this one
+   * cannot say WHICH of them to drop.
+   */
   async disconnectIntegration(provider: 'google' | 'calendly') {
     return request<{ disconnected: boolean; provider?: string; message?: string }>(
       `/api/integrations/${provider}/disconnect`,
       { method: 'POST' },
     );
+  },
+
+  // -------------------------------------------------------------------------
+  // Per-connection operations (several accounts per provider)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The tenant-facing connection list on its own. getIntegrationsStatus covers
+   * the same ground AND the provider/encryption flags in one round trip, so
+   * the Integrations page uses that; this is for callers that need only the
+   * accounts, and it returns the lighter camelCase summaries.
+   */
+  async getCalendarConnections() {
+    return request<{
+      connections: Array<
+        CalendarConnectionSummary & {
+          name: string | null;
+          calendarId: string | null;
+          eventTypeName: string | null;
+          timezone: string | null;
+          lastError: string | null;
+          connectedAt: string;
+        }
+      >;
+      bookingDefaultId: string | null;
+    }>('/api/integrations/connections');
+  },
+
+  /** Rename one connection. The label is cosmetic; it moves no tokens. */
+  async renameCalendarConnection(connectionId: string, label: string) {
+    return request<{ connection: CalendarConnectionSummary }>(
+      `/api/integrations/connections/${encodeURIComponent(connectionId)}`,
+      { method: 'PATCH', body: { label } },
+    );
+  },
+
+  /**
+   * Make this connection the one the voice agent books INTO. PUT, not POST: it
+   * sets a value rather than creating anything, and sending it twice is the
+   * same as sending it once.
+   *
+   * The server clears the previous default in the same write, because the
+   * database allows at most one default per organization and would otherwise
+   * reject it — so the response describes only the connection that WON. A
+   * caller holding a list must re-read it rather than flip a flag locally.
+   * Availability is unaffected either way: it always merges across every
+   * connection.
+   */
+  async setCalendarBookingDefault(connectionId: string) {
+    return request<{ connection: CalendarConnectionSummary }>(
+      `/api/integrations/connections/${encodeURIComponent(connectionId)}/booking-default`,
+      { method: 'PUT' },
+    );
+  },
+
+  /**
+   * Revoke at the provider and delete this one row. If it was the booking
+   * default the server promotes another connection, so the organization is
+   * never left connected but unbookable; promotedConnectionId names the
+   * replacement, or is null when nothing needed promoting.
+   */
+  async disconnectCalendarConnection(connectionId: string) {
+    return request<{
+      disconnected: boolean;
+      provider: CalendarProvider;
+      connectionId: string;
+      promotedConnectionId: string | null;
+    }>(`/api/integrations/connections/${encodeURIComponent(connectionId)}/disconnect`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * The merged bookings feed: appointments across ALL of the organization's
+   * connections, each labelled with the connection it belongs to, so the
+   * tenant sees every business's day in one view instead of switching
+   * accounts. `from`/`to` are ISO instants.
+   *
+   * `status` is matched exactly, so it takes a real appointment status and
+   * nothing else — omit it to get every status. There is no "all" sentinel:
+   * the server would filter for a status literally named "all" and hand back
+   * an empty feed.
+   */
+  async getMergedBookings(range?: {
+    from?: string;
+    to?: string;
+    status?: AppointmentStatus;
+    connectionId?: string;
+    limit?: number;
+  }) {
+    const query = new URLSearchParams();
+    if (range?.from) query.set('from', range.from);
+    if (range?.to) query.set('to', range.to);
+    if (range?.status) query.set('status', range.status);
+    if (range?.connectionId) query.set('connectionId', range.connectionId);
+    if (range?.limit) query.set('limit', String(range.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return request<MergedBookingsResponse>(`/api/integrations/bookings${suffix}`);
   },
 };
 // ─────────────────────────────────────────────────────────────

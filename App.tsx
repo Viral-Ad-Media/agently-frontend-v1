@@ -35,6 +35,7 @@ import PhoneNumbers from "./pages/PhoneNumbers";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
+import Bookings from "./pages/Bookings";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
 // ─────────────────────────────────────────────────────────────────────────
@@ -1210,6 +1211,26 @@ const App: React.FC = () => {
                 // should be redirected: sending a signed-in one to /login
                 // bounced them straight on to /dashboard, losing the route
                 // they actually asked for.
+                <AppLoading />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          {/*
+            * The merged bookings feed: every appointment across every
+            * connected calendar account, on one page. Same org-gate as
+            * /integrations -- it reads the organization's appointments, so it
+            * must not render before the workspace resolves.
+            */}
+          <Route
+            path="/bookings"
+            element={
+              org ? (
+                <ProtectedRoute {...protectedRouteProps}>
+                  <Bookings />
+                </ProtectedRoute>
+              ) : user || authPending ? (
                 <AppLoading />
               ) : (
                 <Navigate to="/login" />

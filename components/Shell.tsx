@@ -64,6 +64,19 @@ const NAV_ITEMS: Array<{
     description: "Contact capture and outreach scheduling",
   },
   {
+    to: "/bookings",
+    tourId: "nav-bookings",
+    /*
+     * A glyph, not a PNG. Every other item has a bespoke icon in public/nav/
+     * and this one has none yet; SidebarLink treats a leading "/" as an image
+     * path and anything else as a Font Awesome class, so this renders without
+     * shipping a placeholder asset that would have to be redrawn later.
+     */
+    icon: "fa-sharp fa-solid fa-calendar-days",
+    label: "Bookings",
+    description: "Every appointment across your connected calendars",
+  },
+  {
     to: "/settings",
     tourId: "nav-settings",
     icon: "/nav/settings.png",
