@@ -3198,6 +3198,32 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
             <div>
+              <Label>Transfer attempts</Label>
+              <select
+                value={String(draft.rules?.transferAttempts ?? 2)}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    rules: {
+                      ...(d.rules || {}),
+                      transferAttempts: Number(e.target.value),
+                    } as AgentConfig["rules"],
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-amber-300 focus:ring-2 focus:ring-amber-200"
+              >
+                <option value="1">1 attempt</option>
+                <option value="2">2 attempts (recommended)</option>
+                <option value="3">3 attempts</option>
+              </select>
+              <p className="mt-1.5 text-xs text-[#7a8493]">
+                How many times the agent rings the escalation number when a
+                caller asks for a person. If nobody answers, the agent comes
+                back on the line and offers to take a message or arrange a
+                callback.
+              </p>
+            </div>
+            <div>
               <Label>Escalation Manager Working Hours</Label>
               <Inp
                 placeholder="Mon-Fri 9AM-6PM for human escalation only"

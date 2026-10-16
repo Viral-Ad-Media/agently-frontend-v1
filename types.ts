@@ -326,6 +326,8 @@ export interface AgentConfig {
     autoBook: boolean;
     autoEscalate: boolean;
     captureAllLeads: boolean;
+    /** Times to ring the escalation number before returning the caller to the agent (1-3, default 2). */
+    transferAttempts?: number;
   };
 }
 
