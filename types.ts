@@ -70,6 +70,36 @@ export interface Lead {
   crmMetadata?: Record<string, unknown>;
 }
 
+/** A photo or short video clip the customer sent through the chat widget. */
+export interface LeadMediaAnalysis {
+  reply?: string;
+  summary?: string;
+  subject?: string;
+  observations?: string[];
+  urgency?: 'low' | 'medium' | 'high';
+  confidence?: number;
+  needs_human?: boolean;
+  model?: string;
+}
+
+export interface LeadMedia {
+  id: string;
+  kind: 'photo' | 'video';
+  mime: string;
+  bytes?: number;
+  durationMs?: number | null;
+  width?: number | null;
+  height?: number | null;
+  /** Signed, expires after about an hour. */
+  url: string | null;
+  posterUrl?: string | null;
+  note?: string;
+  analysis?: LeadMediaAnalysis | null;
+  analysisStatus?: 'pending' | 'done' | 'failed';
+  chatbotId?: string;
+  createdAt: string;
+}
+
 export interface LeadOutreachWindow {
   weekdays: string[];
   time: string;
@@ -387,6 +417,8 @@ export interface ChatbotConfig {
    * leads and nothing changes for anything already deployed.
    */
   leadCaptureEnabled?: boolean;
+  /** Customers can send photos / short video clips in the widget. Server default: on. */
+  mediaUploadsEnabled?: boolean;
   /**
    * Avatar. `avatarDataUri` is the self-contained image inlined into the widget
    * script — the fix for avatars not rendering once the widget runs on the

@@ -458,6 +458,12 @@ const Messenger: React.FC<MessengerProps> = ({
         embedScript: freshEmbedScript,
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
+        // Only sent when the owner flips the switch, so saving never touches
+        // the column on a server where its migration hasn't run yet.
+        ...(draft.mediaUploadsEnabled !== undefined &&
+        draft.mediaUploadsEnabled !== activeChatbot.mediaUploadsEnabled
+          ? { mediaUploadsEnabled: draft.mediaUploadsEnabled }
+          : {}),
       } as any);
       patch({
         avatarLabel: updatedChatbot.avatarLabel,
@@ -1282,6 +1288,25 @@ const Messenger: React.FC<MessengerProps> = ({
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <input
+                type="checkbox"
+                checked={draft.mediaUploadsEnabled !== false}
+                onChange={(e) => patch({ mediaUploadsEnabled: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-indigo-600"
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-800">
+                  Customers can send photos &amp; videos
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Adds a camera button to the widget. The assistant looks at the photo or 15-second
+                  clip and replies; it shows up on the lead. Media from visitors who never leave
+                  their details is deleted after 24 hours.
+                </span>
+              </span>
+            </label>
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">

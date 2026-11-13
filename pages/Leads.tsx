@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import AppModal from "../components/AppModal";
+import LeadMediaGallery from "../components/LeadMediaGallery";
 import { api } from "../services/api";
 import {
   Lead,
@@ -1714,6 +1715,7 @@ const Leads: React.FC<LeadsProps> = ({
                 </p>
               </div>
             )}
+            <LeadMediaGallery leadId={activeLead.id} onMessage={showMsg} />
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Quick Tag
