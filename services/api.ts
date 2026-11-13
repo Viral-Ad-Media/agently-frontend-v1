@@ -7,6 +7,7 @@ import {
   DashboardData,
   FAQ,
   Lead,
+  LeadMedia,
   LeadOutreachSchedule,
   KnowledgeBase,
   KnowledgeSource,
@@ -901,6 +902,14 @@ export const api = {
         method: 'DELETE',
       });
     }
+  },
+
+  async listLeadMedia(id: string) {
+    return request<{ media: LeadMedia[] }>(`/api/leads/${id}/media`);
+  },
+
+  async deleteLeadMedia(leadId: string, mediaId: string) {
+    return request<{ success: boolean }>(`/api/leads/${leadId}/media/${mediaId}`, { method: 'DELETE' });
   },
 
   async deleteLead(id: string) {
