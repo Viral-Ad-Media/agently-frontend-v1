@@ -12,6 +12,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Local v1.1 workspace: the same type, paper and accent as LandingPage.
+   Scoped here so landing-page themes and embedded widgets keep their own UI. */
+.ag-workspace {
+  --bg: #f6f5f1;
+  --surface: #fff;
+  --ink: #101216;
+  --muted: #5a5b61;
+  --line: #d9d7d0;
+  --warm: #ece9e1;
+  --orange: #f15a24;
+  --orange-deep: #b63a0e;
+  color-scheme: light;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+.ag-workspace h1, .ag-workspace h2, .ag-workspace h3,
+.ag-workspace h4, .ag-workspace .font-display {
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -.035em;
+  text-wrap: balance;
+}
+.ag-workspace h1 { font-weight: 600; }
+.ag-workspace table { font-variant-numeric: tabular-nums; }
+.ag-workspace th {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 500;
+  letter-spacing: .06em;
+}
+/* Keyboard focus ring for controls. Form fields that turn the outline off
+   (outline-none) draw their own focus ring or border; giving them this one
+   too stacked a square red box over their rounded field (e.g. the Billing
+   top-up amount). */
+.ag-workspace :is(button, a):focus-visible,
+.ag-workspace :is(input, select, textarea):not([class*="outline-none"]):focus-visible {
+  outline: 2px solid #b63a0e;
+  outline-offset: 3px;
+}
+.ag-workspace ::selection { background: #ffe1d2; color: #101216; }
+
 /* ─── TOKENS ─────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
@@ -294,8 +332,19 @@ body,
   width: 100%;
   max-width: 100%;
   min-width: 320px;
-  overflow-x: hidden;
+  /* clip, not hidden: overflow-x:hidden turns html/body/#root into scroll
+     containers, and with #root's overscroll lock a touch swipe on a phone
+     landed on #root (nothing to scroll) and never reached the page. */
+  overflow-x: clip;
   overscroll-behavior-x: none;
+}
+
+@supports not (overflow: clip) {
+  html,
+  body,
+  #root {
+    overflow-x: hidden;
+  }
 }
 
 body {
@@ -305,7 +354,6 @@ body {
 
 #root {
   min-height: 100dvh;
-  overscroll-behavior: none;
 }
 
 [data-radix-scroll-area-viewport],
@@ -2729,4 +2777,53 @@ textarea,
     padding: 0.9rem !important;
     border-radius: 1rem !important;
   }
+}
+
+/* Landing-page surfaces throughout the signed-in workspace. */
+.ag-workspace .ag-panel,
+.ag-workspace .ag-dashboard-stat {
+  border-color: var(--line) !important;
+  border-radius: 14px;
+  box-shadow: none !important;
+}
+.ag-workspace .ag-dashboard-stat {
+  position: relative;
+  display: block;
+  padding: 1.2rem;
+  min-height: 132px;
+}
+.ag-workspace .ag-dashboard-stat > .ag-dashboard-icon {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 8px;
+}
+.ag-workspace .ag-dashboard-stat > div > p:first-child {
+  max-width: calc(100% - 2rem);
+  min-height: 2.2em;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  letter-spacing: .05em;
+  line-height: 1.4;
+}
+.ag-workspace .ag-dashboard-stat > div > p:nth-child(2) {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ag-workspace .ag-dashboard-stat .ag-marquee-text {
+  overflow: visible;
+  white-space: normal;
+}
+.ag-workspace .ag-dashboard-stat .ag-marquee-text > span {
+  white-space: normal;
+  transform: none !important;
+  animation: none !important;
+}
+.ag-workspace .ag-dashboard-stat:hover { transform: none; }
+.ag-workspace .ag-dashboard-icon-orange { color: #b63a0e; background: #fff0e8; }
+@media (max-width: 480px) {
+  .ag-workspace .ag-dashboard-stat { padding: .9rem; min-height: 124px; }
+  .ag-workspace .ag-dashboard-stat > .ag-dashboard-icon { top: .8rem; right: .8rem; width: 1.5rem; height: 1.5rem; }
 }

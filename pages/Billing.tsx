@@ -8,6 +8,7 @@ import React, {
 import { Invoice, Organization } from "../types";
 import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 import SettingsTabs from "../components/SettingsTabs";
+import AutoTopUpPanel from "../components/AutoTopUpPanel";
 import { useSearchParams } from "react-router-dom";
 
 interface BillingProps {
@@ -566,7 +567,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
           type="button"
           onClick={() => void loadBilling()}
           disabled={loading}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 transition hover:border-[#f15a24] hover:text-[#f15a24] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
           aria-label="Refresh billing"
           title="Refresh"
         >
@@ -699,7 +700,7 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
 
             <label className="mt-3 block">
               <span className="sr-only">Top-up amount in US dollars</span>
-              <div className="flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-3 transition focus-within:border-[#F59E0B] focus-within:ring-2 focus-within:ring-[#F59E0B]/15">
+              <div className="flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-3 transition focus-within:border-[#f15a24] focus-within:ring-2 focus-within:ring-[#f15a24]/15">
                 <span className="text-[15px] text-slate-400">$</span>
                 <input
                   value={topUpAmount}
@@ -749,6 +750,8 @@ const Billing: React.FC<BillingProps> = ({ org, onDownloadInvoice }) => {
           </div>
         </div>
       </section>
+
+      <AutoTopUpPanel cardsVersion={savedCards.length} />
 
       <section
         className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-6"

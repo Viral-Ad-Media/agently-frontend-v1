@@ -70,6 +70,150 @@ export interface Lead {
   crmMetadata?: Record<string, unknown>;
 }
 
+/** A photo or short video clip the customer sent through the chat widget. */
+export interface LeadMediaAnalysis {
+  reply?: string;
+  summary?: string;
+  subject?: string;
+  observations?: string[];
+  urgency?: 'low' | 'medium' | 'high';
+  confidence?: number;
+  needs_human?: boolean;
+  model?: string;
+  /** Present when the business has quotes switched on. */
+  assessment?: {
+    issue?: string;
+    severity?: number;
+    recommendation?: 'repair' | 'replace' | 'inspect' | 'no_action';
+    lineItems?: { code: string; qty: number }[];
+  };
+  regions?: MediaRegion[];
+}
+
+/** An area of a photo the assistant pointed at. box = [x, y, width, height] as fractions of the image. */
+export interface MediaRegion {
+  label: string;
+  box: [number, number, number, number];
+  severity?: number;
+}
+
+export interface PriceSheetItem {
+  code: string;
+  label: string;
+  unit: string;
+  priceCents: number;
+}
+
+export interface FrontDeskSettings {
+  quotesEnabled: boolean;
+  autoSendLimitCents: number;
+  currency: string;
+  rangeLowPct: number;
+  rangeHighPct: number;
+  priceSheet: PriceSheetItem[];
+  conversationsEnabled: boolean;
+}
+
+export interface QuoteLine {
+  code: string;
+  description: string;
+  qty: number;
+  unit: string;
+  unitPriceCents: number;
+  totalCents: number;
+}
+
+export type QuoteStatus = 'draft' | 'pending_approval' | 'sent' | 'accepted' | 'declined' | 'void';
+
+export interface LeadQuote {
+  id: string;
+  leadId: string | null;
+  leadName?: string | null;
+  leadEmail?: string | null;
+  mediaId: string | null;
+  status: QuoteStatus;
+  lines: QuoteLine[];
+  subtotalCents: number;
+  lowCents: number;
+  highCents: number;
+  currency: string;
+  summary: string;
+  sentTo: string | null;
+  sentAt: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  chatbotId: string;
+  leadId: string | null;
+  leadName: string | null;
+  leadEmail: string | null;
+  leadPhone: string | null;
+  status: 'ai' | 'human' | 'closed';
+  unread: number;
+  lastMessageAt: string;
+  lastPreview: string;
+  /** No contact details yet: deleted automatically after 24 hours. */
+  temporary: boolean;
+  expiresAt: string | null;
+  visitorLive?: boolean;
+  createdAt: string;
+}
+
+export interface ChatInboxMessage {
+  id: string;
+  role: 'visitor' | 'assistant' | 'owner' | 'system';
+  body: string;
+  mediaId: string | null;
+  createdAt: string;
+}
+
+export interface ChatInboxMedia {
+  kind: 'photo' | 'video';
+  url: string | null;
+  posterUrl: string | null;
+  summary: string;
+  regions: MediaRegion[];
+}
+
+export interface FrontDeskKpis {
+  days: number;
+  photosReceived: number;
+  quotesCreated: number;
+  quotesSent: number;
+  quotesPendingApproval: number;
+  quotesAccepted: number;
+  quotedValueCents: number;
+  medianSecondsToQuote: number | null;
+  quotedLeads: number;
+  bookedAfterQuote: number;
+  bookedRate: number | null;
+  leadsByStage: Record<string, number>;
+  conversationsOpen: number;
+  conversationsUnread: number;
+  ai?: { breaker: string; cache: { hits: number; misses: number }; throttle: { queued: number } };
+}
+
+export interface LeadMedia {
+  id: string;
+  kind: 'photo' | 'video';
+  mime: string;
+  bytes?: number;
+  durationMs?: number | null;
+  width?: number | null;
+  height?: number | null;
+  /** Signed, expires after about an hour. */
+  url: string | null;
+  posterUrl?: string | null;
+  note?: string;
+  analysis?: LeadMediaAnalysis | null;
+  analysisStatus?: 'pending' | 'done' | 'failed';
+  chatbotId?: string;
+  createdAt: string;
+}
+
 export interface LeadOutreachWindow {
   weekdays: string[];
   time: string;
@@ -319,6 +463,15 @@ export interface AgentConfig {
   dataCaptureFields: string[];
   isActive: boolean;
   knowledgeBaseId?: string | null;
+  /** Business calendar this agent books into; null = the org's booking default. */
+  calendarIntegrationId?: string | null;
+  qualificationPlaybook?: string;
+  qualificationRules?: {
+    qualified_min_score?: number;
+    nurture_min_score?: number;
+    disqualify_signals?: string[];
+    booking_criteria?: string;
+  };
   webhookUrl?: string;
   escalationWorkingHoursStart?: string;
   escalationWorkingHoursEnd?: string;
@@ -389,6 +542,8 @@ export interface ChatbotConfig {
    * leads and nothing changes for anything already deployed.
    */
   leadCaptureEnabled?: boolean;
+  /** Customers can send photos / short video clips in the widget. Server default: on. */
+  mediaUploadsEnabled?: boolean;
   /**
    * Avatar. `avatarDataUri` is the self-contained image inlined into the widget
    * script — the fix for avatars not rendering once the widget runs on the

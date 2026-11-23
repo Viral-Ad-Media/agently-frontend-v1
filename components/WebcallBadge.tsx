@@ -24,7 +24,7 @@ const WebcallBadge: React.FC = () => {
       className="fixed bottom-5 right-5 z-[600] flex items-center gap-2.5 rounded-full bg-[#0F172A] pl-3 pr-4 py-2.5 text-white shadow-2xl shadow-slate-900/30 transition-transform hover:scale-105 active:scale-95"
       aria-label={`Live call with ${agentName} in progress — click to reopen`}
     >
-      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F59E0B]">
+      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f15a24]">
         <i
           className={`fa-solid ${agentSpeaking ? "fa-volume-high" : "fa-phone"} text-xs text-white`}
         />

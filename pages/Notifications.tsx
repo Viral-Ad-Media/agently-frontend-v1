@@ -28,6 +28,9 @@ type BulkAction = "read" | "unread" | "delete";
 
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   call_completed: "Call completed",
+  quote_needs_approval: "Quote needs approval",
+  quote_accepted: "Quote accepted",
+  chat_message: "Chat message",
   call_failed: "Call failed",
   message_captured: "Message captured",
   lead_requested_follow_up: "Follow-up requested",

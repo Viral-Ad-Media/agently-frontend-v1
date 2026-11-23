@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import SettingsTabs from "../components/SettingsTabs";
+import GmailSenderCard from "../components/GmailSenderCard";
 import BrandSurface, {
   BTN_PRIMARY,
   BTN_QUIET,
@@ -13,7 +14,6 @@ import BrandSurface, {
 } from "../components/BrandSurface";
 import { api, apiBaseUrl } from "../services/api";
 import type {
-  CalendarBookingSettings,
   CalendarConnection,
   CalendarConnectionStatus,
   CalendarProvider,
@@ -30,9 +30,9 @@ import type { User } from "../types";
  * none: the table carried unique (organization_id, provider), so a second
  * account would have overwritten the first.
  *
- * So this is a LIST now. Each row is one account and can be renamed, made the
- * booking target, or removed. Below the list sit the add buttons, which are the
- * point of the whole change.
+ * So this is a LIST now. Each row is one account and can be renamed or removed.
+ * Booking behavior is configured on the Bookings page; this page stays focused
+ * on connecting and managing accounts.
  *
  * Two behaviours the UI has to teach, because they are not guessable:
  *   AVAILABILITY merges across every connected account -- a slot is offered
@@ -52,13 +52,6 @@ import type { User } from "../types";
 
 type Provider = CalendarProvider;
 
-interface BookingPrefs {
-  slotMinutes: number;
-  windowDays: number;
-  workingHours: Record<string, Array<[string, string]>>;
-  sendUpdates: "all" | "none";
-}
-
 interface BusinessGroup {
   id: string;
   owner_label: string;
@@ -67,53 +60,6 @@ interface BusinessGroup {
   invite_expires_at: string | null;
   members: Array<{ organization_id: string; name: string; joined_at: string }>;
 }
-
-interface PickerOption {
-  id: string;
-  name: string;
-  primary?: boolean;
-  slug?: string;
-}
-
-const WEEKDAYS: Array<{ key: string; label: string }> = [
-  { key: "mon", label: "Mon" },
-  { key: "tue", label: "Tue" },
-  { key: "wed", label: "Wed" },
-  { key: "thu", label: "Thu" },
-  { key: "fri", label: "Fri" },
-  { key: "sat", label: "Sat" },
-  { key: "sun", label: "Sun" },
-];
-
-const defaultPrefs = (): BookingPrefs => ({
-  slotMinutes: 30,
-  windowDays: 14,
-  workingHours: {
-    mon: [["09:00", "17:00"]],
-    tue: [["09:00", "17:00"]],
-    wed: [["09:00", "17:00"]],
-    thu: [["09:00", "17:00"]],
-    fri: [["09:00", "17:00"]],
-    sat: [],
-    sun: [],
-  },
-  sendUpdates: "all",
-});
-
-const prefsFromConnection = (connection: CalendarConnection | null): BookingPrefs => {
-  const base = defaultPrefs();
-  const saved = connection?.booking_settings as CalendarBookingSettings | null | undefined;
-  if (!saved) return base;
-  return {
-    slotMinutes: typeof saved.slotMinutes === "number" ? saved.slotMinutes : base.slotMinutes,
-    windowDays: typeof saved.windowDays === "number" ? saved.windowDays : base.windowDays,
-    workingHours:
-      saved.workingHours && typeof saved.workingHours === "object"
-        ? { ...base.workingHours, ...saved.workingHours }
-        : base.workingHours,
-    sendUpdates: saved.sendUpdates === "none" ? "none" : "all",
-  };
-};
 
 /*
  * Each provider's own mark, served from public/integrations/.
@@ -189,22 +135,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
-  const [options, setOptions] = useState<Record<Provider, PickerOption[]>>({
-    google: [],
-    calendly: [],
-  });
-  const [optionsLoading, setOptionsLoading] = useState<Provider | null>(null);
-  const [selection, setSelection] = useState<Record<Provider, string>>({
-    google: "",
-    calendly: "",
-  });
-  const [savingSelection, setSavingSelection] = useState<Provider | null>(null);
-  const [prefs, setPrefs] = useState<Record<Provider, BookingPrefs>>({
-    google: defaultPrefs(),
-    calendly: defaultPrefs(),
-  });
-  const [savingPrefs, setSavingPrefs] = useState<Provider | null>(null);
-
   const [groups, setGroups] = useState<BusinessGroup[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [ownerLabel, setOwnerLabel] = useState("");
@@ -212,25 +142,11 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
 
   const isAdmin = user?.role === "Owner" || user?.role === "Admin";
 
-  const seedPrefs = useCallback((rows: CalendarConnection[]) => {
-    // The booking target's settings are the ones that govern, so they seed the
-    // form; any connection of that provider is the fallback.
-    const pick = (provider: Provider) =>
-      rows.find((c) => c.provider === provider && c.is_booking_default) ||
-      rows.find((c) => c.provider === provider) ||
-      null;
-    setPrefs({
-      google: prefsFromConnection(pick("google")),
-      calendly: prefsFromConnection(pick("calendly")),
-    });
-  }, []);
-
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getIntegrationsStatus();
       setStatus(data);
-      seedPrefs(data.connections || []);
     } catch (error) {
       setBanner({
         kind: "err",
@@ -246,7 +162,7 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
     } catch {
       // Non-admins get a 403 here; silently leave the section hidden.
     }
-  }, [seedPrefs]);
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -257,7 +173,9 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
     const connected = searchParams.get("connected");
     const error = searchParams.get("error");
     const message = searchParams.get("message");
-    if (connected === "google" || connected === "calendly") {
+    if (connected === "gmail") {
+      setBanner({ kind: "ok", text: "Gmail connected. Agently can now send emails from it (send-only)." });
+    } else if (connected === "google" || connected === "calendly") {
       setBanner({
         kind: "ok",
         text: `${PROVIDER_META[connected].title} account connected. Give it a name below so you can tell your businesses apart.`,
@@ -291,8 +209,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
 
   const countFor = (provider: Provider) =>
     connections.filter((c) => c.provider === provider).length;
-
-  const bookingTarget = connections.find((c) => c.is_booking_default) || null;
 
   /*
    * A single connection IS the booking target whether or not the column says
@@ -353,32 +269,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
-  const makeBookingTarget = async (connection: CalendarConnection) => {
-    setRowBusyId(connection.id);
-    try {
-      await api.setCalendarBookingDefault(connection.id);
-      /*
-       * Re-read rather than flip the flag locally. The write CLEARS whichever
-       * row was the default — the database permits only one per organization —
-       * and the response describes just the winner, so the row that LOST is
-       * only knowable from a fresh read. Patching state here is how a UI ends
-       * up showing two booking targets at once.
-       */
-      await refresh();
-      setBanner({
-        kind: "ok",
-        text: `The agent now books into “${connectionLabel(connection)}”.`,
-      });
-    } catch (error) {
-      setBanner({
-        kind: "err",
-        text: error instanceof Error ? error.message : "Could not change the booking target.",
-      });
-    } finally {
-      setRowBusyId(null);
-    }
-  };
-
   const removeConnection = async (connection: CalendarConnection) => {
     setRowBusyId(connection.id);
     try {
@@ -403,81 +293,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
       });
     } finally {
       setRowBusyId(null);
-    }
-  };
-
-  const loadOptions = async (provider: Provider, connectionId?: string) => {
-    setOptionsLoading(provider);
-    try {
-      const data = await api.getIntegrationOptions(provider, connectionId);
-      setOptions((prev) => ({ ...prev, [provider]: data.options }));
-      setSelection((prev) => ({ ...prev, [provider]: data.selected || "" }));
-    } catch (error) {
-      setBanner({
-        kind: "err",
-        text: error instanceof Error ? error.message : "Could not load options.",
-      });
-    } finally {
-      setOptionsLoading(null);
-    }
-  };
-
-  const saveSelection = async (provider: Provider, connectionId?: string) => {
-    const value = selection[provider];
-    if (!value) return;
-    setSavingSelection(provider);
-    try {
-      /*
-       * connectionId is passed explicitly. Without it the server falls back to
-       * this provider's booking default — which is the row the panel happens to
-       * be showing today, but naming it means the save cannot land on a
-       * different account than the one on screen.
-       */
-      await api.saveIntegrationSelection(
-        provider,
-        provider === "google"
-          ? { calendarId: value, connectionId }
-          : {
-              eventTypeUri: value,
-              eventTypeName: options.calendly.find((o) => o.id === value)?.name || undefined,
-              connectionId,
-            },
-      );
-      setBanner({ kind: "ok", text: "Booking destination saved." });
-      await refresh();
-    } catch (error) {
-      setBanner({
-        kind: "err",
-        text: error instanceof Error ? error.message : "Could not save the selection.",
-      });
-    } finally {
-      setSavingSelection(null);
-    }
-  };
-
-  const saveBookingPrefs = async (provider: Provider, connectionId?: string) => {
-    const p = prefs[provider];
-    setSavingPrefs(provider);
-    try {
-      const payload: CalendarBookingSettings & { connectionId?: string } = {
-        windowDays: p.windowDays,
-        connectionId,
-      };
-      if (provider === "google") {
-        payload.slotMinutes = p.slotMinutes;
-        payload.workingHours = p.workingHours;
-        payload.sendUpdates = p.sendUpdates;
-      }
-      await api.saveBookingSettings(provider, payload);
-      setBanner({ kind: "ok", text: "Booking preferences saved." });
-      await refresh();
-    } catch (error) {
-      setBanner({
-        kind: "err",
-        text: error instanceof Error ? error.message : "Could not save preferences.",
-      });
-    } finally {
-      setSavingPrefs(null);
     }
   };
 
@@ -687,16 +502,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
               <button type="button" onClick={() => beginRename(connection)} className={BTN_QUIET}>
                 Rename
               </button>
-              {!target && connection.status === "connected" && (
-                <button
-                  type="button"
-                  onClick={() => void makeBookingTarget(connection)}
-                  disabled={busy}
-                  className={BTN_QUIET}
-                >
-                  {busy ? "Working…" : "Make booking target"}
-                </button>
-              )}
               {connection.status === "needs_reconnect" && (
                 <button
                   type="button"
@@ -808,10 +613,11 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
           Calendars Agently works with
         </h2>
         <p className="mt-1.5 max-w-xl text-[13px] leading-[1.55] text-[var(--muted)]">
-          Connect one account per business. Agently checks every account before it offers a time,
-          so a caller can never be given a slot you are busy in somewhere else — and it books into
-          the one account you mark as the booking target.
+          Connect the calendar and email accounts your agents use. Set availability and booking destinations on the Bookings page.
         </p>
+        <Link to="/bookings" className="mt-3 inline-flex text-sm font-medium text-[var(--orange-deep)] hover:underline">
+          Manage booking setup
+        </Link>
       </div>
 
       {connections.length === 0 ? (
@@ -831,267 +637,6 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
       {renderAddButtons()}
     </section>
   );
-
-  const renderHowItWorks = () => (
-    <section className={`${CARD} p-4 sm:p-5`}>
-      <p className={EYEBROW}>How the merge works</p>
-      <dl className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <dt className="text-[14px] font-medium text-[var(--ink)]">
-            Availability spans every account
-          </dt>
-          <dd className="mt-1 text-[13px] leading-[1.55] text-[var(--muted)]">
-            A time is offered only when you are free on all of your connected calendars, so one
-            business can never double-book another.
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[14px] font-medium text-[var(--ink)]">
-            Bookings land in one calendar
-          </dt>
-          <dd className="mt-1 text-[13px] leading-[1.55] text-[var(--muted)]">
-            {bookingTarget
-              ? `New appointments are written to “${connectionLabel(bookingTarget)}”. Change that with “Make booking target” above.`
-              : "Mark one account as the booking target and new appointments go there."}
-          </dd>
-        </div>
-      </dl>
-      <Link to="/bookings" className={`${BTN_SECONDARY} mt-4`}>
-        See all bookings in one view
-      </Link>
-    </section>
-  );
-
-  const renderBookingTargetPanel = () => {
-    if (!bookingTarget || !isAdmin) return null;
-    const provider = bookingTarget.provider;
-    const list = options[provider];
-    const p = prefs[provider];
-    const set = (patch: Partial<BookingPrefs>) =>
-      setPrefs((prev) => ({ ...prev, [provider]: { ...prev[provider], ...patch } }));
-
-    const setDayOpen = (day: string, open: boolean) =>
-      set({ workingHours: { ...p.workingHours, [day]: open ? [["09:00", "17:00"]] : [] } });
-    const setDayWindow = (day: string, index: 0 | 1, value: string) => {
-      const windows = [...(p.workingHours[day] || [["09:00", "17:00"]])];
-      const current: [string, string] = [...(windows[0] || ["09:00", "17:00"])] as [
-        string,
-        string,
-      ];
-      current[index] = value;
-      windows[0] = current;
-      set({ workingHours: { ...p.workingHours, [day]: windows } });
-    };
-
-    return (
-      <section className={`${CARD} p-4 sm:p-5`} aria-labelledby="booking-target-heading">
-        <p className={EYEBROW}>Booking target</p>
-        <h2
-          id="booking-target-heading"
-          className="mt-1.5 text-lg font-medium tracking-[-0.01em] text-[var(--ink)]"
-        >
-          Where the agent books: {connectionLabel(bookingTarget)}
-        </h2>
-        <p className="mt-1.5 max-w-xl text-[13px] leading-[1.55] text-[var(--muted)]">
-          {PROVIDER_META[provider].note}
-        </p>
-
-        <div className="mt-4 border-t border-[var(--line)] pt-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <p className={EYEBROW}>
-              {provider === "google" ? "Book into calendar" : "Book into event type"}
-            </p>
-            {list.length === 0 && (
-              <button
-                type="button"
-                onClick={() => void loadOptions(provider, bookingTarget.id)}
-                disabled={optionsLoading === provider}
-                className={BTN_QUIET}
-              >
-                {optionsLoading === provider ? "Loading…" : "Load options"}
-              </button>
-            )}
-          </div>
-
-          {list.length > 0 && (
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <label className="sr-only" htmlFor={`destination-${provider}`}>
-                {provider === "google" ? "Calendar to book into" : "Event type to book into"}
-              </label>
-              <select
-                id={`destination-${provider}`}
-                value={selection[provider]}
-                onChange={(e) => setSelection((prev) => ({ ...prev, [provider]: e.target.value }))}
-                className={`${FIELD} sm:max-w-sm`}
-              >
-                <option value="">Choose…</option>
-                {list.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.name}
-                    {opt.primary ? " (primary)" : ""}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void saveSelection(provider, bookingTarget.id)}
-                disabled={!selection[provider] || savingSelection === provider}
-                className={BTN_PRIMARY}
-              >
-                {savingSelection === provider ? "Saving…" : "Save"}
-              </button>
-            </div>
-          )}
-
-          {provider === "google" && bookingTarget.calendar_id && list.length === 0 && (
-            <p className="mt-2 text-[13px] text-[var(--muted)]">
-              Currently booking into{" "}
-              <span className="font-medium text-[var(--ink)]">{bookingTarget.calendar_id}</span>
-            </p>
-          )}
-          {provider === "calendly" && bookingTarget.event_type_name && list.length === 0 && (
-            <p className="mt-2 text-[13px] text-[var(--muted)]">
-              Currently booking into{" "}
-              <span className="font-medium text-[var(--ink)]">
-                {bookingTarget.event_type_name}
-              </span>
-            </p>
-          )}
-        </div>
-
-        <div className="mt-4 border-t border-[var(--line)] pt-4">
-          <p className={EYEBROW}>Booking preferences</p>
-
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {provider === "google" && (
-              <label className="block">
-                <span className="text-[13px] text-[var(--muted)]">Appointment length</span>
-                <select
-                  value={p.slotMinutes}
-                  onChange={(e) => set({ slotMinutes: Number(e.target.value) })}
-                  className={`${FIELD} mt-1`}
-                >
-                  {[15, 30, 45, 60, 90].map((m) => (
-                    <option key={m} value={m}>
-                      {m} minutes
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="block">
-              <span className="text-[13px] text-[var(--muted)]">Offer slots this far ahead</span>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={p.windowDays}
-                  onChange={(e) =>
-                    set({ windowDays: Math.max(1, Math.min(60, Number(e.target.value) || 1)) })
-                  }
-                  className={`${FIELD} w-24`}
-                />
-                <span className="text-[13px] text-[var(--muted)]">days</span>
-              </div>
-            </label>
-          </div>
-
-          {provider === "calendly" && (
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              Appointment length comes from your Calendly event type.
-            </p>
-          )}
-
-          {provider === "google" && (
-            <>
-              <div className="mt-3">
-                <span className="text-[13px] text-[var(--muted)]">Working hours</span>
-                <div className="mt-1 overflow-hidden rounded-lg border border-[var(--line)]">
-                  {WEEKDAYS.map(({ key, label }, i) => {
-                    const windows = p.workingHours[key] || [];
-                    const open = windows.length > 0;
-                    const [start, end] = windows[0] || ["09:00", "17:00"];
-                    return (
-                      <div
-                        key={key}
-                        className={`flex items-center gap-3 px-3 py-2 ${
-                          i > 0 ? "border-t border-[var(--line)]" : ""
-                        } ${open ? "bg-[var(--surface)]" : "bg-[var(--warm)]"}`}
-                      >
-                        <span className="w-10 font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.8px] text-[var(--muted)]">
-                          {label}
-                        </span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={open}
-                          aria-label={`${label} open`}
-                          onClick={() => setDayOpen(key, !open)}
-                          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                            open ? "bg-[var(--orange)]" : "bg-[var(--line)]"
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                              open ? "left-[18px]" : "left-0.5"
-                            }`}
-                          />
-                        </button>
-                        {open ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="time"
-                              aria-label={`${label} opening time`}
-                              value={start}
-                              onChange={(e) => setDayWindow(key, 0, e.target.value)}
-                              className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] outline-none focus:border-[var(--orange)]"
-                            />
-                            <span className="text-xs text-[var(--muted)]">–</span>
-                            <input
-                              type="time"
-                              aria-label={`${label} closing time`}
-                              value={end}
-                              onChange={(e) => setDayWindow(key, 1, e.target.value)}
-                              className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] outline-none focus:border-[var(--orange)]"
-                            />
-                          </div>
-                        ) : (
-                          <span className="text-xs text-[var(--muted)]">Closed</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="mt-3 flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={p.sendUpdates === "all"}
-                  onChange={(e) => set({ sendUpdates: e.target.checked ? "all" : "none" })}
-                  className="mt-0.5 h-4 w-4 accent-[var(--orange)]"
-                />
-                <span className="text-[13px] leading-[1.5] text-[var(--muted)]">
-                  <span className="font-medium text-[var(--ink)]">Email the caller</span> a
-                  calendar invite when the agent books.
-                </span>
-              </label>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => void saveBookingPrefs(provider, bookingTarget.id)}
-            disabled={savingPrefs === provider}
-            className={`${BTN_PRIMARY} mt-3`}
-          >
-            {savingPrefs === provider ? "Saving…" : "Save preferences"}
-          </button>
-        </div>
-      </section>
-    );
-  };
 
   /*
    * The "Linked businesses" section lived here: cross-ACCOUNT pairing by
@@ -1166,8 +711,7 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
             )}
 
             {renderAccounts()}
-            {renderHowItWorks()}
-            {renderBookingTargetPanel()}
+            <GmailSenderCard />
           </div>
         )}
       </main>

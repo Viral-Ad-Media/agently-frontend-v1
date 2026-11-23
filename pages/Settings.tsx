@@ -6,6 +6,7 @@ import {
 } from "@/utils/timezones";
 import type { BusinessProfile, User, WorkspaceSettings } from "../types";
 import SettingsTabs from "../components/SettingsTabs";
+import SessionSecurity from '../components/SessionSecurity';
 
 interface SettingsPayload {
   timezone: string;
@@ -589,6 +590,7 @@ const Settings: React.FC<SettingsProps> = ({
             {passwordMessage.text}
           </div>
         )}
+        <SessionSecurity />
       </main>
     </div>
   );

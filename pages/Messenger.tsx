@@ -407,7 +407,7 @@ const Messenger: React.FC<MessengerProps> = ({
 
     return `<!-- Agently Chat Widget for: ${chatbot.name || "My Chatbot"} -->
 <style>
-  #${widgetId}{position:fixed;bottom:16px;${side}width:72px;height:72px;border:0;background:transparent;z-index:2147483646;overflow:visible;outline:none;display:block;border-radius:999px;transition:width .24s ease,height .24s ease,border-radius .24s ease,top .24s ease,bottom .24s ease,right .24s ease,left .24s ease;}
+  #${widgetId}{position:fixed;bottom:16px;${side}width:72px;height:72px;border:0;background:transparent;color-scheme:normal;z-index:2147483646;overflow:visible;outline:none;display:block;border-radius:999px;transition:width .24s ease,height .24s ease,border-radius .24s ease,top .24s ease,bottom .24s ease,right .24s ease,left .24s ease;}
   #${widgetId}[data-agently-open="true"]{width:min(390px,calc(100vw - 32px));height:min(640px,calc(100dvh - 32px));border-radius:22px;overflow:hidden;box-shadow:0 18px 54px rgba(15,23,42,.22);}
   @media (max-width:640px){#${widgetId}[data-agently-open="true"]{top:12px!important;bottom:12px!important;${mobileSide}width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;border-radius:22px!important;}}
 </style>
@@ -458,6 +458,12 @@ const Messenger: React.FC<MessengerProps> = ({
         embedScript: freshEmbedScript,
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
+        // Only sent when the owner flips the switch, so saving never touches
+        // the column on a server where its migration hasn't run yet.
+        ...(draft.mediaUploadsEnabled !== undefined &&
+        draft.mediaUploadsEnabled !== activeChatbot.mediaUploadsEnabled
+          ? { mediaUploadsEnabled: draft.mediaUploadsEnabled }
+          : {}),
       } as any);
       patch({
         avatarLabel: updatedChatbot.avatarLabel,
@@ -800,7 +806,7 @@ const Messenger: React.FC<MessengerProps> = ({
         <p className="text-slate-400 font-medium mb-4">No chatbot yet.</p>
         <button
           onClick={() => void runAction("create", onCreateChatbot)}
-          className="rounded-2xl bg-[#F59E0B] px-6 py-3 text-xs font-medium text-white transition hover:bg-[#d88a05]"
+          className="rounded-2xl bg-[#f15a24] px-6 py-3 text-xs font-medium text-white transition hover:bg-[#d88a05]"
         >
           + Create Chatbot
         </button>
@@ -834,14 +840,14 @@ const Messenger: React.FC<MessengerProps> = ({
               void saveCustomization();
             }}
             disabled={busyAction === "save"}
-            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-600 transition hover:border-[#F59E0B] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-600 transition hover:border-[#f15a24] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             {busyAction === "save" ? "Saving…" : "Save Changes"}
           </button>
           <button
             onClick={() => void runAction("create", onCreateChatbot)}
             disabled={busyAction === "create"}
-            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full bg-[#F59E0B] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-full bg-[#f15a24] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             {busyAction === "create" ? "Creating…" : "+ New Chatbot"}
           </button>
@@ -902,7 +908,7 @@ const Messenger: React.FC<MessengerProps> = ({
                   }}
                   className={`ag-chatbot-fleet-card group min-h-[4rem] min-w-0 cursor-pointer rounded-xl border px-1.5 py-1.5 text-left transition-all sm:min-h-[6.2rem] sm:rounded-2xl sm:px-3 sm:py-2 ${
                     isActive
-                      ? "border-[#D97706] bg-[#FFF7ED] text-[#111827] shadow-[0_18px_38px_rgba(217,119,6,0.18)] ring-2 ring-[#F59E0B]/35"
+                      ? "border-[#D97706] bg-[#FFF7ED] text-[#111827] shadow-[0_18px_38px_rgba(217,119,6,0.18)] ring-2 ring-[#f15a24]/35"
                       : "border-slate-200 bg-white/75 text-[#232f3e] hover:border-[#fbbf24] hover:bg-[#fffbeb]"
                   }`}
                 >
@@ -926,7 +932,7 @@ const Messenger: React.FC<MessengerProps> = ({
                         <span
                           className="mt-0.5 hidden h-2 w-2 shrink-0 rounded-full ring-2 ring-white sm:block"
                           style={{
-                            background: displayBot.accentColor || "#F59E0B",
+                            background: displayBot.accentColor || "#f15a24",
                           }}
                         />
                       </div>
@@ -1095,7 +1101,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     <button
                       type="button"
                       onClick={() => setAvatarMenuOpen((open) => !open)}
-                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-[#F59E0B] focus:ring-2 focus:ring-indigo-500"
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-[#f15a24] focus:ring-2 focus:ring-indigo-500"
                     >
                       <span className="min-w-0 truncate">
                         {getAvatarSelectorLabel(draft.avatarLabel)}
@@ -1283,6 +1289,25 @@ const Messenger: React.FC<MessengerProps> = ({
               />
             </div>
 
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <input
+                type="checkbox"
+                checked={draft.mediaUploadsEnabled !== false}
+                onChange={(e) => patch({ mediaUploadsEnabled: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-indigo-600"
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-800">
+                  Customers can send photos &amp; videos
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Adds a camera button to the widget. The assistant looks at the photo or 15-second
+                  clip and replies; it shows up on the lead. Media from visitors who never leave
+                  their details is deleted after 24 hours.
+                </span>
+              </span>
+            </label>
+
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
                 Custom AI Prompt (optional)
@@ -1415,7 +1440,7 @@ const Messenger: React.FC<MessengerProps> = ({
           <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
             <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-5">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#f15a24]">
                   Live Preview
                 </p>
                 <p className="text-white font-black text-lg mt-0.5">
@@ -1423,6 +1448,14 @@ const Messenger: React.FC<MessengerProps> = ({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href={`${resolveChatbotWidgetBaseUrl()}/chatbot-widget/${encodeURIComponent(activeChatbot.id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/80 hover:bg-white/10 hover:text-white"
+                  >
+                    Test camera &amp; video
+                  </a>
                 <button
                   type="button"
                   onClick={() => void onResetConversation(activeChatbot.id)}
@@ -1593,7 +1626,7 @@ const Messenger: React.FC<MessengerProps> = ({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={draft.placeholder || "Type your message…"}
-                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#F59E0B] sm:px-4"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#f15a24] sm:px-4"
                   />
                 )}
 
@@ -1627,7 +1660,7 @@ const Messenger: React.FC<MessengerProps> = ({
           <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-2xl sm:p-7">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#f15a24]">
                   Embed Script
                 </p>
                 <h3 className="text-lg font-black mt-1">Deploy anywhere</h3>
@@ -1752,7 +1785,7 @@ const Messenger: React.FC<MessengerProps> = ({
           <button
             type="button"
             onClick={addFaq}
-            className="inline-flex min-h-[2.75rem] shrink-0 items-center justify-center rounded-full bg-[#F59E0B] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 sm:px-6"
+            className="inline-flex min-h-[2.75rem] shrink-0 items-center justify-center rounded-full bg-[#f15a24] px-5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition hover:bg-[#d88a05] focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 sm:px-6"
           >
             + Add FAQ
           </button>

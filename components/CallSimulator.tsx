@@ -1,3 +1,5 @@
+import VoiceActions from "./VoiceActions";
+import VoiceSetup from "./VoiceSetup";
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWebcall } from "../contexts/WebcallContext";
@@ -11,6 +13,7 @@ import { useWebcall } from "../contexts/WebcallContext";
  */
 const CallSimulator: React.FC = () => {
   const {
+    diagnostics,
     status,
     error,
     duration,
@@ -20,6 +23,7 @@ const CallSimulator: React.FC = () => {
     muted,
     maxSessionSeconds,
     agentName,
+    mode,
     voiceNotice,
     isModalOpen,
     isCallLive,
@@ -78,14 +82,16 @@ const CallSimulator: React.FC = () => {
         {/* Header */}
         <div className="bg-[#0F172A] px-7 py-5 text-white flex items-center justify-between flex-shrink-0">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#F59E0B]">
-              Live Call
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#f15a24]">
+              {mode === "owner" ? "Owner conversation" : "Live Call"}
             </p>
             <h3 className="text-xl font-black tracking-tight mt-0.5 truncate">
               {agentName}
             </h3>
             <p className="text-xs text-white/40 mt-0.5">
-              Talk to the exact agent that answers your real calls
+              {mode === "owner"
+                ? "Private conversation with your business agent"
+                : "Talk to the agent that answers your real calls"}
             </p>
           </div>
           <button
@@ -115,17 +121,17 @@ const CallSimulator: React.FC = () => {
                 {(agentSpeaking || userSpeaking) && (
                   <>
                     <span
-                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#F59E0B]" : "bg-emerald-500"}`}
+                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#f15a24]" : "bg-emerald-500"}`}
                       style={{ animation: "webcall-ring 1.6s ease-out infinite" }}
                     />
                     <span
-                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#F59E0B]" : "bg-emerald-500"}`}
+                      className={`absolute inset-0 rounded-full ${agentSpeaking ? "bg-[#f15a24]" : "bg-emerald-500"}`}
                       style={{ animation: "webcall-ring 1.6s ease-out 0.55s infinite" }}
                     />
                   </>
                 )}
                 <div
-                  className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 ${agentSpeaking ? "bg-[#F59E0B]" : userSpeaking ? "bg-emerald-500" : "bg-[#0F172A]"}`}
+                  className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 ${agentSpeaking ? "bg-[#f15a24]" : userSpeaking ? "bg-emerald-500" : "bg-[#0F172A]"}`}
                   style={{
                     animation:
                       !agentSpeaking && !userSpeaking
@@ -180,7 +186,7 @@ const CallSimulator: React.FC = () => {
                 letting it sound subtly wrong for no visible reason. */}
             {voiceNotice && (
               <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-100 flex items-start gap-2 flex-shrink-0">
-                <i className="fa-solid fa-triangle-exclamation text-[#F59E0B] text-xs mt-0.5 flex-shrink-0" />
+                <i className="fa-solid fa-triangle-exclamation text-[#f15a24] text-xs mt-0.5 flex-shrink-0" />
                 <p className="text-[11px] text-[#92400e] leading-snug">
                   Voice <strong>{voiceNotice.configured}</strong> isn't
                   available for this agent's provider — speaking as{" "}
@@ -191,10 +197,16 @@ const CallSimulator: React.FC = () => {
             )}
 
             {/* Transcript — the dominant region */}
+            <div className="px-5 py-2 text-xs text-slate-600">
+              <meter aria-label="Live microphone level" min={0} max={1} value={diagnostics?.inputLevel || 0}/>
+              <span className="ml-2">{diagnostics?.latencyMs == null ? "Measuring connection..." : `Connection ${diagnostics.latencyMs} ms`} / Interruptions {diagnostics?.interruptions || 0} / Audio gaps {diagnostics?.playbackGaps || 0}</span>
+              {!!diagnostics?.droppedFrames && <p>Connection is falling behind; some microphone audio was dropped.</p>}
+            </div>
             <div
               ref={transcriptRef}
               className="flex-1 min-h-0 overflow-y-auto bg-[#0F172A] px-5 py-4 space-y-3"
             >
+              <VoiceActions />
               {captions.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center px-6">
                   <div className="flex items-end gap-1 h-6 mb-4 opacity-40">
@@ -219,7 +231,7 @@ const CallSimulator: React.FC = () => {
                     className={`flex ${msg.speaker === "You" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed ${msg.speaker === "You" ? "bg-[#F59E0B] text-white" : "bg-white/10 text-white/90"} ${msg.partial ? "opacity-60" : ""}`}
+                      className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed ${msg.speaker === "You" ? "bg-[#f15a24] text-white" : "bg-white/10 text-white/90"} ${msg.partial ? "opacity-60" : ""}`}
                     >
                       <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">
                         {msg.speaker}
@@ -266,20 +278,20 @@ const CallSimulator: React.FC = () => {
                 <div className="rounded-3xl bg-slate-50 border border-slate-200 p-5 shadow-card">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center">
-                      <i className="fa-solid fa-phone text-[#F59E0B] text-base" />
+                      <i className="fa-solid fa-phone text-[#f15a24] text-base" />
                     </div>
                     <div>
                       <p className="font-black text-[#0F172A] text-sm">
-                        Live web call
+                        {mode === "owner" ? "Owner conversation" : "Live web call"}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => void restartCall()}
-                    className="w-full rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
+                    className="w-full rounded-xl bg-[#f15a24] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
                   >
                     <i className="fa-solid fa-phone text-sm" />
-                    Start Live Call
+                    {mode === "owner" ? "Start conversation" : "Start Live Call"}
                   </button>
                   <p className="text-[11px] text-[#7a8493] text-center mt-3">
                     Up to {Math.round(maxSessionSeconds / 60)} minutes · uses
@@ -288,8 +300,9 @@ const CallSimulator: React.FC = () => {
                 </div>
 
                 <p className="text-[11px] text-[#7a8493] text-center px-2">
-                  Same voice and knowledge base as your real calls — nothing
-                  here is saved to leads or call history.
+                  {mode === "owner"
+                    ? "Owner mode is separate from caller testing. Calendar or email changes require clear confirmation in the conversation."
+                    : "Caller mode uses the business greeting and knowledge. If connected, a confirmed appointment can be added to its calendar."}
                 </p>
               </>
             )}
@@ -297,7 +310,7 @@ const CallSimulator: React.FC = () => {
             {status === "connecting" && (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="relative mb-6">
-                  <div className="w-20 h-20 rounded-3xl bg-[#F59E0B] flex items-center justify-center shadow-xl shadow-amber-100">
+                  <div className="w-20 h-20 rounded-3xl bg-[#f15a24] flex items-center justify-center shadow-xl shadow-amber-100">
                     <i className="fa-solid fa-phone text-3xl text-white" />
                   </div>
                   <div className="absolute inset-0 rounded-3xl border-2 border-amber-300 animate-ping opacity-40" />
@@ -320,8 +333,7 @@ const CallSimulator: React.FC = () => {
                   Call Ended
                 </p>
                 <p className="text-sm text-[#7a8493] mb-5">
-                  Duration: {formatTime(duration)} · nothing was saved to
-                  your leads or call history
+                  Duration: {formatTime(duration)} · {mode === "owner" ? "private owner session" : "caller test session"}
                 </p>
                 <button
                   onClick={resetToIdle}
@@ -345,7 +357,7 @@ const CallSimulator: React.FC = () => {
                 </p>
                 <button
                   onClick={resetToIdle}
-                  className="rounded-xl bg-[#F59E0B] hover:bg-[#d97706] text-white px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all"
+                  className="rounded-xl bg-[#f15a24] hover:bg-[#d97706] text-white px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all"
                 >
                   Try Again
                 </button>

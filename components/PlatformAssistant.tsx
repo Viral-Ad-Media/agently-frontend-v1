@@ -18,7 +18,7 @@ import {
  * Agently mark on a deep navy disc, lifted on a soft shadow, with a slow
  * four-second breath that says "live" without ever pulling the eye away from
  * the work. Everything else — the panel, the bubbles, the escalation form —
- * stays in the existing dashboard vocabulary (#0F172A / #F59E0B, rounded-2xl,
+ * stays in the existing dashboard vocabulary (#0F172A / #f15a24, rounded-2xl,
  * slate borders) so it reads as part of the product rather than a bolted-on
  * chat vendor.
  *
@@ -126,7 +126,7 @@ const RichText: React.FC<{ text: string }> = ({ text }) => {
           return (
             <ul
               key={blockIndex}
-              className="my-1.5 list-disc space-y-1 pl-4 marker:text-[#F59E0B]"
+              className="my-1.5 list-disc space-y-1 pl-4 marker:text-[#f15a24]"
             >
               {lines.map((line, lineIndex) => (
                 <li key={lineIndex}>
@@ -468,7 +468,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
           {/* Expanding halo, behind the disc — the "live" signal. */}
           <span
             aria-hidden
-            className={`pointer-events-none absolute inset-0 rounded-full bg-[#F59E0B]/45 ${
+            className={`pointer-events-none absolute inset-0 rounded-full bg-[#f15a24]/45 ${
               dragging ? "" : "agently-halo"
             }`}
           />
@@ -481,7 +481,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
             onPointerCancel={onPointerUp}
             aria-label={`Open ${config.name}`}
             style={{ width: LAUNCHER_SIZE, height: LAUNCHER_SIZE }}
-            className={`group relative flex touch-none items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#0F172A] shadow-[0_14px_38px_rgba(15,23,42,0.34)] outline-none transition-shadow duration-200 hover:shadow-[0_18px_46px_rgba(15,23,42,0.42)] focus-visible:ring-4 focus-visible:ring-[#F59E0B]/45 ${
+            className={`group relative flex touch-none items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#0F172A] shadow-[0_14px_38px_rgba(15,23,42,0.34)] outline-none transition-shadow duration-200 hover:shadow-[0_18px_46px_rgba(15,23,42,0.42)] focus-visible:ring-4 focus-visible:ring-[#f15a24]/45 ${
               dragging
                 ? "cursor-grabbing scale-105"
                 : "cursor-grab agently-breathe"
@@ -603,7 +603,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                     key={prompt}
                     type="button"
                     onClick={() => void send(prompt)}
-                    className="block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-[13px] font-medium text-slate-600 transition hover:border-[#F59E0B] hover:text-[#0F172A]"
+                    className="block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-[13px] font-medium text-slate-600 transition hover:border-[#f15a24] hover:text-[#0F172A]"
                   >
                     {prompt}
                   </button>
@@ -647,7 +647,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                 onChange={(event) => setEscalationNote(event.target.value)}
                 rows={3}
                 placeholder="What's happening? Include anything you've already tried."
-                className="mt-2.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#F59E0B]"
+                className="mt-2.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#f15a24]"
               />
               {/* Screenshots. A picture of the problem usually saves a whole
                   round of questions, so this sits right next to the note
@@ -660,7 +660,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                     disabled={
                       uploading || attachments.length >= MAX_SUPPORT_ATTACHMENTS
                     }
-                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-[#F59E0B] hover:text-[#F59E0B] disabled:opacity-40"
+                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-[#f15a24] hover:text-[#f15a24] disabled:opacity-40"
                   >
                     {uploading ? "Uploading…" : "Add screenshot"}
                   </button>
@@ -741,7 +741,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                   }}
                   rows={1}
                   placeholder={config.placeholder}
-                  className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] outline-none transition focus:border-[#F59E0B]"
+                  className="max-h-28 min-h-[40px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] outline-none transition focus:border-[#f15a24]"
                 />
                 {/* Attach sits on the main input row, not buried in the report
                     form. Someone reporting a bug reaches for the paperclip
@@ -756,7 +756,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                   }}
                   aria-label="Attach a screenshot and report a problem"
                   title="Attach a screenshot"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-[#F59E0B] hover:text-[#F59E0B]"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-[#f15a24] hover:text-[#f15a24]"
                 >
                   <svg
                     width="16"
@@ -777,7 +777,7 @@ const PlatformAssistant: React.FC<PlatformAssistantProps> = ({
                   disabled={!input.trim() || sending}
                   onClick={() => void send(input)}
                   aria-label="Send message"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F59E0B] text-white transition disabled:opacity-35"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f15a24] text-white transition disabled:opacity-35"
                 >
                   <svg
                     width="16"

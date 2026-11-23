@@ -142,7 +142,7 @@ export const KnowledgeUploadTrigger: React.FC<{
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-[#F59E0B] transition-[width] duration-200"
+              className="h-full rounded-full bg-[#f15a24] transition-[width] duration-200"
               style={{ width: `${progress.percent}%` }}
             />
           </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import React from "react";
 
@@ -22,11 +22,23 @@ import React from "react";
  */
 
 const getMergedBookings = vi.fn();
+const cancelBooking = vi.fn();
+const getIntegrationsStatus = vi.fn();
+const getIntegrationOptions = vi.fn();
+const setCalendarBookingDefault = vi.fn();
+const saveIntegrationSelection = vi.fn();
+const saveBookingSettings = vi.fn();
 
 vi.mock("../services/api", () => ({
   apiBaseUrl: "https://api.example.test",
   api: {
     getMergedBookings: (...a: unknown[]) => getMergedBookings(...a),
+    cancelBooking: (...a: unknown[]) => cancelBooking(...a),
+    getIntegrationsStatus: (...a: unknown[]) => getIntegrationsStatus(...a),
+    getIntegrationOptions: (...a: unknown[]) => getIntegrationOptions(...a),
+    setCalendarBookingDefault: (...a: unknown[]) => setCalendarBookingDefault(...a),
+    saveIntegrationSelection: (...a: unknown[]) => saveIntegrationSelection(...a),
+    saveBookingSettings: (...a: unknown[]) => saveBookingSettings(...a),
   },
 }));
 
@@ -123,9 +135,47 @@ beforeEach(() => {
     connections: ACCOUNTS,
     total: BOOKINGS.length,
   });
+  getIntegrationsStatus.mockResolvedValue({
+    connections: [{
+      id: "conn-viral", provider: "google", status: "connected", label: "Viral Ad Media",
+      is_booking_default: true, provider_user_id: null, provider_user_email: "viral@example.test",
+      provider_user_name: null, calendar_id: "primary", event_type_uri: null, event_type_name: null,
+      scopes: null, timezone: "America/New_York", last_error: null,
+      connected_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z",
+      booking_settings: null,
+    }],
+  });
+  getIntegrationOptions.mockResolvedValue({ options: [{ id: "primary", name: "Primary calendar", primary: true }], selected: "primary" });
+  setCalendarBookingDefault.mockResolvedValue({});
+  saveIntegrationSelection.mockResolvedValue({});
+  saveBookingSettings.mockResolvedValue({});
 });
 
 describe("Bookings — merged view", () => {
+  it("keeps booking setup compact and exposes its controls on demand", async () => {
+    render(<MemoryRouter><Bookings user={{ role: "Owner" } as any} /></MemoryRouter>);
+    const setup = screen.getByTestId("booking-setup-panel");
+    expect(setup).toHaveTextContent("Booking setup");
+    expect(setup).not.toHaveAttribute("open");
+    fireEvent.click(within(setup).getByText("Booking setup"));
+    expect(await screen.findByLabelText("Appointment length")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load destinations" })).toBeInTheDocument();
+  });
+
+  it("requires confirmation to cancel and shows provider failures", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    cancelBooking.mockResolvedValue({ success: false, message: "Calendar is unavailable" });
+    render(<MemoryRouter><Bookings user={{ role: "Owner" } as any} /></MemoryRouter>);
+    const button = await screen.findByRole("button", { name: "Cancel appointment for Jane Doe" });
+    fireEvent.click(button);
+    expect(cancelBooking).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    fireEvent.click(button);
+    await waitFor(() => expect(cancelBooking).toHaveBeenCalledWith("appt-viral-mon"));
+    expect(await screen.findByText("Calendar is unavailable")).toBeInTheDocument();
+    expect(screen.getByTestId("booking-appt-viral-mon")).toBeInTheDocument();
+    confirm.mockRestore();
+  });
   it("groups appointments by day and labels each with its account", async () => {
     renderPage();
 

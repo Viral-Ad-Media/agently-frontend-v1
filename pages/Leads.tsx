@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../components/AppModal";
+import LeadMediaGallery from "../components/LeadMediaGallery";
+import EmailComposeModal from "../components/EmailComposeModal";
+import LeadPipeline from "../components/LeadPipeline";
 import { api } from "../services/api";
 import {
   Lead,
@@ -362,6 +365,7 @@ const Leads: React.FC<LeadsProps> = ({
   }, [externalLeads]);
 
   const [search, setSearch] = useState("");
+  const [leadView, setLeadView] = useState<'list'|'hot'|'pipeline'>('list');
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -390,6 +394,7 @@ const Leads: React.FC<LeadsProps> = ({
   }, []);
 
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTagModal, setShowTagModal] = useState(false);
@@ -1382,6 +1387,11 @@ const Leads: React.FC<LeadsProps> = ({
       </div>
 
       {/* Main grid */}
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Lead views">
+        {([['list','All leads'],['hot','Hot leads'],['pipeline','Pipeline']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={leadView===key} onClick={()=>{setLeadView(key);if(key==='list')void refreshLeadsFromBackend();}} className={`rounded-xl px-4 py-2 text-sm font-bold ${leadView===key ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>{label}</button>)}
+      </div>
+      {leadView!=='list' && <LeadPipeline mode={leadView} agents={fetchedAgents} onChanged={()=>void refreshLeadsFromBackend()}/>}
+      {leadView==='list' && (
       <div className="grid min-w-0 gap-5">
         {/* LEFT */}
         <div className="space-y-4">
@@ -1613,10 +1623,20 @@ const Leads: React.FC<LeadsProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* ═══ MODALS ═══ */}
 
       {/* Per-lead detail */}
+      {emailLead && (
+        <EmailComposeModal
+          open
+          onClose={() => setEmailLead(null)}
+          leadId={emailLead.id}
+          defaultTo={emailLead.email || ""}
+          recipientName={emailLead.name}
+        />
+      )}
       {activeLead && (
         <AppModal
           open
@@ -1685,6 +1705,15 @@ const Leads: React.FC<LeadsProps> = ({
                 <p className="text-sm font-black text-slate-900 truncate">
                   {activeLead.email || "—"}
                 </p>
+                {activeLead.email && (
+                  <button
+                    type="button"
+                    onClick={() => setEmailLead(activeLead)}
+                    className="mt-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700 hover:bg-amber-100"
+                  >
+                    Email from Gmail
+                  </button>
+                )}
               </div>
             </div>
             <div>
@@ -1716,6 +1745,7 @@ const Leads: React.FC<LeadsProps> = ({
                 </p>
               </div>
             )}
+            <LeadMediaGallery leadId={activeLead.id} onMessage={showMsg} />
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
                 Quick Tag

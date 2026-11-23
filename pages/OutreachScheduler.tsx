@@ -1081,7 +1081,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 aria-pressed={active}
                 className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all sm:flex-none sm:px-6 ${
                   active
-                    ? "bg-[#F59E0B] text-white shadow-sm"
+                    ? "bg-[#f15a24] text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -1107,7 +1107,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                 onChange={(event) =>
                   updateForm("voiceAgentId", event.target.value)
                 }
-                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
               >
                 <option value="">Select voice agent</option>
                 {outboundAgents.map((agent) => {
@@ -1146,7 +1146,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                     fromNumber: number ? getNumberValue(number) : "",
                   }));
                 }}
-                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
               >
                 <option value="">
                   {loadingNumbers
@@ -1180,7 +1180,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
               <input
                 value={form.name}
                 onChange={(event) => updateForm("name", event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                 placeholder="Example: Demo follow-up campaign"
               />
             </div>
@@ -1196,7 +1196,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                     resolveWorkspaceTimezone(event.target.value),
                   )
                 }
-                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                className="mt-2 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
               >
                 {getAvailableTimezones(form.timezone || defaultTimezone).map(
                   (timezone) => (
@@ -1232,7 +1232,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   onChange={(event) =>
                     updateForm("manualRecipientName", event.target.value)
                   }
-                  className="rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                  className="rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                   placeholder="Recipient name"
                 />
                 <input
@@ -1240,14 +1240,14 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   onChange={(event) =>
                     updateForm("manualRecipientPhone", event.target.value)
                   }
-                  className="rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                  className="rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                   placeholder="(123) 456-7890"
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={addManualRecipient}
-                    className="flex-1 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-amber-600 lg:flex-none"
+                    className="flex-1 rounded-xl bg-[#f15a24] px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-amber-600 lg:flex-none"
                   >
                     Add
                   </button>
@@ -1270,7 +1270,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                       updateForm("bulkRecipientText", event.target.value)
                     }
                     rows={3}
-                    className="w-full resize-none rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                    className="w-full resize-none rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                     placeholder={
                       "One per line or comma separated:\nJane Doe, (123) 456-7890\n+1 123 456 7890"
                     }
@@ -1301,7 +1301,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                       event.target.value as "" | "tag" | "leads",
                     )
                   }
-                  className="w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                  className="w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                 >
                   <option value="">Import recipients</option>
                   <option value="tag">Import from lead tags</option>
@@ -1324,7 +1324,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                     <button
                       type="button"
                       onClick={() => setTagDropdownOpen((open) => !open)}
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-left text-sm font-semibold text-slate-800 outline-none transition hover:border-amber-300 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-left text-sm font-semibold text-slate-800 outline-none transition hover:border-amber-300 focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                     >
                       <span className="truncate">
                         {form.selectedTag || "Choose lead tag"}
@@ -1412,7 +1412,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                   <input
                     value={leadSearch}
                     onChange={(event) => setLeadSearch(event.target.value)}
-                    className="mt-3 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                    className="mt-3 w-full rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                     placeholder="Search leads"
                   />
                   <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
@@ -1521,7 +1521,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                         );
                         setCalendarOpen((open) => !open);
                       }}
-                      className="flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-white px-4 text-left text-sm font-bold text-slate-800 outline-none transition hover:border-amber-300 focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-white px-4 text-left text-sm font-bold text-slate-800 outline-none transition hover:border-amber-300 focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                     >
                       <span>{formatDateDisplay(form.scheduleDateInput)}</span>
                       <i className="fa-solid fa-calendar-days text-amber-500" />
@@ -1635,7 +1635,7 @@ const OutreachScheduler: React.FC<OutreachSchedulerProps> = ({
                       onChange={(event) =>
                         updateForm("scheduleTimeInput", event.target.value)
                       }
-                      className="h-11 w-full rounded-2xl border border-amber-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/25"
+                      className="h-11 w-full rounded-2xl border border-amber-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#f15a24] focus:ring-2 focus:ring-[#f15a24]/25"
                     />
                     <button
                       type="button"

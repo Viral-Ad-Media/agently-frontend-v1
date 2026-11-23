@@ -11,7 +11,7 @@ import AppModal from "../components/AppModal";
 import { voiceCallsApi } from "../services/voiceCallsApi";
 
 type TranscriptMessage = {
-  speaker: "Agent" | "Caller" | "System" | "Unknown";
+  speaker: string;
   text: string;
   at?: string;
   timestamp?: string;
@@ -49,6 +49,7 @@ type CallDetail = CallListItem & {
   to?: string;
   lead?: unknown;
   metadata?: unknown;
+  recordings?: Array<{ sid: string; phase: string; status: string; duration?: number; transcriptionStatus?: string; transcript: TranscriptMessage[] }>;
   messages?: TranscriptMessage[];
   unansweredQuestions?: unknown[];
   recording?: {
@@ -295,6 +296,7 @@ const normalizeSpeaker = (raw: unknown): TranscriptMessage["speaker"] => {
   if (["caller", "user", "human", "customer", "lead"].includes(value))
     return "Caller";
   if (["system", "tool"].includes(value)) return "System";
+  if (/^(speaker |caller and representative|full call recording)/i.test(safeString(raw, ""))) return safeString(raw, "Unknown");
   return "Unknown";
 };
 
@@ -636,7 +638,7 @@ const normalizeDetailResponse = (
       ? (payload as Record<string, unknown>)
       : {};
   const rawCall = (record.call || record.data || payload) as unknown;
-  const base = normalizeCall(rawCall) ||
+  const base = normalizeCall(rawCall && typeof rawCall === "object"    ? { ...fallback, ...(rawCall as Record<string, unknown>) }    : rawCall) ||
     fallback || {
       id: "",
       callerName: "Unknown Caller",
@@ -667,6 +669,10 @@ const normalizeDetailResponse = (
     ),
     lead: callRecord.lead || null,
     metadata: callRecord.metadata || null,
+    recordings: (Array.isArray(callRecord.recordings) ? callRecord.recordings : []).map((entry: unknown) => {
+      const r = getRecordObject(entry);
+      return { sid: safeString(r.sid), phase: safeString(r.phase), status: safeString(r.status), duration: Number(r.duration || 0), transcriptionStatus: safeString(r.transcriptionStatus), transcript: normalizeTranscript(r.transcript || []) };
+    }),
     transcript: normalizeTranscript(
       callRecord.transcript || record.transcript || base.transcript || [],
     ),
@@ -704,6 +710,10 @@ const CallLogs: React.FC<CallLogsProps> = ({
   const [selected, setSelected] = useState<CallDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recordingLoading, setRecordingLoading] = useState(false);
+  const [selectedRecordingSid, setSelectedRecordingSid] = useState("");
+  const segmentTranscript = selectedRecordingSid
+    ? selected?.recordings?.find(r => r.sid === selectedRecordingSid)?.transcript || []
+    : selected?.transcript || [];
   const [downloading, setDownloading] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [serverMetrics, setServerMetrics] = useState<CallMetrics | null>(null);
@@ -903,6 +913,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
   );
 
   const openDetail = async (call: CallListItem) => {
+    setSelectedRecordingSid("");
     setSelected({
       ...call,
       messages: call.transcript || [],
@@ -991,7 +1002,7 @@ const CallLogs: React.FC<CallLogsProps> = ({
     setError("");
     try {
       const payload = (await voiceCallsApi.calls.getCallRecording(
-        selected.id,
+        selected.id, selectedRecordingSid || undefined,
       )) as Record<string, unknown>;
       const recording = (payload.recording ||
         payload.data ||
@@ -1780,16 +1791,27 @@ const CallLogs: React.FC<CallLogsProps> = ({
                     Conversation transcript
                   </p>
                 </div>
+                {Boolean(selected.recordings?.length) && (
+                  <label className="mb-3 block text-xs font-medium text-slate-600">
+                    Conversation segment
+                    <select value={selectedRecordingSid} onChange={event => {
+                      setSelectedRecordingSid(event.target.value);
+                      setSelected(current => current ? { ...current, recording: null, recordingUrl: "" } : current);
+                    }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <option value="">Live AI conversation</option>
+                      {selected.recordings!.map((r, index) => <option key={r.sid} value={r.sid}>
+                        {r.phase === "human_transfer" ? "Representative / manager conversation" : "Full call recording"} {index + 1}{r.duration ? ` · ${r.duration}s` : ""}
+                      </option>)}
+                    </select>
+                  </label>
+                )}
                 <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-800">
                   Transcripts are AI-generated and may not be 100% accurate.
                   Please listen to the recording when auditing important calls.
                 </div>
                 <div className="space-y-2 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                  {(selected.transcript && selected.transcript.length
-                    ? selected.transcript
-                    : []
-                  ).length ? (
-                    selected.transcript!.map((message, index) => {
+                  {segmentTranscript.length ? (
+                    segmentTranscript.map((message, index) => {
                       const isAgent = message.speaker === "Agent";
                       const isCaller = message.speaker === "Caller";
                       return (

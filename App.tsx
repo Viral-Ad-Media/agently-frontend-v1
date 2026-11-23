@@ -26,7 +26,8 @@ import { WebcallProvider } from "./contexts/WebcallContext";
 import Billing from "./pages/Billing";
 import Dashboard from "./pages/Dashboard";
 import KnowledgeBases from "./pages/KnowledgeBases";
-import Leads from "./pages/Leads";
+import LeadsInbox from "./pages/LeadsInbox";
+import FrontDesk from "./pages/FrontDesk";
 import Messenger from "./pages/Messenger";
 import Notifications from "./pages/Notifications";
 import Onboarding from "./pages/Onboarding";
@@ -36,6 +37,7 @@ import Settings from "./pages/Settings";
 import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Bookings from "./pages/Bookings";
+import Operator from "./pages/Operator";
 // THE TOUR. It was written last round but never imported by anything, which is
 // why onboarding a test user produced no walkthrough at all.
 // ─────────────────────────────────────────────────────────────────────────
@@ -202,6 +204,7 @@ const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [startupError, setStartupError] = useState("");
+  const [logoutError,setLogoutError]=useState('');
   const [creditAlert, setCreditAlert] = useState<{
     message: string;
     balanceUsd?: number;
@@ -469,12 +472,15 @@ const App: React.FC = () => {
       if (getSessionToken()) {
         await api.logout();
       }
-    } catch {
-      // Best effort logout when remote session invalidation fails.
-    } finally {
-      clearSessionToken();
-      setWorkspace(null);
+    } catch (error) {
+      if(!(error instanceof ApiError && error.status===401)) {
+        setLogoutError('Sign-out could not be confirmed. Your session is still open. Please retry.');
+        return;
+      }
     }
+    setLogoutError('');
+    clearSessionToken();
+    setWorkspace(null);
   };
 
   const retryWorkspaceInitialization = async () => {
@@ -706,7 +712,16 @@ const App: React.FC = () => {
   };
 
   const handleUpdateLead = async (leadId: string, updates: Partial<Lead>) => {
-    await api.updateLead(leadId, updates);
+    // Pipeline stage lives on the CRM endpoint: PATCH /api/leads/:id ignores
+    // crmStage, so dragging a card or "Convert to deal" used to snap back on
+    // refresh. The CRM route validates the stage and logs a stage_change.
+    const { crmStage, ...rest } = updates;
+    if (crmStage !== undefined) {
+      await api.updateCrmLead(leadId, { crm_stage: crmStage });
+    }
+    if (Object.keys(rest).length) {
+      await api.updateLead(leadId, rest);
+    }
   };
 
   const handleCreateLead = async (
@@ -718,6 +733,11 @@ const App: React.FC = () => {
 
   const handleExportLeads = async () => {
     await api.exportLeadsCsv();
+  };
+
+  const handleImportLeadsCsv = async (csv: string) => {
+    await api.importLeadsCsv(csv);
+    await refreshWorkspace();
   };
 
   const handleDeleteLead = async (leadId: string) => {
@@ -897,6 +917,7 @@ const App: React.FC = () => {
     // navigation (see contexts/WebcallContext.tsx) — anything owning live
     // call state has to live outside that remount boundary to survive it.
     <WebcallProvider>
+      {logoutError&&<div role="alert" className="fixed right-5 top-5 z-[100] max-w-sm rounded-xl border border-red-200 bg-white p-4 text-sm text-red-800 shadow-lg">{logoutError}<button type="button" onClick={()=>void handleLogout()} className="ml-3 font-semibold underline">Retry sign-out</button></div>}
       <StableRouter>
         <RouteCommitBoundary fallback={<AppLoading />}>
           <Routes>
@@ -1010,6 +1031,20 @@ const App: React.FC = () => {
                 // should be redirected: sending a signed-in one to /login
                 // bounced them straight on to /dashboard, losing the route
                 // they actually asked for.
+                <AppLoading />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/operator"
+            element={
+              org ? (
+                <ProtectedRoute {...protectedRouteProps}>
+                  <Operator org={org} user={user} />
+                </ProtectedRoute>
+              ) : user || authPending ? (
                 <AppLoading />
               ) : (
                 <Navigate to="/login" />
@@ -1152,14 +1187,14 @@ const App: React.FC = () => {
             element={
               org ? (
                 <ProtectedRoute {...protectedRouteProps}>
-                  <Leads
+                  <LeadsInbox
                     leads={leads}
-                    org={org}
                     onRefresh={refreshWorkspace}
                     onUpdateLead={handleUpdateLead}
                     onDeleteLead={handleDeleteLead}
                     onBulkDeleteLeads={handleBulkDeleteLeads}
                     onCreateLead={handleCreateLead}
+                    onImportCsv={handleImportLeadsCsv}
                     onExport={handleExportLeads}
                   />
                 </ProtectedRoute>
@@ -1169,6 +1204,20 @@ const App: React.FC = () => {
                 // should be redirected: sending a signed-in one to /login
                 // bounced them straight on to /dashboard, losing the route
                 // they actually asked for.
+                <AppLoading />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+          <Route
+            path="/frontdesk"
+            element={
+              org ? (
+                <ProtectedRoute {...protectedRouteProps}>
+                  <FrontDesk />
+                </ProtectedRoute>
+              ) : user || authPending ? (
                 <AppLoading />
               ) : (
                 <Navigate to="/login" />
@@ -1228,7 +1277,7 @@ const App: React.FC = () => {
             element={
               org ? (
                 <ProtectedRoute {...protectedRouteProps}>
-                  <Bookings />
+                  <Bookings user={user} />
                 </ProtectedRoute>
               ) : user || authPending ? (
                 <AppLoading />

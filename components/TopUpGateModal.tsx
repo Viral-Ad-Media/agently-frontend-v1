@@ -89,7 +89,7 @@ const TopUpGateModal: React.FC<{
             "Add a card before buying a number or putting a chatbot live."}
         </p>
 
-        <div className="mt-4 rounded-xl border border-[#F59E0B]/30 bg-[#FFFBEB] px-4 py-3">
+        <div className="mt-4 rounded-xl border border-[#f15a24]/30 bg-[#FFFBEB] px-4 py-3">
           <p className="text-[13px] font-medium text-[#0F172A]">
             You will not be charged today.
           </p>

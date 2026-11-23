@@ -7,6 +7,13 @@ import {
   DashboardData,
   FAQ,
   Lead,
+  LeadMedia,
+  LeadQuote,
+  FrontDeskSettings,
+  FrontDeskKpis,
+  ChatConversation,
+  ChatInboxMessage,
+  ChatInboxMedia,
   LeadOutreachSchedule,
   KnowledgeBase,
   KnowledgeSource,
@@ -21,6 +28,23 @@ import { getSessionToken } from './session';
 import { resolveApiBaseUrl } from '../utils/runtimeUrls';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+export interface AutoTopUpStatus {
+  enabled: boolean;
+  thresholdUsd: number;
+  amountUsd: number;
+  monthlyCapUsd: number;
+  pausedReason: string | null;
+  lastError: string | null;
+  lastChargedAt: string | null;
+  available: boolean;
+  hasCard: boolean;
+  card: { id: string; brand: string; last4: string } | null;
+  minimumTopUpUsd: number;
+  spentThisMonthUsd: number;
+  remainingThisMonthUsd: number;
+  month: string;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -45,6 +69,34 @@ const API_BASE_URL = resolveApiBaseUrl();
 
 /** Shared so other clients cannot resolve a different base and 405 silently. */
 export const apiBaseUrl = API_BASE_URL;
+
+export type OperatorReference = { source: string; url: string | null };
+export type OperatorPendingAction = {
+  id: string;
+  type: "send_emails" | "reschedule_appointment";
+  summary: string;
+  expiresAt: string;
+  recipients?: Array<{ name: string; to: string; subject: string; body: string }>;
+  appointment?: string;
+  oldTime?: string;
+  newTime?: string;
+  business?: string;
+  agentName?: string;
+};
+export type OperatorChatResult = {
+  reply: string;
+  pendingActions: OperatorPendingAction[];
+  references?: OperatorReference[];
+};
+export type OperatorActionResult = {
+  success: boolean;
+  partial?: boolean;
+  message?: string;
+  sent?: number;
+  total?: number;
+  localTime?: string;
+  results?: Array<{ name: string; sent: boolean; message?: string }>;
+};
 
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
@@ -324,6 +376,21 @@ export interface CalendarConnection {
   booking_settings: CalendarBookingSettings | null;
 }
 
+export type EmailPurpose = 'follow_up' | 'meeting_invite' | 'reschedule' | 'send_link' | 'custom';
+
+export interface GmailConnection {
+  id: string;
+  provider: 'gmail';
+  label: string | null;
+  provider_user_email: string | null;
+  status: 'connected' | 'needs_reconnect' | 'disconnected';
+  last_error: string | null;
+  is_default: boolean;
+  automations: { booking_confirmation?: boolean };
+  connected_at: string;
+  updated_at: string;
+}
+
 export interface IntegrationsStatus {
   encryptionConfigured: boolean;
   encryptionHelp: string | null;
@@ -484,6 +551,13 @@ export const api = {
     return request<{ success: boolean; allSessionsRevoked: boolean }>('/api/auth/logout-all', {
       method: 'POST',
     });
+  },
+
+  async listSessions() {
+    return request<{ sessions: Array<{id:string;client:string;user_agent:string|null;request_ip:string|null;created_at:string;last_seen_at:string;absolute_expires_at:string;current:boolean}>;policy:{idleSeconds:number;absoluteSeconds:number;maxConcurrentSessions:number} }>('/api/auth/sessions');
+  },
+  async revokeSession(sessionId:string) {
+    return request<{success:boolean;currentSessionRevoked:boolean}>(`/api/auth/sessions/${encodeURIComponent(sessionId)}`,{method:'DELETE'});
   },
 
   async requestPasswordReset(email: string) {
@@ -720,6 +794,58 @@ export const api = {
 
   async activateVoiceAgent(id: string) {
     return request<AgentConfig>(`/api/voice-agents/${id}/activate`, {
+      method: 'POST',
+      body: {},
+    });
+  },
+
+  async operatorChat(payload: {
+    agentId: string;
+    message: string;
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }) {
+    return request<OperatorChatResult>('/api/operator/chat', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async operatorWorkspace(agentId: string, path: string, method: "GET" | "POST" | "PUT" = 'GET', body?: Record<string, unknown>) {
+    return request<any>(`/api/operator/workspace/${encodeURIComponent(agentId)}/${path}`, { method, ...(body ? { body } : {}) });
+  },
+
+  async listCrmLeads(filters: Record<string, string>) {
+    return request<{leads: import('../types/lead-crm').LeadCrmRecord[]; count: number; hasMore: boolean}>(`/api/leads-crm?${new URLSearchParams(filters)}`);
+  },
+  async leadQualification(id: string) {
+    return request<{lead: import('../types/lead-crm').LeadCrmRecord; assessment: {body: string; metadata: {score?: number; confidence?: number; evidence?: string[]}; occurred_at: string} | null}>(`/api/leads-crm/${encodeURIComponent(id)}/qualification`);
+  },
+  async leadCrmDetail(id: string, activityPage = 1, taskPage = 1) {
+    const query = new URLSearchParams({activity_limit: '10', activity_offset: String((activityPage - 1) * 10), task_limit: '10', task_offset: String((taskPage - 1) * 10)});
+    return request<import('../types/lead-crm').LeadCrmDetail>(`/api/leads-crm/${encodeURIComponent(id)}?${query}`);
+  },
+  async addLeadNote(id: string, body: string) {
+    return request<{activity: import('../types/lead-crm').LeadActivity}>(`/api/leads-crm/${encodeURIComponent(id)}/notes`, {method: 'POST', body: {body}});
+  },
+  async completeLeadTask(id: string) {
+    return request<{task: import('../types/lead-crm').LeadTask}>(`/api/leads-crm/tasks/${encodeURIComponent(id)}`, {method: 'PATCH', body: {status: 'done'}});
+  },
+  async updateCrmLead(id: string, body: Record<string, unknown>) {
+    return request<{lead: import('../types/lead-crm').LeadCrmRecord}>(`/api/leads-crm/${encodeURIComponent(id)}`, {method: 'PATCH', body});
+  },
+
+  async confirmOperatorAction(id: string) {
+    return request<OperatorActionResult>(`/api/operator/actions/${encodeURIComponent(id)}/confirm`, {
+      method: 'POST',
+      body: {},
+    });
+  },
+
+  async retryOperatorAction(id: string) {
+    return request<{success:boolean;pendingAction:OperatorPendingAction}>(`/api/operator/actions/${encodeURIComponent(id)}/retry`,{method:'POST',body:{}});
+  },
+  async cancelOperatorAction(id: string) {
+    return request<{ success: boolean }>(`/api/operator/actions/${encodeURIComponent(id)}/cancel`, {
       method: 'POST',
       body: {},
     });
@@ -1029,6 +1155,63 @@ export const api = {
     }
   },
 
+  async listLeadMedia(id: string) {
+    return request<{ media: LeadMedia[] }>(`/api/leads/${id}/media`);
+  },
+
+  async deleteLeadMedia(leadId: string, mediaId: string) {
+    return request<{ success: boolean }>(`/api/leads/${leadId}/media/${mediaId}`, { method: 'DELETE' });
+  },
+
+  // ── Front Desk: quotes, price list, chat inbox ──
+  async getFrontDeskSettings() {
+    return request<{ settings: FrontDeskSettings; models?: { reply: string; assessment: string } }>('/api/frontdesk/settings');
+  },
+  async saveFrontDeskSettings(patch: Partial<FrontDeskSettings>) {
+    return request<{ settings: FrontDeskSettings }>('/api/frontdesk/settings', { method: 'PUT', body: patch });
+  },
+  async getFrontDeskKpis(days = 30) {
+    return request<FrontDeskKpis>(`/api/frontdesk/kpis?days=${days}`);
+  },
+  async listQuotes(params: { status?: string; leadId?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.leadId) qs.set('leadId', params.leadId);
+    return request<{ quotes: LeadQuote[] }>(`/api/frontdesk/quotes${qs.toString() ? `?${qs}` : ''}`);
+  },
+  async updateQuoteLines(id: string, lines: { code: string; qty: number }[]) {
+    return request<{ quote: LeadQuote }>(`/api/frontdesk/quotes/${id}`, { method: 'PATCH', body: { lines } });
+  },
+  async approveQuote(id: string) {
+    return request<{ quote: LeadQuote }>(`/api/frontdesk/quotes/${id}/approve`, { method: 'POST' });
+  },
+  async voidQuote(id: string) {
+    return request<{ quote: LeadQuote }>(`/api/frontdesk/quotes/${id}/void`, { method: 'POST' });
+  },
+  async listConversations(status?: string) {
+    return request<{ conversations: ChatConversation[] }>(`/api/frontdesk/conversations${status ? `?status=${status}` : ''}`);
+  },
+  async getConversation(id: string) {
+    return request<{ conversation: ChatConversation; messages: ChatInboxMessage[]; media: Record<string, ChatInboxMedia> }>(
+      `/api/frontdesk/conversations/${id}`,
+    );
+  },
+  async replyToConversation(id: string, message: string, email?: boolean) {
+    return request<{ message: ChatInboxMessage; status: 'human'; delivery: string }>(`/api/frontdesk/conversations/${id}/reply`, {
+      method: 'POST',
+      body: { message, email },
+    });
+  },
+  async setConversationStatus(id: string, status: 'ai' | 'human' | 'closed') {
+    return request<{ conversation: ChatConversation }>(`/api/frontdesk/conversations/${id}`, {
+      method: 'PATCH',
+      body: { status },
+    });
+  },
+  async deleteConversation(id: string) {
+    return request<{ success: boolean }>(`/api/frontdesk/conversations/${id}`, { method: 'DELETE' });
+  },
+
   async deleteLead(id: string) {
     return request<{ success: boolean }>(`/api/leads/${id}`, { method: 'DELETE' });
   },
@@ -1126,6 +1309,25 @@ export const api = {
       method: 'POST',
       body: { amountUsd, paymentMethodId },
     });
+  },
+
+  /** Auto top-up with a monthly cap (card-on-file plan). */
+  async getAutoTopUp() {
+    return request<{ success: boolean; autoTopUp: AutoTopUpStatus }>(
+      '/api/billing/stripe/auto-topup',
+    );
+  },
+
+  async updateAutoTopUp(settings: {
+    enabled: boolean;
+    thresholdUsd: number;
+    amountUsd: number;
+    monthlyCapUsd: number;
+  }) {
+    return request<{ success: boolean; autoTopUp: AutoTopUpStatus }>(
+      '/api/billing/stripe/auto-topup',
+      { method: 'PUT', body: settings },
+    );
   },
 
   async getStripeWalletTopUpStatus(sessionId: string) {
@@ -1250,9 +1452,67 @@ export const api = {
    * header on a full-page navigation, so this fetches a short-lived,
    * single-purpose start token (authenticated) whose URL the page navigates to.
    */
-  async createIntegrationStartToken(provider: 'google' | 'calendly') {
+  async createIntegrationStartToken(provider: 'google' | 'calendly' | 'gmail') {
+    // returnTo: the page to land back on after the provider's consent screen.
+    // The server accepts only an in-app path and signs it into the OAuth state.
+    const returnTo = typeof window !== 'undefined' ? window.location.pathname : '/integrations';
     return request<{ url: string }>(`/api/integrations/${provider}/start-token`, {
       method: 'POST',
+      body: { returnTo },
+    });
+  },
+
+  // -------------------------------------------------------------------------
+  // Gmail (send-only). Agently drafts; the tenant's Gmail delivers.
+  // -------------------------------------------------------------------------
+
+  async getGmailConnections() {
+    return request<{ connections: GmailConnection[]; dailyCap: number; setupRequired?: boolean }>(
+      '/api/email/gmail/connections',
+    );
+  },
+
+  async setGmailDefault(id: string) {
+    return request<{ connection: GmailConnection }>(`/api/email/gmail/connections/${id}/default`, { method: 'POST' });
+  },
+
+  async setGmailAutomations(id: string, automations: { booking_confirmation?: boolean }) {
+    return request<{ connection: GmailConnection }>(`/api/email/gmail/connections/${id}/automations`, {
+      method: 'PATCH',
+      body: automations,
+    });
+  },
+
+  async disconnectGmail(id: string) {
+    return request<{ ok: boolean }>(`/api/email/gmail/connections/${id}`, { method: 'DELETE' });
+  },
+
+  async draftEmail(input: {
+    purpose: EmailPurpose;
+    leadId?: string;
+    appointmentId?: string;
+    link?: string;
+    notes?: string;
+    to?: string;
+  }) {
+    return request<{ subject: string; body: string; to: string; purpose: EmailPurpose }>('/api/email/gmail/draft', {
+      method: 'POST',
+      body: input,
+    });
+  },
+
+  async sendEmail(input: {
+    to: string;
+    subject: string;
+    body: string;
+    purpose?: EmailPurpose;
+    leadId?: string;
+    appointmentId?: string;
+    connectionId?: string;
+  }) {
+    return request<{ success: boolean; messageId: string | null; from: string }>('/api/email/gmail/send', {
+      method: 'POST',
+      body: input,
     });
   },
 
@@ -1469,6 +1729,9 @@ export const api = {
     if (range?.limit) query.set('limit', String(range.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return request<MergedBookingsResponse>(`/api/integrations/bookings${suffix}`);
+  },
+  async cancelBooking(id: string) {
+    return request<{ success: boolean; message?: string }>(`/api/integrations/bookings/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
   },
 };
 // ─────────────────────────────────────────────────────────────

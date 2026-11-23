@@ -32,7 +32,7 @@ export const LuxuryButton = React.forwardRef<HTMLButtonElement, LuxuryButtonProp
       ref={ref}
       disabled={disabled || isLoading}
       className={cn(
-        "inline-flex max-w-full items-center justify-center rounded-[0.9rem] font-black transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9900] focus-visible:ring-offset-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex max-w-full items-center justify-center rounded-[0.9rem] font-black transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f15a24] focus-visible:ring-offset-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,

@@ -9,7 +9,7 @@ import React, {
 import { AgentConfig, Organization } from "../types";
 import { resolveApiBaseUrl } from "../utils/runtimeUrls";
 import { getSessionToken } from "../services/session";
-import { WebcallClient, WebcallStatus } from "../lib/webcallClient";
+import { WebcallClient, WebcallStatus, VoiceAction, VoiceDiagnostics } from "../lib/webcallClient";
 
 /**
  * Owns the "Talk to Your Agent" webcall's entire lifecycle above the router.
@@ -30,6 +30,8 @@ export type CaptionEntry = {
   partial?: boolean;
 };
 
+export type WebcallMode = "caller" | "owner";
+
 interface WebcallState {
   status: WebcallStatus | "idle";
   error: { code: string; message: string } | null;
@@ -44,11 +46,18 @@ interface WebcallState {
   /** Set when the agent's configured voice could not be used, so the modal can
    * say so instead of the operator wondering why it sounds wrong. */
   voiceNotice: { configured: string; used: string } | null;
+  mode: WebcallMode;
+  actions: VoiceAction[];
+  diagnostics: VoiceDiagnostics;
+  agentId: string;
 }
 
 interface WebcallContextValue extends WebcallState {
   isCallLive: boolean;
-  startCall: (agent: AgentConfig, org: Organization) => Promise<void>;
+  voiceSettings: {deviceId:string};
+  setVoiceSettings: (settings:{deviceId:string})=>void;
+  decideAction: (id:string,decision:"approve"|"cancel")=>void;
+  startCall: (agent: AgentConfig, org: Organization, mode?: WebcallMode) => Promise<void>;
   /** Re-runs startCall against whichever agent/org was last used — powers
    * "Call Again" in the modal, which only knows the call state, not the
    * agent, since it's now a global singleton rather than page-scoped. */
@@ -72,6 +81,10 @@ const initialState: WebcallState = {
   agentName: "Your Agent",
   isModalOpen: false,
   voiceNotice: null,
+  mode: "caller",
+  agentId:"",
+  actions:[],
+  diagnostics:{inputLevel:0,latencyMs:null,interruptions:0,droppedFrames:0,playbackGaps:0},
 };
 
 const WebcallContext = createContext<WebcallContextValue | null>(null);
@@ -80,10 +93,14 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [state, setState] = useState<WebcallState>(initialState);
+  const [voiceSettings,setVoiceSettings] = useState({deviceId:""});
+  const settingsRef = useRef(voiceSettings);
+  settingsRef.current=voiceSettings;
   const clientRef = useRef<WebcallClient | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastAgentRef = useRef<AgentConfig | null>(null);
   const lastOrgRef = useRef<Organization | null>(null);
+  const lastModeRef = useRef<WebcallMode>("caller");
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -107,13 +124,17 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const startCall = useCallback(
-    async (agent: AgentConfig, org: Organization) => {
+    async (agent: AgentConfig, org: Organization, mode: WebcallMode = "caller") => {
       lastAgentRef.current = agent;
       lastOrgRef.current = org;
+      lastModeRef.current = mode;
       setState({
         ...initialState,
         status: "connecting",
         agentName: agent.name || "Your Agent",
+        mode,
+        agentId:agent.id,
+        muted:false,
         isModalOpen: true,
       });
 
@@ -126,7 +147,7 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ agentId: agent.id }),
+          body: JSON.stringify({ agentId: agent.id, mode }),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data?.wsUrl) {
@@ -140,6 +161,8 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
         }));
 
         const client = new WebcallClient(data.wsUrl, {
+          onAction: action=>setState(s=>({...s,actions:[...s.actions.filter(a=>a.id!==action.id),action]})),
+          onDiagnostics: diagnostics=>setState(s=>({...s,diagnostics})),
           onStatusChange: (status) => setState((s) => ({ ...s, status })),
           onReady: (info) => {
             setState((s) => ({
@@ -168,7 +191,6 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
             setState((s) => {
               const prev = s.captions;
               if (
-                partial &&
                 prev.length &&
                 prev[prev.length - 1].speaker === "Agent" &&
                 prev[prev.length - 1].partial
@@ -202,7 +224,7 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
             clientRef.current?.stop();
             clientRef.current = null;
           },
-        });
+        },settingsRef.current);
         clientRef.current = client;
         await client.start();
       } catch (e: any) {
@@ -226,7 +248,7 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const restartCall = useCallback(async () => {
     if (!lastAgentRef.current || !lastOrgRef.current) return;
-    await startCall(lastAgentRef.current, lastOrgRef.current);
+    await startCall(lastAgentRef.current, lastOrgRef.current, lastModeRef.current);
   }, [startCall]);
 
   const endCall = useCallback(() => {
@@ -259,6 +281,8 @@ export const WebcallProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const value: WebcallContextValue = {
     ...state,
+    voiceSettings,setVoiceSettings,
+    decideAction:(id,decision)=>clientRef.current?.decideAction(id,decision),
     isCallLive,
     startCall,
     restartCall,

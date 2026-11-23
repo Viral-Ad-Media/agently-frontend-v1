@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import BookingSetupPanel from "../components/BookingSetupPanel";
 import BrandSurface, {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -9,6 +10,7 @@ import BrandSurface, {
   EYEBROW,
 } from "../components/BrandSurface";
 import { api } from "../services/api";
+import type { User } from "../types";
 import type { MergedBooking, MergedBookingsResponse } from "../services/api";
 
 /*
@@ -145,12 +147,25 @@ const STATUS_NOTE: Partial<Record<MergedBooking["status"], string>> = {
   completed: "Completed",
 };
 
-const Bookings: React.FC = () => {
+const Bookings: React.FC<{ user?: User | null }> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MergedBookingsResponse | null>(null);
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [accountId, setAccountId] = useState<string>("all");
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [hideCancelled, setHideCancelled] = useState(false);
+  const cancel = async (booking: MergedBooking) => {
+    if (!window.confirm(`Cancel ${attendeeOf(booking)} on ${dateOf(booking)} at ${timeOf(booking)} (${booking.timezone})? This also cancels it on the connected calendar and may notify attendees.`)) return;
+    setCancelling(booking.id);
+    try {
+      const result = await api.cancelBooking(booking.id);
+      if (!result.success) throw new Error(result.message || "Cancellation failed. The appointment is still shown.");
+      await load(filter);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not cancel this appointment.");
+    } finally { setCancelling(null); }
+  };
 
   const load = useCallback(async (which: Filter) => {
     setLoading(true);
@@ -184,9 +199,9 @@ const Bookings: React.FC = () => {
   const accounts = data?.connections || [];
 
   const visible = useMemo(() => {
-    const rows = data?.bookings || [];
+    const rows = (data?.bookings || []).filter((b) => !hideCancelled || b.status !== "cancelled");
     return accountId === "all" ? rows : rows.filter((b) => b.connectionId === accountId);
-  }, [data, accountId]);
+  }, [data, accountId, hideCancelled]);
 
   const groups = useMemo(() => {
     const ordered = groupByDay(visible);
@@ -243,6 +258,12 @@ const Bookings: React.FC = () => {
           <span className="shrink-0 font-['IBM_Plex_Mono',monospace] text-[10px] uppercase tracking-[0.8px] text-[var(--orange-deep)]">
             {note}
           </span>
+        )}
+        {booking.status !== "cancelled" && user && ["Owner", "Admin"].includes(user.role) && (
+          <button type="button" className={`${BTN_SECONDARY} text-xs`} disabled={cancelling !== null}
+            onClick={() => void cancel(booking)} aria-label={`Cancel appointment for ${attendeeOf(booking)}`}>
+            {cancelling === booking.id ? "Cancelling…" : "Cancel appointment"}
+          </button>
         )}
       </li>
     );
@@ -313,7 +334,13 @@ const Bookings: React.FC = () => {
         </Link>
       </header>
 
+      <BookingSetupPanel user={user} />
+
       <div className="mt-4 flex flex-col gap-3">
+        <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+          <input type="checkbox" checked={hideCancelled} onChange={(event) => setHideCancelled(event.target.checked)} />
+          Hide cancelled appointments
+        </label>
         <div
           className="flex flex-wrap items-center gap-1.5"
           role="group"

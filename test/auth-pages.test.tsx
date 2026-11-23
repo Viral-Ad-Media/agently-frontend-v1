@@ -40,6 +40,10 @@ function renderLogin(props = loginProps()) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  // Login keeps its tab in the URL (?mode=signup) and a sign-up draft in
+  // sessionStorage; start every test on a clean sign-in screen.
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/login");
   document.documentElement.removeAttribute("data-theme");
 });
 

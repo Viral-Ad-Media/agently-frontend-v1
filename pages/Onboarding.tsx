@@ -49,36 +49,58 @@ const CAPTURE_FIELDS = [
   "timeline",
 ];
 
+/* One short heading and one line of context per step: the screen itself
+   carries the rest. */
 const STEP_META = [
   {
-    title: "Workspace",
-    description:
-      "Tell us who you are so your agent can introduce your business correctly.",
-    icon: "fa-building",
+    title: "Business",
+    heading: "Tell us about your business.",
+    sub: "Your agent uses this to introduce you to callers.",
   },
   {
-    title: "Knowledge",
-    description: "Connecting your business so Agently can learn how you work.",
-    icon: "fa-sparkles",
+    title: "Website",
+    heading: "Where should your agent learn?",
+    sub: "Agently reads your homepage and drafts starter answers.",
   },
   {
-    title: "Review",
-    description:
-      "Check the answers your agent will give — edit anything that is not right.",
-    icon: "fa-list-check",
+    title: "Answers",
+    heading: "Check your starter answers.",
+    sub: "This is what your agent tells callers. Click any line to edit it.",
   },
   {
-    title: "Persona",
-    description:
-      "Choose the voice, tone, escalation hours, and captured caller details.",
-    icon: "fa-user-headset",
+    title: "Agent",
+    heading: "Set up your agent.",
+    sub: "Its name, its tone, and when a call goes to a person.",
   },
   {
     title: "Launch",
-    description: "Confirm the setup and enter the workspace.",
-    icon: "fa-rocket-launch",
+    heading: "Ready to launch.",
+    sub: "You can change any of this later in Settings.",
   },
 ];
+
+/* Same palette, fonts and theme rules as the landing page, scoped to the
+   onboarding screen so nothing leaks into the dashboard behind it. */
+const ONBOARDING_CSS = `
+.ob-scope{--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;--orange:#f15a24;--orange-deep:#b63a0e;--orange-soft:#fdebe2;--focus:rgba(241,90,36,.18);color-scheme:light}
+@media (prefers-color-scheme:dark){html:not([data-theme="light"]) .ob-scope{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45;--orange-soft:rgba(255,106,50,.14);--focus:rgba(255,106,50,.25);color-scheme:dark}}
+html[data-theme="dark"] .ob-scope{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45;--orange-soft:rgba(255,106,50,.14);--focus:rgba(255,106,50,.25);color-scheme:dark}
+.ob-faqs{max-height:clamp(180px,calc(100svh - 470px),440px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.ob-faqs textarea{white-space:pre-wrap;overflow-wrap:anywhere}
+@media (max-height:720px){.ob-scope .ob-main{padding-top:12px;padding-bottom:12px}.ob-scope .ob-steps{margin-bottom:12px}.ob-scope .ob-card{padding:22px 28px}.ob-scope .ob-card h1{font-size:26px;letter-spacing:-.9px}.ob-scope .ob-body{margin-top:16px}.ob-scope .ob-foot{margin-top:18px;padding-top:14px}.ob-scope .ob-stack{row-gap:14px}.ob-scope .ob-card input{height:40px}.ob-scope .ob-greet{padding-top:8px;padding-bottom:8px}.ob-faqs{max-height:clamp(160px,calc(100svh - 400px),440px)}}
+`;
+
+const ChevronDown = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true" className="h-4 w-4">
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
+const ArrowRight = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true" className="h-4 w-4">
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
 
 interface NominatimResult {
   place_id: number;
@@ -303,519 +325,6 @@ const inferTimezoneFromLocationText = (location: string) => {
   return match?.[1];
 };
 
-const CLIP_ARTS = [
-  {
-    label: "Workspace",
-    tone: "#FF5527",
-    caption: "Create the place your agents will work from.",
-  },
-  {
-    label: "Website scan",
-    tone: "#2563EB",
-    caption: "Scan pages, policies, services, and useful details.",
-  },
-  {
-    label: "Review answers",
-    tone: "#16A34A",
-    caption: "Approve the first answers before agents use them.",
-  },
-  {
-    label: "Agent persona",
-    tone: "#8B5CF6",
-    caption: "Tune voice, tone, hours, and caller details.",
-  },
-  {
-    label: "Launch",
-    tone: "#f2572b",
-    caption: "Send your first agent into the control room.",
-  },
-];
-
-const OnboardingClipArt: React.FC<{ step: number; compact?: boolean }> = ({
-  step,
-  compact = false,
-}) => {
-  const art = CLIP_ARTS[Math.max(0, Math.min(CLIP_ARTS.length - 1, step - 1))];
-  const sizeClass = compact ? "h-20 w-28" : "h-44 w-full max-w-[300px]";
-
-  const shell = (children: React.ReactNode) => (
-    <div className={`relative mx-auto ${sizeClass}`} aria-hidden="true">
-      <div
-        className="absolute -left-3 top-4 h-12 w-12 rounded-[1.25rem] blur-xl"
-        style={{ backgroundColor: `${art.tone}26` }}
-      />
-      <div className="absolute -right-2 bottom-2 h-12 w-12 rounded-full bg-[#ffd166]/25 blur-xl" />
-      <svg
-        viewBox="0 0 320 230"
-        className="relative z-10 h-full w-full drop-shadow-sm"
-      >
-        {children}
-        {!compact && (
-          <g>
-            <rect
-              x="70"
-              y="197"
-              width="180"
-              height="25"
-              rx="12.5"
-              fill="#232F3E"
-              fillOpacity="0.08"
-            />
-            <text
-              x="160"
-              y="213"
-              textAnchor="middle"
-              fill="#232F3E"
-              fillOpacity="0.62"
-              fontSize="10.5"
-              fontWeight="500"
-            >
-              {art.caption}
-            </text>
-          </g>
-        )}
-      </svg>
-    </div>
-  );
-
-  if (step === 1) {
-    return shell(
-      <>
-        <rect
-          x="54"
-          y="48"
-          width="212"
-          height="132"
-          rx="30"
-          fill="#FBFAF4"
-          stroke="#232F3E"
-          strokeOpacity="0.12"
-        />
-        <rect
-          x="82"
-          y="75"
-          width="156"
-          height="74"
-          rx="24"
-          fill="#fff"
-          stroke="#232F3E"
-          strokeOpacity="0.1"
-        />
-        <circle cx="118" cy="111" r="20" fill={art.tone} fillOpacity="0.15" />
-        <path
-          d="M107 113c7 8 17 8 24 0"
-          stroke={art.tone}
-          strokeWidth="4"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <circle cx="111" cy="105" r="2.4" fill="#232F3E" />
-        <circle cx="125" cy="105" r="2.4" fill="#232F3E" />
-        <rect
-          x="153"
-          y="93"
-          width="60"
-          height="8"
-          rx="4"
-          fill="#232F3E"
-          fillOpacity="0.16"
-        />
-        <rect
-          x="153"
-          y="112"
-          width="74"
-          height="8"
-          rx="4"
-          fill="#232F3E"
-          fillOpacity="0.1"
-        />
-        <rect
-          x="153"
-          y="131"
-          width="45"
-          height="8"
-          rx="4"
-          fill={art.tone}
-          fillOpacity="0.3"
-        />
-        <rect
-          x="65"
-          y="158"
-          width="56"
-          height="22"
-          rx="11"
-          fill={art.tone}
-          fillOpacity="0.14"
-        />
-        <rect
-          x="132"
-          y="158"
-          width="56"
-          height="22"
-          rx="11"
-          fill="#232F3E"
-          fillOpacity="0.07"
-        />
-        <rect
-          x="199"
-          y="158"
-          width="56"
-          height="22"
-          rx="11"
-          fill="#232F3E"
-          fillOpacity="0.07"
-        />
-        <text
-          x="93"
-          y="172"
-          textAnchor="middle"
-          fill="#232F3E"
-          fontSize="9.5"
-          fontWeight="500"
-        >
-          Org
-        </text>
-        <text
-          x="160"
-          y="172"
-          textAnchor="middle"
-          fill="#232F3E"
-          fontSize="9.5"
-          fontWeight="500"
-        >
-          Team
-        </text>
-        <text
-          x="227"
-          y="172"
-          textAnchor="middle"
-          fill="#232F3E"
-          fontSize="9.5"
-          fontWeight="500"
-        >
-          Line
-        </text>
-        <circle cx="250" cy="62" r="17" fill={art.tone} />
-        <path
-          d="M242 62h16M250 54v16"
-          stroke="#fff"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-        />
-        <rect x="42" y="29" width="98" height="29" rx="14.5" fill="#232F3E" />
-        <text x="60" y="47" fill="#fff" fontSize="10.5" fontWeight="500">
-          Workspace
-        </text>
-      </>,
-    );
-  }
-
-  if (step === 2) {
-    return shell(
-      <>
-        <rect
-          x="48"
-          y="50"
-          width="224"
-          height="138"
-          rx="28"
-          fill="#FBFAF4"
-          stroke="#232F3E"
-          strokeOpacity="0.12"
-        />
-        <rect
-          x="70"
-          y="73"
-          width="180"
-          height="95"
-          rx="18"
-          fill="#fff"
-          stroke="#232F3E"
-          strokeOpacity="0.1"
-        />
-        <rect
-          x="70"
-          y="73"
-          width="180"
-          height="24"
-          rx="18"
-          fill={art.tone}
-          fillOpacity="0.12"
-        />
-        <circle cx="89" cy="85" r="3" fill={art.tone} />
-        <circle cx="101" cy="85" r="3" fill="#232F3E" fillOpacity="0.24" />
-        <circle cx="113" cy="85" r="3" fill="#232F3E" fillOpacity="0.16" />
-        <rect
-          x="91"
-          y="114"
-          width="76"
-          height="7"
-          rx="3.5"
-          fill="#232F3E"
-          fillOpacity="0.18"
-        />
-        <rect
-          x="91"
-          y="132"
-          width="104"
-          height="7"
-          rx="3.5"
-          fill="#232F3E"
-          fillOpacity="0.1"
-        />
-        <rect
-          x="91"
-          y="150"
-          width="62"
-          height="7"
-          rx="3.5"
-          fill={art.tone}
-          fillOpacity="0.28"
-        />
-        <circle cx="211" cy="136" r="27" fill={art.tone} fillOpacity="0.14" />
-        <circle
-          cx="211"
-          cy="136"
-          r="15"
-          stroke={art.tone}
-          strokeWidth="5"
-          fill="none"
-        />
-        <path
-          d="M223 148l20 20"
-          stroke={art.tone}
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-        <path
-          d="M44 44c22-22 59-26 84-9"
-          stroke={art.tone}
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeDasharray="2 11"
-          fill="none"
-        />
-        <rect x="46" y="27" width="94" height="29" rx="14.5" fill="#232F3E" />
-        <text x="63" y="45" fill="#fff" fontSize="10.5" fontWeight="500">
-          Scan site
-        </text>
-      </>,
-    );
-  }
-
-  if (step === 3) {
-    return shell(
-      <>
-        <rect
-          x="72"
-          y="42"
-          width="176"
-          height="146"
-          rx="30"
-          fill="#FBFAF4"
-          stroke="#232F3E"
-          strokeOpacity="0.12"
-        />
-        <rect
-          x="95"
-          y="68"
-          width="130"
-          height="22"
-          rx="11"
-          fill={art.tone}
-          fillOpacity="0.14"
-        />
-        {[0, 1, 2].map((i) => (
-          <g key={i}>
-            <rect
-              x="94"
-              y={105 + i * 27}
-              width="132"
-              height="18"
-              rx="9"
-              fill="#fff"
-              stroke="#232F3E"
-              strokeOpacity="0.08"
-            />
-            <circle
-              cx="108"
-              cy={114 + i * 27}
-              r="6"
-              fill={art.tone}
-              fillOpacity="0.18"
-            />
-            <path
-              d={`M105 ${114 + i * 27}l3 3 6-7`}
-              stroke={art.tone}
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-            <rect
-              x="123"
-              y={110 + i * 27}
-              width={68 + i * 10}
-              height="7"
-              rx="3.5"
-              fill="#232F3E"
-              fillOpacity="0.14"
-            />
-          </g>
-        ))}
-        <circle cx="235" cy="62" r="18" fill={art.tone} />
-        <path
-          d="M225 62l7 7 15-17"
-          stroke="#fff"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-        <rect x="54" y="25" width="108" height="29" rx="14.5" fill="#232F3E" />
-        <text x="73" y="43" fill="#fff" fontSize="10.5" fontWeight="500">
-          Review FAQ
-        </text>
-      </>,
-    );
-  }
-
-  if (step === 4) {
-    return shell(
-      <>
-        <rect
-          x="54"
-          y="52"
-          width="212"
-          height="128"
-          rx="32"
-          fill="#FBFAF4"
-          stroke="#232F3E"
-          strokeOpacity="0.12"
-        />
-        <circle cx="117" cy="112" r="34" fill={art.tone} fillOpacity="0.14" />
-        <circle
-          cx="117"
-          cy="101"
-          r="12"
-          fill="#fff"
-          stroke={art.tone}
-          strokeWidth="4"
-        />
-        <path
-          d="M92 139c12-23 38-23 50 0"
-          stroke={art.tone}
-          strokeWidth="6"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <path
-          d="M78 105c5-29 23-45 46-45 25 0 44 18 48 47"
-          stroke={art.tone}
-          strokeWidth="6"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <rect
-          x="164"
-          y="83"
-          width="68"
-          height="13"
-          rx="6.5"
-          fill="#232F3E"
-          fillOpacity="0.12"
-        />
-        <circle cx="206" cy="89.5" r="8" fill={art.tone} />
-        <rect
-          x="164"
-          y="116"
-          width="68"
-          height="13"
-          rx="6.5"
-          fill="#232F3E"
-          fillOpacity="0.12"
-        />
-        <circle cx="184" cy="122.5" r="8" fill={art.tone} />
-        <rect
-          x="164"
-          y="149"
-          width="68"
-          height="13"
-          rx="6.5"
-          fill="#232F3E"
-          fillOpacity="0.12"
-        />
-        <circle cx="218" cy="155.5" r="8" fill={art.tone} />
-        <rect x="52" y="28" width="112" height="29" rx="14.5" fill="#232F3E" />
-        <text x="70" y="46" fill="#fff" fontSize="10.5" fontWeight="500">
-          Tune agent
-        </text>
-      </>,
-    );
-  }
-
-  return shell(
-    <>
-      <rect
-        x="54"
-        y="122"
-        width="212"
-        height="45"
-        rx="22.5"
-        fill="#FBFAF4"
-        stroke="#232F3E"
-        strokeOpacity="0.12"
-      />
-      <path
-        d="M160 55c32 25 45 60 32 104-34-7-55-28-64-63 6-17 16-31 32-41z"
-        fill={art.tone}
-        fillOpacity="0.18"
-        stroke={art.tone}
-        strokeWidth="4"
-      />
-      <circle
-        cx="163"
-        cy="95"
-        r="12"
-        fill="#fff"
-        stroke={art.tone}
-        strokeWidth="4"
-      />
-      <path
-        d="M134 139l-25 23 35-6M186 139l25 23-35-6"
-        stroke={art.tone}
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path
-        d="M151 167c-2 17-11 28-28 33 5-15 12-25 23-31M171 167c2 17 11 28 28 33-5-15-12-25-23-31"
-        fill="#FFD166"
-        fillOpacity="0.75"
-      />
-      <path
-        d="M159 161c-1 20-8 34-20 45M164 161c1 20 8 34 20 45"
-        stroke="#FF5527"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      <rect x="66" y="36" width="82" height="29" rx="14.5" fill="#232F3E" />
-      <text x="84" y="54" fill="#fff" fontSize="10.5" fontWeight="500">
-        Launch
-      </text>
-      <circle cx="232" cy="70" r="17" fill={art.tone} />
-      <path
-        d="M232 60l5 11-5 11-5-11 5-11z"
-        stroke="#fff"
-        strokeWidth="3"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </>,
-  );
-};
-
 const Onboarding: React.FC<OnboardingProps> = ({
   onGenerateFaqs,
   onComplete,
@@ -860,6 +369,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [industryOpen, setIndustryOpen] = useState(false);
   const industryRef = useRef<HTMLDivElement>(null);
+  const cityRef = useRef<HTMLDivElement>(null);
   const [citySearch, setCitySearch] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<NominatimResult[]>([]);
   const [cityLoading, setCityLoading] = useState(false);
@@ -888,6 +398,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
         !industryRef.current.contains(e.target as Node)
       ) {
         setIndustryOpen(false);
+      }
+      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
+        setCityOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -965,13 +478,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
       if (!profile.name.trim()) errors.name = "Add your business name.";
       if (!profile.industry.trim()) errors.industry = "Choose or type your industry.";
       if (!profile.location.trim()) errors.location = "Add your city or location.";
-      const website = profile.website.trim();
-      if (website && !/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/.test(website)) {
-        errors.website = "That does not look like a website address.";
-      }
     }
-    if (step === 2 && !profile.website.trim()) {
-      errors.website = "Add your website so Agently can read it.";
+    if (step === 2) {
+      const website = profile.website.trim();
+      if (!website) errors.website = "Add your website so Agently can read it.";
+      else if (!/^(https?:\/\/)?[\w-]+(\.[\w-]+)+/.test(website))
+        errors.website = "That does not look like a website address.";
     }
     return errors;
   }, [step, profile]);
@@ -1030,135 +542,94 @@ const Onboarding: React.FC<OnboardingProps> = ({
   };
 
   const inputClass =
-    "w-full rounded-[1.1rem] border border-[#0F172A]/10 bg-white/85 px-4 py-3 text-[14px] font-normal text-[#0F172A] outline-none transition-all placeholder:text-[#0F172A]/35 focus:border-[#f2572b]/60 focus:bg-white focus:ring-4 focus:ring-[#f2572b]/10";
-  const labelClass =
-    "mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/55";
+    "h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3.5 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)] placeholder:opacity-70 focus:border-[var(--orange)] focus:shadow-[0_0_0_4px_var(--focus)]";
+  const labelClass = "mb-2 block text-[13px] font-medium text-[var(--ink)]";
+  const menuClass =
+    "absolute left-0 right-0 top-full z-50 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.12)]";
+  const menuItemClass =
+    "w-full rounded-lg px-3 py-2 text-left text-[14px] transition-colors hover:bg-[var(--warm)]";
+  const BTN =
+    "h-11 rounded-xl px-5 inline-flex items-center justify-center gap-2 text-sm font-medium border border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
   /* Inline, per-field. A disabled Continue on its own does not tell anyone
      WHICH field is missing. */
   const FieldError: React.FC<{ name: string }> = ({ name }) =>
     touched[name] && stepErrors[name] ? (
-      <p className="mt-1 text-[12px] text-red-600">{stepErrors[name]}</p>
+      <p className="mt-1.5 text-[12px] text-[#b63d28]">{stepErrors[name]}</p>
     ) : null;
 
+  const selectedTone =
+    TONE_OPTIONS.find((t) => t.id === agent.tone) ?? TONE_OPTIONS[0];
+
   return (
-    <div className="ag-onboarding-no-callout min-h-screen overflow-x-hidden bg-[#F1F5F9] px-3 py-3 text-[#0F172A] sm:px-4 lg:px-5">
-      <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-6xl items-center gap-4 lg:grid-cols-[0.48fr_1.52fr]">
-        <aside className="relative hidden overflow-hidden rounded-[2rem] border border-[#0F172A]/10 bg-[#0F172A] p-5 text-white shadow-2xl lg:flex lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px] lg:flex-col">
-          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#f2572b]/30 blur-3xl" />
-          <div className="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+    <div className="ob-scope ag-onboarding-no-callout flex min-h-svh flex-col bg-[var(--bg)] font-['Manrope',sans-serif] text-[var(--ink)]">
+      <style>{ONBOARDING_CSS}</style>
 
-          <div className="relative z-10 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-1.5">
-              <img
-                src="/agently-mark.png"
-                alt=""
-                className="h-7 w-auto object-contain"
-              />
-              <span className="text-lg font-bold text-white">Agently</span>
-            </div>
-            <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/75">
-              5 steps
-            </span>
-          </div>
+      {/* Header: the landing page's bar, logo left and progress right. */}
+      <header className="h-[65px] shrink-0 border-b border-[var(--line)] max-[699px]:h-[60px]">
+        <div className="mx-auto flex h-full w-[min(calc(100%-36px),1296px)] items-center justify-between gap-4">
+          <span className="inline-flex items-center gap-2.5 font-['DM_Sans',sans-serif] text-[24px] font-semibold tracking-[-1px] max-[699px]:text-[21px]">
+            <img
+              src="/landing/logo.png"
+              alt=""
+              className="h-8 w-8 object-contain"
+            />
+            Agently
+          </span>
+          <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[1px] text-[var(--muted)]">
+            Step {step} of {TOTAL_STEPS}
+          </span>
+        </div>
+      </header>
 
-          <div className="relative z-10 flex flex-1 flex-col items-center justify-center py-6 text-center">
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.24em] text-white/55">
-              Welcome to Agently
-            </p>
-            <h1 className="max-w-[285px] text-[clamp(1.55rem,2.15vw,2.05rem)] font-medium leading-[1.04] tracking-[-0.048em] text-white">
-              Build your first agent without the clutter.
-            </h1>
-            <p className="mt-3 max-w-[285px] text-[12.5px] font-normal leading-[1.55] text-white/70">
-              Add the essentials, review knowledge, choose the tone, then enter
-              your control room.
-            </p>
-            <div className="mt-7 w-full">
-              <OnboardingClipArt step={step} />
-            </div>
-          </div>
-
-          <div className="relative z-10 rounded-[1.35rem] border border-white/10 bg-white/[0.07] px-4 py-3 text-center">
-            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/45">
-              Current step
-            </p>
-            <p className="mt-1 text-sm font-medium text-white">
-              {step} of {TOTAL_STEPS} · {currentStep.title}
-            </p>
-            <p className="mt-1 text-[12px] leading-4 text-white/55">
-              {currentStep.description}
-            </p>
-          </div>
-        </aside>
-
-        <main className="overflow-hidden rounded-[1.65rem] border border-[#0F172A]/10 bg-[#F8FAFC]/95 shadow-2xl shadow-[#0F172A]/10 backdrop-blur md:rounded-[2.25rem] lg:h-[calc(100svh-1.5rem)] lg:max-h-[720px] lg:min-h-[560px]">
-          <div className="border-b border-[#0F172A]/10 bg-white/55 px-4 py-3 sm:px-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-1.5 lg:hidden">
-                <img
-                  src="/agently-mark.png"
-                  alt=""
-                  className="h-6 w-auto object-contain"
+      <main className="ob-main flex flex-1 items-center justify-center px-[18px] py-[clamp(18px,4vh,44px)]">
+        <div className="w-full max-w-[720px]">
+          {/* Progress: one bar per step, named on wider screens. */}
+          <ol
+            className="ob-steps mb-[clamp(16px,3vh,28px)] grid grid-cols-5 gap-2 sm:grid-cols-5"
+            aria-label="Setup progress"
+          >
+            {STEP_META.map((meta, i) => (
+              <li
+                key={meta.title}
+                aria-current={step === i + 1 ? "step" : undefined}
+              >
+                <span
+                  className={`block h-[3px] rounded-full transition-colors duration-500 ${
+                    step > i ? "bg-[var(--orange)]" : "bg-[var(--line)]"
+                  }`}
                 />
-                <span className="text-base font-bold text-[#0F172A]">
-                  Agently
+                <span
+                  className={`mt-2 block font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.9px] max-[599px]:hidden ${
+                    step === i + 1 ? "text-[var(--ink)]" : "text-[var(--muted)]"
+                  }`}
+                >
+                  {meta.title}
                 </span>
-              </div>
-              <div className="hidden lg:block">
-                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#0F172A]/45">
-                  Step {step} of {TOTAL_STEPS}
-                </p>
-                <h2 className="mt-0.5 text-[1.35rem] font-medium leading-none tracking-[-0.045em] text-[#0F172A]">
-                  {currentStep.title}
-                </h2>
-              </div>
-              <div className="flex min-w-[170px] flex-1 items-center gap-1.5 lg:max-w-[260px]">
-                {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step > i ? "bg-[#f2572b]" : "bg-[#0F172A]/10"}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+              </li>
+            ))}
+          </ol>
 
-          <div className="px-4 py-4 sm:px-6 sm:py-5 lg:flex lg:h-[calc(100%-126px)] lg:flex-col lg:justify-center lg:overflow-hidden lg:px-8 lg:py-7">
-            <div className="mb-5 lg:hidden">
-              <div className="flex items-start justify-between gap-4 rounded-[1.35rem] border border-[#0F172A]/10 bg-white/65 p-3.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#0F172A]/45">
-                    Step {step} of {TOTAL_STEPS}
-                  </p>
-                  <h1 className="mt-1 text-[1.55rem] font-medium leading-[1] tracking-[-0.05em] text-[#0F172A]">
-                    {currentStep.title}
-                  </h1>
-                  <p className="mt-1.5 text-[13px] leading-[1.4] text-[#0F172A]/65">
-                    {currentStep.description}
-                  </p>
-                </div>
-                <OnboardingClipArt step={step} compact />
-              </div>
-            </div>
+          <section className="ob-card rounded-[14px] border border-[var(--line)] bg-[var(--surface)] p-[clamp(20px,3.6vw,36px)]">
+            <h1 className="m-0 font-['DM_Sans',sans-serif] text-[32px] font-medium leading-[1.05] tracking-[-1.4px] max-[699px]:text-[26px] max-[699px]:tracking-[-0.9px]">
+              {currentStep.heading}
+            </h1>
+            <p className="m-0 mt-2 text-[15px] leading-[1.5] text-[var(--muted)]">
+              {currentStep.sub}
+            </p>
 
-            {step === 1 && (
-              <section className="mx-auto w-full max-w-[860px] space-y-6">
-                <div className="hidden lg:block">
-                  <h1 className="text-[2.15rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Tell us what your agents represent.
-                  </h1>
-                  <p className="mt-2 max-w-[520px] text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    These details help Agently personalize greetings, routing,
-                    lead capture, and handoff context.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Organization name</label>
+            <div className="ob-body mt-[clamp(20px,3.5vh,30px)]">
+              {step === 1 && (
+                <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className={labelClass} htmlFor="ob-name">
+                      Business name
+                    </label>
                     <input
+                      id="ob-name"
                       type="text"
                       placeholder="Your company name"
+                      autoComplete="organization"
                       className={inputClass}
                       value={profile.name}
                       onBlur={() => setTouched((t) => ({ ...t, name: true }))}
@@ -1168,12 +639,17 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     />
                     <FieldError name="name" />
                   </div>
+
                   <div ref={industryRef}>
-                    <label className={labelClass}>Industry</label>
+                    <label className={labelClass} htmlFor="ob-industry">
+                      Industry
+                    </label>
                     <div className="relative">
                       <input
+                        id="ob-industry"
                         type="text"
-                        placeholder={profile.industry || "Search industry"}
+                        placeholder={profile.industry || "Search industries"}
+                        autoComplete="off"
                         className={`${inputClass} cursor-pointer pr-10`}
                         value={
                           industryOpen ? industrySearch : profile.industry || ""
@@ -1182,21 +658,25 @@ const Onboarding: React.FC<OnboardingProps> = ({
                           setIndustryOpen(true);
                           setIndustrySearch("");
                         }}
+                        onBlur={() =>
+                          setTouched((t) => ({ ...t, industry: true }))
+                        }
                         onChange={(e) => {
                           setIndustrySearch(e.target.value);
                           setIndustryOpen(true);
                         }}
                       />
-                      <i className="fa-sharp fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#0F172A]/35" />
-                      <FieldError name="industry" />
+                      <span className="pointer-events-none absolute right-3.5 top-[22px] -translate-y-1/2 text-[var(--muted)]">
+                        <ChevronDown />
+                      </span>
                       {industryOpen && (
-                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-56 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
+                        <div className={menuClass}>
                           {showCustomIndustry ? (
-                            /* C3: nothing matched, so take their own words
+                            /* Nothing matched, so take their own words
                                rather than forcing a wrong pick. */
                             <button
                               type="button"
-                              className="w-full rounded-2xl px-4 py-3 text-left text-sm text-[#0F172A]/80 transition-colors hover:bg-[#F1F5F9]"
+                              className={`${menuItemClass} text-[var(--muted)]`}
                               onClick={() => {
                                 setProfile((p) => ({
                                   ...p,
@@ -1207,13 +687,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
                               }}
                             >
                               Use “
-                              <span className="font-medium text-[#0F172A]">
+                              <span className="font-medium text-[var(--ink)]">
                                 {industrySearch.trim()}
                               </span>
-                              ” as my industry
+                              ”
                             </button>
                           ) : filteredIndustries.length === 0 ? (
-                            <p className="px-4 py-3 text-sm text-[#0F172A]/45">
+                            <p className="m-0 px-3 py-2 text-[14px] text-[var(--muted)]">
                               Start typing to search industries
                             </p>
                           ) : (
@@ -1221,7 +701,12 @@ const Onboarding: React.FC<OnboardingProps> = ({
                               <button
                                 key={ind}
                                 type="button"
-                                className={`w-full rounded-2xl px-4 py-2.5 text-left text-sm transition-colors ${profile.industry === ind ? "bg-[#f2572b]/10 font-medium text-[#f2572b]" : "text-[#0F172A]/75 hover:bg-[#F1F5F9]"}`}
+                                className={`${menuItemClass} ${
+                                  profile.industry === ind
+                                    ? "font-medium text-[var(--orange-deep)]"
+                                    : "text-[var(--ink)]"
+                                }`}
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                   setProfile((p) => ({ ...p, industry: ind }));
                                   setTouched((t) => ({ ...t, industry: true }));
@@ -1236,17 +721,22 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         </div>
                       )}
                     </div>
+                    <FieldError name="industry" />
                   </div>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="relative">
-                    <label className={labelClass}>City / Location</label>
+                  <div className="relative" ref={cityRef}>
+                    <label className={labelClass} htmlFor="ob-location">
+                      City
+                    </label>
                     <input
+                      id="ob-location"
                       type="text"
                       placeholder="City, country"
+                      autoComplete="off"
                       className={inputClass}
-                      onBlur={() => setTouched((t) => ({ ...t, location: true }))}
+                      onBlur={() =>
+                        setTouched((t) => ({ ...t, location: true }))
+                      }
                       value={citySearch || profile.location}
                       onChange={(e) => {
                         const nextLocation = e.target.value;
@@ -1268,17 +758,18 @@ const Onboarding: React.FC<OnboardingProps> = ({
                     <FieldError name="location" />
                     {cityOpen &&
                       (citySuggestions.length > 0 || cityLoading) && (
-                        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-52 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white p-1 shadow-xl">
+                        <div className={menuClass}>
                           {cityLoading ? (
-                            <div className="px-4 py-3 text-sm text-[#0F172A]/45">
-                              Searching...
-                            </div>
+                            <p className="m-0 px-3 py-2 text-[14px] text-[var(--muted)]">
+                              Searching…
+                            </p>
                           ) : (
                             citySuggestions.map((city) => (
                               <button
                                 key={city.place_id}
                                 type="button"
-                                className="w-full rounded-2xl px-4 py-2.5 text-left text-sm text-[#0F172A]/75 transition-colors hover:bg-[#F1F5F9]"
+                                className={`${menuItemClass} text-[var(--ink)]`}
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                   const displayName =
                                     getConciseLocationLabel(city);
@@ -1304,411 +795,324 @@ const Onboarding: React.FC<OnboardingProps> = ({
                         </div>
                       )}
                   </div>
-                  <div>
-                    <label className={labelClass}>
-                      Website for Knowledge Base
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://yourwebsite.com"
-                      className={inputClass}
-                      value={profile.website}
-                      onChange={(e) =>
-                        setProfile((p) => ({ ...p, website: e.target.value }))
-                      }
-                    />
-                  </div>
                 </div>
+              )}
 
-                <div className="grid gap-3 rounded-[1.6rem] border border-[#0F172A]/10 bg-white/70 p-4 sm:grid-cols-3">
-                  {[
-                    [
-                      "How it answers",
-                      "Callers hear your business name and a warm welcome",
-                    ],
-                    [
-                      "When to pass on",
-                      "Your agent knows when a real person should take over",
-                    ],
-                    [
-                      "What it knows",
-                      "Answers come from your own website, not guesswork",
-                    ],
-                  ].map(([title, copy]) => (
-                    <div key={title}>
-                      <p className="text-sm font-medium text-[#0F172A]">
-                        {title}
-                      </p>
-                      <p className="mt-1 text-[12px] leading-4 text-[#0F172A]/55">
-                        {copy}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {step === 2 && (
-              <section className="mx-auto grid w-full max-w-[860px] gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
+              {step === 2 && (
                 <div>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.5rem] bg-[#f2572b]/10 text-[#f2572b]">
-                    <i className="fa-sharp fa-solid fa-brain text-xl" />
-                  </div>
-                  <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Preparing your agent's knowledge.
-                  </h1>
-                  <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    Agently will read your website's homepage and turn it into
-                    starter questions and answers. You can change any of them
-                    before your agent goes live.
-                  </p>
-                </div>
-                <div className="rounded-[1.65rem] border border-[#0F172A]/10 bg-white p-4 shadow-xl shadow-[#0F172A]/5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#0F172A]/45">
-                    Website to scan
-                  </p>
-                  <p className="mt-3 break-all rounded-[1.35rem] bg-[#F1F5F9] px-4 py-4 font-mono text-sm text-[#0F172A]/75">
-                    {profile.website ||
-                      "No website added. You can continue and add knowledge later."}
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    {[
-                      ["Pages", "Discover"],
-                      ["FAQs", "Draft"],
-                      ["Answers", "Review"],
-                    ].map(([top, bottom]) => (
-                      <div
-                        key={top}
-                        className="rounded-[1.25rem] bg-[#F8FAFC] p-3 text-center"
-                      >
-                        <p className="text-sm font-medium text-[#0F172A]">
-                          {top}
-                        </p>
-                        <p className="text-[12px] text-[#0F172A]/50">
-                          {bottom}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-[13px] leading-5 text-[#0F172A]/55">
-                    Continue and Agently will read your homepage to draft your
-                    first answers. This takes a few seconds.
-                  </p>
-                </div>
-              </section>
-            )}
-
-            {step === 3 && (
-              <section className="mx-auto w-full max-w-[860px] space-y-5">
-                <div>
-                  <h1 className="text-[1.95rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Review starter answers.
-                  </h1>
-                  <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    These answers come from your homepage and are what your
-                    agent will say to callers.
-                  </p>
-                  <div className="mt-3 flex items-start gap-2.5 rounded-[1.35rem] border border-[#f2572b]/25 bg-[#f2572b]/8 px-4 py-3">
-                    <i className="fa-sharp fa-solid fa-pen-to-square mt-0.5 text-[#D97706]" />
-                    <p className="text-[12px] leading-4 text-[#0F172A]/70">
-                      Tap any question or answer below to edit it — or leave
-                      them as they are and refine them later from Settings.
-                    </p>
-                  </div>
-                  <p className="mt-2 text-[12px] leading-4 text-[#0F172A]/55">
-                    After setup, open Settings → Knowledge Bases to discover
-                    every route under your website and choose the pages your
-                    agents should learn from.
-                  </p>
-                </div>
-                {/*
-                  ISSUE 3a - "the editable questions and answer cards are too
-                  big ... this will look more presentable in a list or table,
-                  consuming less space. I do not like cards and boxes."
-                //
-                  Rewritten as a bordered LIST: one hairline rule between rows,
-                  no card per FAQ, no shadow, no rounded box around the answer.
-                  Each row is a numbered question with its answer directly
-                  underneath, and both stay inline-editable - clicking either
-                  puts the cursor in it exactly as before.
-                //
-                  Roughly a third of the previous vertical space per FAQ, so
-                  three or four fit on screen where one and a half did.
-                */}
-                <div className="ag-onboarding-faq-list divide-y divide-[#0F172A]/8 overflow-y-auto rounded-[1.35rem] border border-[#0F172A]/10 bg-white">
-                  {agent.faqs.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-sm text-[#0F172A]/55">
-                      No answers were generated yet. You can add knowledge later
-                      from Settings.
-                    </div>
-                  ) : (
-                    agent.faqs.map((faq, i) => (
-                      <div
-                        key={faq.id}
-                        className="group px-4 py-3 transition-colors hover:bg-[#f2572b]/[0.035]"
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <span className="mt-[3px] w-4 shrink-0 text-right text-[11px] font-bold tabular-nums text-[#D97706]">
-                            {i + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <textarea
-                              rows={1}
-                              value={faq.question}
-                              aria-label={`Question ${i + 1}`}
-                              onInput={(e) => growTextarea(e.currentTarget)}
-                              onFocus={(e) => growTextarea(e.currentTarget)}
-                              onChange={(e) =>
-                                setAgent((a) => ({
-                                  ...a,
-                                  faqs: a.faqs.map((f, j) =>
-                                    j === i
-                                      ? { ...f, question: e.target.value }
-                                      : f,
-                                  ),
-                                }))
-                              }
-                              className="ag-onboarding-faq-question w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[14px] font-semibold leading-[1.35] text-[#0F172A] outline-none transition-colors focus:bg-[#f2572b]/[0.06]"
-                            />
-                            <textarea
-                              rows={2}
-                              value={faq.answer}
-                              aria-label={`Answer ${i + 1}`}
-                              onInput={(e) => growTextarea(e.currentTarget)}
-                              onFocus={(e) => growTextarea(e.currentTarget)}
-                              onChange={(e) =>
-                                setAgent((a) => ({
-                                  ...a,
-                                  faqs: a.faqs.map((f, j) =>
-                                    j === i
-                                      ? { ...f, answer: e.target.value }
-                                      : f,
-                                  ),
-                                }))
-                              }
-                              className="ag-onboarding-faq-answer mt-0.5 w-full resize-none overflow-hidden rounded-md bg-transparent px-1 text-[13px] leading-[1.5] text-[#0F172A]/70 outline-none transition-colors focus:bg-[#f2572b]/[0.06]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-            )}
-
-            {step === 4 && (
-              <section className="mx-auto w-full max-w-[860px] space-y-5">
-                <div>
-                  <h1 className="text-[1.95rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Shape your agent persona.
-                  </h1>
-                  <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    Set the name, tone, escalation window, and caller details
-                    the agent should capture.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[0.86fr_1.14fr]">
-                  <div>
-                    <label className={labelClass}>Agent name</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={agent.name}
-                      onChange={(e) =>
-                        setAgent((a) => ({ ...a, name: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="rounded-[1.35rem] bg-[#0F172A] p-3.5 text-white">
-                    <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">
-                      Live greeting
-                    </p>
-                    <p className="text-sm leading-5 text-white/78">
-                      {agent.greeting}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>
-                    Choose a communication tone for your agent
+                  <label className={labelClass} htmlFor="ob-website">
+                    Website
                   </label>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {TONE_OPTIONS.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setAgent((a) => ({ ...a, tone: t.id }))}
-                        className={`rounded-[1.25rem] border p-3 text-left transition-all ${agent.tone === t.id ? "border-[#f2572b]/35 bg-[#f2572b]/10 text-[#0F172A]" : "border-[#0F172A]/10 bg-white text-[#0F172A]/70 hover:border-[#0F172A]/18"}`}
-                      >
-                        <span
-                          className={`mb-2 flex h-8 w-8 items-center justify-center rounded-2xl ${agent.tone === t.id ? "bg-[#f2572b] text-white" : "bg-[#F1F5F9] text-[#0F172A]/65"}`}
-                        >
-                          <i className={`fa-sharp fa-solid ${t.icon}`} />
-                        </span>
-                        <span className="block text-[12px] font-medium">
-                          {t.id}
-                        </span>
-                        <span className="mt-1 block text-[12px] leading-4 text-[#0F172A]/55">
-                          {t.desc}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div>
-                    <label className={labelClass}>
-                      Human assistant available from
-                    </label>
-                    <input
-                      type="time"
-                      className={inputClass}
-                      value={hours.start}
-                      onChange={(e) =>
-                        setHours((h) => ({ ...h, start: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>
-                      Human assistant available until
-                    </label>
-                    <input
-                      type="time"
-                      className={inputClass}
-                      value={hours.end}
-                      onChange={(e) =>
-                        setHours((h) => ({ ...h, end: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>
-                      Human assistant or manager contact
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="Optional"
-                      className={inputClass}
-                      value={agent.escalationPhone}
-                      onChange={(e) =>
-                        setAgent((a) => ({
-                          ...a,
-                          escalationPhone: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <p className="-mt-2 text-[12px] leading-4 text-[#0F172A]/50">
-                  Set the hours a real person is around for call transfers
-                  (optional). This is the number your agent forwards calls to
-                  when a caller needs a human. You can change both anytime from
-                  Settings.
-                </p>
-
-                <div>
-                  <label className={labelClass}>Capture from callers</label>
-                  <div className="flex flex-wrap gap-2">
-                    {CAPTURE_FIELDS.map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => toggleField(f)}
-                        className={`ag-capture-field-chip rounded-full border px-3 py-1.5 text-[11px] font-semibold capitalize transition-all ${agent.dataCaptureFields.includes(f) ? "ag-capture-field-chip--active border-[#f2572b]/70 bg-[#f2572b]/25 text-[#9A5B00]" : "ag-capture-field-chip--inactive border-[#0F172A]/10 bg-white text-[#0F172A]/55 hover:border-[#0F172A]/20"}`}
-                      >
-                        {agent.dataCaptureFields.includes(f) && "✓ "}
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {step === 5 && (
-              <section className="mx-auto grid w-full max-w-[860px] gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
-                <div>
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.65rem] bg-emerald-500 text-white shadow-xl shadow-emerald-500/20">
-                    <i className="fa-sharp fa-solid fa-check text-2xl" />
-                  </div>
-                  <h1 className="text-[2rem] font-medium leading-[0.98] tracking-[-0.058em] text-[#0F172A]">
-                    Ready to launch your workspace.
-                  </h1>
-                  <p className="mt-2 text-[14px] leading-[1.42] text-[#0F172A]/70">
-                    Everything is prepared. You can adjust agents, knowledge,
-                    phone numbers, and campaigns after entering the dashboard.
+                  <input
+                    id="ob-website"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://yourwebsite.com"
+                    autoComplete="url"
+                    className={inputClass}
+                    value={profile.website}
+                    onBlur={() => setTouched((t) => ({ ...t, website: true }))}
+                    onChange={(e) =>
+                      setProfile((p) => ({ ...p, website: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && stepIsValid && !loading)
+                        void handleNext();
+                    }}
+                  />
+                  <FieldError name="website" />
+                  <p className="m-0 mt-3 text-[13px] leading-[1.5] text-[var(--muted)]">
+                    Takes a few seconds. You can add more pages later from
+                    Settings → Knowledge Bases.
                   </p>
                 </div>
-                <div className="rounded-[1.65rem] border border-[#0F172A]/10 bg-white p-4 shadow-xl shadow-[#0F172A]/5">
+              )}
+
+              {step === 3 &&
+                (agent.faqs.length === 0 ? (
+                  <p className="m-0 rounded-xl bg-[var(--warm)] px-4 py-6 text-center text-[14px] text-[var(--muted)]">
+                    No answers could be drafted from your homepage. Add
+                    knowledge later from Settings → Knowledge Bases.
+                  </p>
+                ) : (
+                  <ol className="ob-faqs m-0 list-none divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] p-0">
+                    {agent.faqs.map((faq, i) => (
+                      <li
+                        key={faq.id}
+                        className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 px-4 py-3"
+                      >
+                        <span className="pt-[3px] font-['IBM_Plex_Mono',monospace] text-[12px] text-[var(--orange-deep)]">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <div className="min-w-0">
+                          <textarea
+                            rows={1}
+                            value={faq.question}
+                            aria-label={`Question ${i + 1}`}
+                            ref={(el) => {
+                              if (el) growTextarea(el);
+                            }}
+                            onInput={(e) => growTextarea(e.currentTarget)}
+                            onChange={(e) =>
+                              setAgent((a) => ({
+                                ...a,
+                                faqs: a.faqs.map((f, j) =>
+                                  j === i
+                                    ? { ...f, question: e.target.value }
+                                    : f,
+                                ),
+                              }))
+                            }
+                            className="block w-full resize-none overflow-hidden rounded-md border-transparent bg-transparent px-1 text-[14px] font-semibold leading-[1.4] text-[var(--ink)] outline-none transition-colors focus:bg-[var(--orange-soft)]"
+                          />
+                          <textarea
+                            rows={1}
+                            value={faq.answer}
+                            aria-label={`Answer ${i + 1}`}
+                            ref={(el) => {
+                              if (el) growTextarea(el);
+                            }}
+                            onInput={(e) => growTextarea(e.currentTarget)}
+                            onChange={(e) =>
+                              setAgent((a) => ({
+                                ...a,
+                                faqs: a.faqs.map((f, j) =>
+                                  j === i ? { ...f, answer: e.target.value } : f,
+                                ),
+                              }))
+                            }
+                            className="mt-0.5 block w-full resize-none overflow-hidden rounded-md border-transparent bg-transparent px-1 text-[13px] leading-[1.5] text-[var(--muted)] outline-none transition-colors focus:bg-[var(--orange-soft)]"
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                ))}
+
+              {step === 4 && (
+                <div className="ob-stack grid gap-y-5">
+                  <div className="grid gap-x-4 gap-y-5 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                    <div>
+                      <label className={labelClass} htmlFor="ob-agent-name">
+                        Agent name
+                      </label>
+                      <input
+                        id="ob-agent-name"
+                        type="text"
+                        className={inputClass}
+                        value={agent.name}
+                        onChange={(e) =>
+                          setAgent((a) => ({ ...a, name: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <span className={labelClass} id="ob-tone-label">
+                        Tone
+                      </span>
+                      <div
+                        role="radiogroup"
+                        aria-labelledby="ob-tone-label"
+                        className="grid h-11 grid-cols-3 gap-1 rounded-xl border border-[var(--line)] p-1 sm:grid-cols-3"
+                      >
+                        {TONE_OPTIONS.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={agent.tone === t.id}
+                            title={t.desc}
+                            onClick={() =>
+                              setAgent((a) => ({ ...a, tone: t.id }))
+                            }
+                            className={`rounded-lg text-[13px] font-medium transition-colors ${
+                              agent.tone === t.id
+                                ? "bg-[var(--ink)] text-[var(--bg)]"
+                                : "text-[var(--muted)] hover:text-[var(--ink)]"
+                            }`}
+                          >
+                            {t.id}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="ob-greet m-0 rounded-xl bg-[var(--warm)] px-4 py-3 text-[14px] leading-[1.5] text-[var(--ink)]">
+                    <span className="mb-1 block font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.9px] text-[var(--muted)]">
+                      Greeting · {selectedTone.desc}
+                    </span>
+                    “{agent.greeting}”
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-[1fr_1fr_1.4fr]">
+                    <div>
+                      <label className={labelClass} htmlFor="ob-from">
+                        Staff available from
+                      </label>
+                      <input
+                        id="ob-from"
+                        type="time"
+                        className={inputClass}
+                        value={hours.start}
+                        onChange={(e) =>
+                          setHours((h) => ({ ...h, start: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="ob-until">
+                        Until
+                      </label>
+                      <input
+                        id="ob-until"
+                        type="time"
+                        className={inputClass}
+                        value={hours.end}
+                        onChange={(e) =>
+                          setHours((h) => ({ ...h, end: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className={labelClass} htmlFor="ob-transfer">
+                        Transfer calls to{" "}
+                        <span className="font-normal text-[var(--muted)]">
+                          (optional)
+                        </span>
+                      </label>
+                      <input
+                        id="ob-transfer"
+                        type="tel"
+                        placeholder="Phone number"
+                        autoComplete="tel"
+                        className={inputClass}
+                        value={agent.escalationPhone}
+                        onChange={(e) =>
+                          setAgent((a) => ({
+                            ...a,
+                            escalationPhone: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className={labelClass}>Collect from callers</span>
+                    <div className="flex flex-wrap gap-2">
+                      {CAPTURE_FIELDS.map((f) => {
+                        const on = agent.dataCaptureFields.includes(f);
+                        return (
+                          <button
+                            key={f}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggleField(f)}
+                            className={`h-8 rounded-full border px-3.5 text-[13px] font-medium capitalize transition-colors ${
+                              on
+                                ? "border-[var(--orange)] bg-[var(--orange-soft)] text-[var(--orange-deep)]"
+                                : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 5 && (
+                <dl className="m-0 grid gap-x-8 sm:grid-cols-2">
                   {[
-                    ["Organization", profile.name || "Not set"],
+                    ["Business", profile.name || "Not set"],
                     ["Industry", profile.industry || "Not set"],
-                    ["Agent", agent.name],
-                    ["Tone", agent.tone],
-                    ["Escalation hours", `${hours.start} - ${hours.end}`],
-                    ["Starter FAQs", `${agent.faqs.length} entries`],
+                    ["City", profile.location || "Not set"],
+                    ["Website", profile.website || "Not set"],
+                    ["Agent", `${agent.name} · ${agent.tone}`],
+                    ["Staff hours", `${hours.start} – ${hours.end}`],
+                    ["Starter answers", String(agent.faqs.length)],
+                    [
+                      "Collects",
+                      agent.dataCaptureFields.length
+                        ? agent.dataCaptureFields.join(", ")
+                        : "Nothing",
+                    ],
                   ].map(([k, v]) => (
                     <div
                       key={k}
-                      className="flex items-center justify-between gap-4 border-b border-[#0F172A]/8 py-3 first:pt-0 last:border-0 last:pb-0"
+                      className="flex items-baseline justify-between gap-4 border-b border-[var(--line)] py-3"
                     >
-                      <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#0F172A]/45">
+                      <dt className="shrink-0 text-[13px] text-[var(--muted)]">
                         {k}
-                      </span>
-                      <span className="max-w-[55%] truncate text-right text-sm font-medium text-[#0F172A]">
+                      </dt>
+                      <dd className="m-0 min-w-0 truncate text-right text-[14px] font-medium">
                         {v}
-                      </span>
+                      </dd>
                     </div>
                   ))}
-                </div>
-              </section>
-            )}
+                </dl>
+              )}
+            </div>
 
             {error && (
-              <div className="mt-5 flex items-center gap-2 rounded-[1.35rem] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                <i className="fa-sharp fa-solid fa-circle-exclamation" />{" "}
-                {error}
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 border-t border-[#0F172A]/10 bg-white/55 px-4 py-3 sm:px-6">
-            {step > 1 && (
-              <button
-                onClick={() => setStep((s) => s - 1)}
-                disabled={loading}
-                className="flex-1 rounded-[1.1rem] border border-[#0F172A]/10 bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A]/65 transition-all hover:border-[#0F172A]/20 hover:text-[#0F172A] disabled:opacity-60"
+              <p
+                role="alert"
+                className="m-0 mt-5 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-[#b63d28]"
               >
-                Back
-              </button>
+                {error}
+              </p>
             )}
-            <button
-              onClick={handleNext}
-              disabled={loading || !stepIsValid}
-              title={stepIsValid ? undefined : Object.values(stepErrors)[0]}
-              className="flex-[2] rounded-[1.1rem] bg-[#0F172A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#f2572b] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <i className="fa-sharp fa-solid fa-spinner fa-spin" />{" "}
-                  Processing...
-                </span>
+
+            <div className="ob-foot mt-[clamp(22px,3.5vh,32px)] flex items-center justify-between gap-3 border-t border-[var(--line)] pt-[clamp(18px,3vh,24px)]">
+              {step > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setStep((s) => s - 1);
+                  }}
+                  disabled={loading}
+                  className={`${BTN} bg-[var(--warm)] text-[var(--ink)]`}
+                >
+                  Back
+                </button>
               ) : (
-                <span className="inline-flex items-center gap-2">
-                  {step === TOTAL_STEPS ? "Launch workspace" : "Continue"}
-                  <i className="fa-sharp fa-solid fa-arrow-right" />
-                </span>
+                <span />
               )}
-            </button>
-          </div>
-        </main>
-      </div>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={loading || !stepIsValid}
+                title={stepIsValid ? undefined : Object.values(stepErrors)[0]}
+                className={`${BTN} min-w-[160px] max-[479px]:flex-1 ${
+                  step === TOTAL_STEPS
+                    ? "bg-[var(--orange)] text-[#160802] hover:brightness-95"
+                    : "bg-[var(--ink)] text-[var(--bg)] hover:opacity-90"
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    {step === 2
+                      ? "Reading your site…"
+                      : step === TOTAL_STEPS
+                        ? "Launching…"
+                        : "Working…"}
+                  </>
+                ) : (
+                  <>
+                    {step === TOTAL_STEPS ? "Launch workspace" : "Continue"}
+                    <ArrowRight />
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
     </div>
   );
 };

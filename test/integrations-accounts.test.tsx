@@ -15,16 +15,14 @@ import React from "react";
  *   2. an add button is present even when that provider already has an
  *      account — the absence of exactly that button is what the user hit.
  *
- * The row actions (rename, make booking target, remove) are checked against
- * the CONNECTION ID they are called with, because keying per-row state by
- * provider instead of by id is the specific way this page breaks once a
- * provider has more than one account.
+ * Row actions are checked against the CONNECTION ID they are called with,
+ * because keying per-row state by provider instead of by id is the specific
+ * way this page breaks once a provider has more than one account.
  */
 
 const getIntegrationsStatus = vi.fn();
 const getBusinessGroups = vi.fn();
 const renameCalendarConnection = vi.fn();
-const setCalendarBookingDefault = vi.fn();
 const disconnectCalendarConnection = vi.fn();
 
 vi.mock("../services/api", () => ({
@@ -33,7 +31,6 @@ vi.mock("../services/api", () => ({
     getIntegrationsStatus: (...a: unknown[]) => getIntegrationsStatus(...a),
     getBusinessGroups: (...a: unknown[]) => getBusinessGroups(...a),
     renameCalendarConnection: (...a: unknown[]) => renameCalendarConnection(...a),
-    setCalendarBookingDefault: (...a: unknown[]) => setCalendarBookingDefault(...a),
     disconnectCalendarConnection: (...a: unknown[]) => disconnectCalendarConnection(...a),
     createIntegrationStartToken: vi.fn(async () => ({ url: "/api/integrations/google/start" })),
     getIntegrationOptions: vi.fn(async () => ({ options: [], selected: null })),
@@ -140,16 +137,6 @@ beforeEach(() => {
       isBookingDefault: false,
     },
   });
-  setCalendarBookingDefault.mockResolvedValue({
-    connection: {
-      id: "conn-google-nutra",
-      provider: "google",
-      label: "Nutra Wellness",
-      email: "nutra@example.test",
-      status: "connected",
-      isBookingDefault: true,
-    },
-  });
   disconnectCalendarConnection.mockResolvedValue({
     disconnected: true,
     provider: "calendly",
@@ -227,25 +214,12 @@ describe("Integrations — connected accounts list", () => {
     expect(await screen.findByText("Nutra Wellness HQ")).toBeInTheDocument();
   });
 
-  it("lets a non-target row become the booking target", async () => {
+  it("keeps booking setup on the Bookings page", async () => {
     renderPage();
 
-    const row = await waitFor(() =>
-      screen.getByTestId("calendar-connection-conn-google-nutra"),
-    );
-    fireEvent.click(within(row).getByRole("button", { name: /make booking target/i }));
-
-    await waitFor(() =>
-      expect(setCalendarBookingDefault).toHaveBeenCalledWith("conn-google-nutra"),
-    );
-
-    /*
-     * And the page re-reads the list. It must: the write cleared the old
-     * default and the response named only the new one, so the row that LOST
-     * the flag is knowable from nowhere else. Patching state locally is how a
-     * UI ends up showing two booking targets.
-     */
-    await waitFor(() => expect(getIntegrationsStatus).toHaveBeenCalledTimes(2));
+    const row = await waitFor(() => screen.getByTestId("calendar-connection-conn-google-nutra"));
+    expect(within(row).queryByRole("button", { name: /make booking target/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /manage booking setup/i })).toHaveAttribute("href", "/bookings");
   });
 
   it("confirms before removing a row, then removes that row", async () => {

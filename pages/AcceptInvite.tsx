@@ -95,7 +95,7 @@ const AcceptInvite: React.FC<AcceptInviteProps> = ({ onAccept }) => {
         <div className="rounded-[1.45rem] border border-[#0F172A]/10 bg-[#F8FAFC]/94 p-5 text-center shadow-[0_14px_42px_rgba(15,23,42,0.09)] backdrop-blur-xl">
           {status === "working" && (
             <>
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[#0F172A]/15 border-t-[#F59E0B]" />
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[#0F172A]/15 border-t-[#f15a24]" />
               <h1 className="text-[19px] font-medium tracking-[-0.035em] text-[#0F172A]">
                 Accepting your invitation
               </h1>
@@ -142,7 +142,7 @@ const AcceptInvite: React.FC<AcceptInviteProps> = ({ onAccept }) => {
               </p>
               <Link
                 to="/login"
-                className="mt-4 flex w-full items-center justify-center min-h-[44px] rounded-full border border-[#0F172A]/12 px-5 py-3 text-[14px] font-medium text-[#0F172A]/72 transition hover:border-[#F59E0B]/40 hover:text-[#F59E0B]"
+                className="mt-4 flex w-full items-center justify-center min-h-[44px] rounded-full border border-[#0F172A]/12 px-5 py-3 text-[14px] font-medium text-[#0F172A]/72 transition hover:border-[#f15a24]/40 hover:text-[#f15a24]"
               >
                 Back to sign in
               </Link>

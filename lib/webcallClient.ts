@@ -26,7 +26,11 @@ export type WebcallStatus =
   | "ended"
   | "error";
 
+export type VoiceAction = {id:string;name:string;args:Record<string,unknown>;preview:Record<string,any>;state:string;expiresAt:number;result?:any};
+export type VoiceDiagnostics = {inputLevel:number;latencyMs:number|null;interruptions:number;droppedFrames:number;playbackGaps:number};
 export interface WebcallCallbacks {
+  onAction?: (action:VoiceAction)=>void;
+  onDiagnostics?: (diagnostics:VoiceDiagnostics)=>void;
   onStatusChange?: (status: WebcallStatus) => void;
   onReady?: (info: {
     agentName: string;
@@ -100,7 +104,7 @@ export class WebcallClient {
   private ws: WebSocket | null = null;
   private micStream: MediaStream | null = null;
   private captureContext: AudioContext | null = null;
-  private captureNode: ScriptProcessorNode | null = null;
+  private captureNode: ScriptProcessorNode | AudioWorkletNode | null = null;
   private micSource: MediaStreamAudioSourceNode | null = null;
   private playbackContext: AudioContext | null = null;
   private playbackCursor = 0;
@@ -126,9 +130,14 @@ export class WebcallClient {
   private terminalReported = false;
   private speakingResetTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private lastMeter = 0;
+  private diagnostics:VoiceDiagnostics = {inputLevel:0,latencyMs:null,interruptions:0,droppedFrames:0,playbackGaps:0};
+  decideAction(id:string,decision:"approve"|"cancel") { if(this.ws?.readyState === WebSocket.OPEN)this.ws.send(JSON.stringify({type:"owner.action.decision",id,decision})); }
   constructor(
     private wsUrl: string,
     private callbacks: WebcallCallbacks = {},
+    private options: {deviceId?:string} = {},
   ) {}
 
   get isMuted() {
@@ -145,10 +154,15 @@ export class WebcallClient {
 
   async start(): Promise<void> {
     this.stopped = false;
+    // Normal web calls are continuous and hands-free. OpenAI's server VAD
+    // decides when a turn begins and ends; the UI's Mute control is the only
+    // intentional way to stop microphone transmission during a live call.
+    this.muted = false;
     this.callbacks.onStatusChange?.("connecting");
 
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
+        ...(this.options.deviceId ? {deviceId:{exact:this.options.deviceId}} : {}),
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
@@ -156,32 +170,53 @@ export class WebcallClient {
       },
     });
 
+    this.setMuted(this.muted);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const AudioContextCtor: typeof AudioContext =
       (window as any).AudioContext || (window as any).webkitAudioContext;
 
-    this.captureContext = new AudioContextCtor();
-    this.playbackContext = new AudioContextCtor();
+    this.captureContext = new AudioContextCtor({ sampleRate: TARGET_SAMPLE_RATE });
+    this.playbackContext = new AudioContextCtor({ latencyHint: "interactive" });
+    await Promise.all([this.captureContext.resume(), this.playbackContext.resume()]);
+    let workletReady = false;
+    if (this.captureContext.audioWorklet) {
+      try {
+        await this.captureContext.audioWorklet.addModule(new URL("./webcallCapture.worklet.js", import.meta.url));
+        workletReady = true;
+      } catch { /* Older browsers retain the fallback capture path. */ }
+    }
     this.playbackCursor = this.playbackContext.currentTime;
 
     this.ws = new WebSocket(this.wsUrl);
 
     this.ws.onopen = () => {
+      this.pingTimer = setInterval(()=>{if(this.ws?.readyState === WebSocket.OPEN)this.ws.send(JSON.stringify({type:"diagnostics.ping",sentAt:Date.now()}));},3000);
       this.micSource = this.captureContext!.createMediaStreamSource(this.micStream!);
-      // ScriptProcessorNode is deprecated but universally supported and is
-      // the simplest single-file way to get raw PCM frames without shipping
-      // a separate AudioWorklet module through the Vite build.
-      this.captureNode = this.captureContext!.createScriptProcessor(4096, 1, 1);
-      this.captureNode.onaudioprocess = (event) => {
+      const sendSamples = (input: Float32Array) => {
+        if(Date.now()-this.lastMeter>150) {
+          this.lastMeter=Date.now();
+          this.diagnostics.inputLevel=this.muted ? 0 : Math.min(1,Math.sqrt(input.reduce((n,v)=>n+v*v,0)/input.length)*5);
+          this.callbacks.onDiagnostics?.({...this.diagnostics});
+        }
         if (this.stopped || this.muted) return;
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-        const input = event.inputBuffer.getChannelData(0);
+        // Do not accumulate seconds of stale speech on a stalled connection.
+        if (this.ws.bufferedAmount > 192000) {this.diagnostics.droppedFrames++;return;}
         const pcm16 = downsampleTo24k(input, this.captureContext!.sampleRate);
         if (!pcm16.length) return;
         this.ws.send(
           JSON.stringify({ type: "input_audio", audio: int16ArrayToBase64(pcm16) }),
         );
       };
+      if (workletReady) {
+        const node = new AudioWorkletNode(this.captureContext!, "agently-capture");
+        node.port.onmessage = (event) => sendSamples(event.data);
+        this.captureNode = node;
+      } else {
+        const node = this.captureContext!.createScriptProcessor(1024, 1, 1);
+        node.onaudioprocess = (event) => sendSamples(event.inputBuffer.getChannelData(0));
+        this.captureNode = node;
+      }
       this.micSource.connect(this.captureNode);
       // Required by the WebAudio spec for ScriptProcessorNode to fire, but
       // we don't want mic audio actually reaching the speakers.
@@ -225,6 +260,8 @@ export class WebcallClient {
 
   private handleServerMessage(msg: any) {
     switch (msg.type) {
+      case "owner.action": this.callbacks.onAction?.(msg);break;
+      case "diagnostics.pong": this.diagnostics.latencyMs=Math.max(0,Date.now()-Number(msg.sentAt));break;
       case "session.ready":
         this.callbacks.onStatusChange?.("ready");
         this.callbacks.onReady?.({
@@ -243,6 +280,7 @@ export class WebcallClient {
         if (msg.audio) this.playAudioChunk(msg.audio);
         break;
       case "agent.interrupted":
+        this.diagnostics.interruptions++;
         this.flushPlayback();
         break;
       case "user.speaking":
@@ -292,7 +330,10 @@ export class WebcallClient {
     source.connect(this.playbackContext.destination);
 
     const now = this.playbackContext.currentTime;
-    const startAt = Math.max(now, this.playbackCursor);
+    if(this.agentSpeaking && this.playbackCursor < now-0.04)this.diagnostics.playbackGaps++;
+    // Small initial/recovery buffer absorbs uneven network delivery without
+    // inserting a delay between chunks that already have contiguous audio.
+    const startAt = this.playbackCursor > now + 0.01 ? this.playbackCursor : now + 0.12;
     source.start(startAt);
     this.playbackCursor = startAt + buffer.duration;
     this.activeSources.add(source);
@@ -300,6 +341,7 @@ export class WebcallClient {
     this.setAgentSpeaking(true);
     source.onended = () => {
       this.activeSources.delete(source);
+      source.disconnect();
       if (this.speakingResetTimer) clearTimeout(this.speakingResetTimer);
       this.speakingResetTimer = setTimeout(() => {
         if (this.playbackContext && this.playbackCursor <= this.playbackContext.currentTime + 0.05) {
@@ -351,6 +393,7 @@ export class WebcallClient {
   stop() {
     if (this.stopped) return;
     this.stopped = true;
+    if(this.pingTimer) clearInterval(this.pingTimer);
     if (this.speakingResetTimer) clearTimeout(this.speakingResetTimer);
     this.flushPlayback();
 

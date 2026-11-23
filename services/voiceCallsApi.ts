@@ -811,7 +811,7 @@ export const voiceCallsApi = {
     getCall: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}`),
     getCallTranscript: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/transcript`),
     getCallMessages: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/messages`),
-    getCallRecording: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/recording`),
+    getCallRecording: (callId: string, recordingSid?: string) => request(`/api/calls/${encodeURIComponent(callId)}/recording${recordingSid ? `?recordingSid=${encodeURIComponent(recordingSid)}` : ""}`),
     getCallUnansweredQuestions: (callId: string) => request(`/api/calls/${encodeURIComponent(callId)}/unanswered-questions`),
     summarizeCall: (callId: string, payload: unknown = { force: true }) => request(`/api/calls/${encodeURIComponent(callId)}/summarize`, { method: 'POST', body: payload }),
     updateCallTags: (callId: string, payload: { tags: string[]; action?: 'add' | 'remove' | 'replace' }) =>

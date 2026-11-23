@@ -1,5 +1,5 @@
 import React, { Suspense, useLayoutEffect, type ReactNode } from "react";
-import { BrowserRouter, useLocation } from "react-router-dom";
+import { BrowserRouter, useLocation, useNavigationType } from "react-router-dom";
 
 interface StableRouterProps {
   children: ReactNode;
@@ -99,7 +99,20 @@ export const RouteCommitBoundary: React.FC<RouteCommitBoundaryProps> = ({
   fallback,
 }) => {
   const location = useLocation();
+  const navigationType = useNavigationType();
   const routeKey = `${location.key}:${location.pathname}${location.search}`;
+
+  /*
+   * A new page opens at its top. The browser keeps the window's scroll offset
+   * across client-side navigations, so following "Get started" from halfway
+   * down the landing page opened sign-up halfway down too. Back/forward (POP)
+   * is left alone so the browser can restore where the user was, and a URL
+   * with a #fragment is left to the page that owns that anchor.
+   */
+  useLayoutEffect(() => {
+    if (navigationType === "POP" || location.hash) return;
+    window.scrollTo(0, 0);
+  }, [location.pathname, navigationType, location.hash]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.agentlyRoute = location.pathname;

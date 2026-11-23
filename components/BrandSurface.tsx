@@ -11,14 +11,7 @@ import React from "react";
  * prefers-color-scheme + [data-theme] pair at all, so this one <style> block
  * carries them -- exactly the split LandingPage already uses.
  *
- * Dark mode resolves in three layers, in this order:
- *   1. the light palette, unconditionally;
- *   2. the dark palette under prefers-color-scheme, guarded so an explicit
- *      light choice still wins;
- *   3. the dark palette under :root[data-theme="dark"], for the toggle the
- *      landing header writes to documentElement.
- * Layer 2's guard is what stops "I picked light" from being overridden by the
- * operating system a moment later.
+ * Dark mode is deliberately off for now -- see SURFACE_STYLE below.
  *
  * A note on the tints. Tailwind v3 silently emits NOTHING for an opacity
  * modifier on a custom property -- `bg-[var(--orange)]/10` produces no rule at
@@ -28,33 +21,21 @@ import React from "react";
  * a dark surface reads as almost nothing.
  */
 
+/*
+ * LIGHT ONLY inside the app, for now. The dark layers (prefers-color-scheme
+ * and :root[data-theme="dark"]) used to live here too, but only the pages
+ * wrapped in BrandSurface honoured them -- the rest of the app is light. So an
+ * OS in dark mode, or the landing page's theme toggle having saved "dark" on
+ * <html>, turned Integrations black on reload while every other screen stayed
+ * light. Restore the dark palette when the whole app supports it.
+ */
 const SURFACE_STYLE = `
 .ag-surface{
-  color-scheme:light dark;
-  --bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;
-  --orange:#f15a24;--orange-deep:#b63a0e;
-  --orange-tint:rgba(241,90,36,0.10);--orange-tint-strong:rgba(241,90,36,0.17);
-  --deep:#07101c;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;
-}
-@media(prefers-color-scheme:dark){
-  :root:not([data-theme="light"]) .ag-surface{
-    color-scheme:dark;
-    --bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;
-    --orange:#ff6a32;--orange-deep:#ff7a45;
-    --orange-tint:rgba(255,106,50,0.16);--orange-tint-strong:rgba(255,106,50,0.24);
-  }
-}
-:root[data-theme="light"] .ag-surface{
   color-scheme:light;
   --bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;
   --orange:#f15a24;--orange-deep:#b63a0e;
   --orange-tint:rgba(241,90,36,0.10);--orange-tint-strong:rgba(241,90,36,0.17);
-}
-:root[data-theme="dark"] .ag-surface{
-  color-scheme:dark;
-  --bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;
-  --orange:#ff6a32;--orange-deep:#ff7a45;
-  --orange-tint:rgba(255,106,50,0.16);--orange-tint-strong:rgba(255,106,50,0.24);
+  --deep:#07101c;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;
 }
 /* Native controls (time/date/select pickers) follow color-scheme only when the
  * element itself declares it, so inputs inside the surface inherit it here. */

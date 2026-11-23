@@ -30,7 +30,7 @@ const BackLink: React.FC<{
         if (window.history.length > 1) navigate(-1);
         else navigate(to);
       }}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-[12px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#0F172A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F59E0B] ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-[12px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#0F172A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f15a24] ${className}`}
       aria-label={label}
     >
       <svg

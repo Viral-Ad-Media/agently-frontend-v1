@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, NETWORK_OFFLINE_MESSAGE } from "../services/api";
 import type { AuthChallenge } from "../services/api";
@@ -110,6 +110,8 @@ const strengthHint = (value: string, score: number) => {
   return "Strong password.";
 };
 
+const SIGNUP_DRAFT_KEY = "agently.signupDraft";
+
 const Login: React.FC<LoginProps> = ({
   onLogin,
   onRegister,
@@ -118,10 +120,39 @@ const Login: React.FC<LoginProps> = ({
   onResendCode,
   resendCooldownSeconds = 60,
 }) => {
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [name, setName] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [email, setEmail] = useState("");
+  // /login?mode=signup (the landing page's "Create account" and pricing links) opens on the sign-up tab.
+  const [authMode, setAuthMode] = useState<"signin" | "signup">(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("mode") === "signup"
+      ? "signup"
+      : "signin",
+  );
+  // Name, company and email survive a trip to Terms and back (never the
+  // password). Session-scoped, and cleared once the form is submitted.
+  const draft = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIGNUP_DRAFT_KEY) || "{}") as {
+        name?: string;
+        companyName?: string;
+        email?: string;
+      };
+    } catch {
+      return {};
+    }
+  })();
+  const [name, setName] = useState(draft.name || "");
+  const [companyName, setCompanyName] = useState(draft.companyName || "");
+  const [email, setEmail] = useState(draft.email || "");
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        SIGNUP_DRAFT_KEY,
+        JSON.stringify({ name, companyName, email }),
+      );
+    } catch {
+      /* storage disabled: nothing to restore later */
+    }
+  }, [name, companyName, email]);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -166,6 +197,11 @@ const Login: React.FC<LoginProps> = ({
           ? await onRegister({ name, companyName, email, password })
           : await onLogin(email, password);
       setChallenge(next);
+      try {
+        sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
+      } catch {
+        /* non-fatal */
+      }
       // Do not keep the password in component state while the user reads their
       // email. It has done its job.
       setPassword("");
@@ -205,6 +241,16 @@ const Login: React.FC<LoginProps> = ({
   const switchMode = (mode: "signin" | "signup") => {
     setAuthMode(mode);
     setError("");
+    // Keep the tab in the URL so leaving for Terms and pressing Back lands on
+    // the same tab instead of the default sign-in view.
+    try {
+      const url = new URL(window.location.href);
+      if (mode === "signup") url.searchParams.set("mode", "signup");
+      else url.searchParams.delete("mode");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    } catch {
+      /* non-fatal: the tab still switches */
+    }
   };
 
   return (
@@ -361,6 +407,7 @@ const Login: React.FC<LoginProps> = ({
               By creating an account, you agree to Agently&apos;s{" "}
               <Link
                 to="/terms"
+                state={{ from: "/login?mode=signup" }}
                 className="font-medium text-[var(--accent)] no-underline hover:underline hover:underline-offset-[3px]"
               >
                 Terms &amp; Privacy

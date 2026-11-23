@@ -20,6 +20,7 @@ import {
   VoiceSettings,
 } from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
+import BusinessCalendarPicker from "../components/BusinessCalendarPicker";
 import { formatTimezoneOptionLabel } from "@/utils/timezones";
 import { useWebcall } from "../contexts/WebcallContext";
 
@@ -1175,6 +1176,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       "voicemailMaxRedialAttempts",
       "callScreeningEnabled",
       "callScreeningMessage",
+      "qualificationPlaybook",
     ] as const;
 
     fields.forEach((field) => {
@@ -1217,6 +1219,13 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     const savedFields = baseline.dataCaptureFields || [];
     if (JSON.stringify(draftFields) !== JSON.stringify(savedFields)) {
       updates.dataCaptureFields = draftFields;
+    }
+
+    if (
+      JSON.stringify(currentDraft.qualificationRules || {}) !==
+      JSON.stringify(baseline.qualificationRules || {})
+    ) {
+      updates.qualificationRules = currentDraft.qualificationRules || {};
     }
 
     return updates;
@@ -2108,7 +2117,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     strokeWidth="2.35"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-[#F59E0B]"
+                    className="text-[#f15a24]"
                   >
                     <path d="M20 21a8 8 0 0 0-16 0" />
                     <circle cx="12" cy="7" r="4" />
@@ -2142,7 +2151,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                   disabled={
                     !hasUnsavedChanges || busy === "save-agent-settings"
                   }
-                  className="flex-1 sm:flex-none whitespace-nowrap rounded-xl bg-[#F59E0B] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white transition-all hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex-1 sm:flex-none whitespace-nowrap rounded-xl bg-[#f15a24] px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white transition-all hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy === "save-agent-settings" ? "Saving…" : "Save Changes"}
                 </button>
@@ -2484,7 +2493,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       -webkit-appearance: none; appearance: none;
                       width: 100%; height: 6px; min-height: 0; border-radius: 999px; outline: none;
                       cursor: pointer; margin: 0; padding: 0; border: 0;
-                      background: linear-gradient(90deg,#F59E0B 0%,#F59E0B var(--agwc-fill,0%),#E2E8F0 var(--agwc-fill,0%),#E2E8F0 100%);
+                      background: linear-gradient(90deg,#f15a24 0%,#f15a24 var(--agwc-fill,0%),#E2E8F0 var(--agwc-fill,0%),#E2E8F0 100%);
                     }
                     .agwc-range::-webkit-slider-runnable-track {
                       height: 6px; border-radius: 999px; background: transparent;
@@ -2492,18 +2501,18 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     .agwc-range::-webkit-slider-thumb {
                       -webkit-appearance: none; appearance: none;
                       width: 16px; height: 16px; margin-top: -5px;
-                      border-radius: 999px; background: #fff; border: 3px solid #F59E0B;
+                      border-radius: 999px; background: #fff; border: 3px solid #f15a24;
                       box-shadow: 0 2px 6px rgba(15,23,42,0.18);
                     }
                     .agwc-range::-moz-range-track {
                       height: 6px; border-radius: 999px; background: #E2E8F0;
                     }
                     .agwc-range::-moz-range-progress {
-                      height: 6px; border-radius: 999px; background: #F59E0B;
+                      height: 6px; border-radius: 999px; background: #f15a24;
                     }
                     .agwc-range::-moz-range-thumb {
                       width: 16px; height: 16px; border-radius: 999px;
-                      background: #fff; border: 3px solid #F59E0B;
+                      background: #fff; border: 3px solid #f15a24;
                       box-shadow: 0 2px 6px rgba(15,23,42,0.18);
                     }
                     .agwc-boost {
@@ -2524,7 +2533,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                       padding: 0 0.15rem; cursor: pointer; background: #E2E8F0;
                       transition: background 160ms ease;
                     }
-                    button.agwc-toggle.is-on { background: #F59E0B; }
+                    button.agwc-toggle.is-on { background: #f15a24; }
                     .agwc-toggle-knob {
                       width: 1.05rem; height: 1.05rem; border-radius: 999px; background: #fff;
                       box-shadow: 0 1px 3px rgba(15,23,42,0.2); transition: transform 160ms ease;
@@ -2728,6 +2737,95 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               </div>
             </div>
 
+            <div className="ag-prompt-purpose-card space-y-5">
+              <div>
+                <h3 className="text-sm font-medium leading-tight text-[#0F172A]">
+                  Lead qualification playbook
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-[#94a3b8]">
+                  Tell this agent what evidence to gather naturally during caller conversations. After a completed call, the transcript is assessed against this playbook and added to the lead record for your review.
+                </p>
+              </div>
+              <div>
+                <Label>Questions and qualification evidence</Label>
+                <textarea
+                  rows={5}
+                  className="ag-textarea-premium"
+                  placeholder={"Example:\n• Are they the decision maker?\n• What result do they need and by when?\n• What budget or buying signal did they share?"}
+                  value={draft.qualificationPlaybook || ""}
+                  onChange={(event) =>
+                    updateDraftField("qualificationPlaybook", event.target.value)
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Qualified score threshold</Label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
+                    value={draft.qualificationRules?.qualified_min_score ?? 80}
+                    onChange={(event) =>
+                      updateDraftField("qualificationRules", {
+                        ...(draft.qualificationRules || {}),
+                        qualified_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 80)),
+                      })
+                    }
+                  />
+                  <p className="mt-1 text-[10px] text-[#7a8493]">This can mark a lead qualified. It never books an appointment by score alone.</p>
+                </div>
+                <div>
+                  <Label>Nurture score threshold</Label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
+                    value={draft.qualificationRules?.nurture_min_score ?? 50}
+                    onChange={(event) =>
+                      updateDraftField("qualificationRules", {
+                        ...(draft.qualificationRules || {}),
+                        nurture_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 50)),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Possible disqualifying signals</Label>
+                <input
+                  type="text"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
+                  placeholder="wrong number, outside service area, no authority"
+                  value={(draft.qualificationRules?.disqualify_signals || []).join(", ")}
+                  onChange={(event) =>
+                    updateDraftField("qualificationRules", {
+                      ...(draft.qualificationRules || {}),
+                      disqualify_signals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                    })
+                  }
+                />
+                <p className="mt-1 text-[10px] text-[#7a8493]">Matches are flagged for owner review; the AI does not automatically discard the lead.</p>
+              </div>
+              <div>
+                <Label>Booking readiness criteria</Label>
+                <textarea
+                  rows={2}
+                  className="ag-textarea-premium"
+                  placeholder="Example: Confirm the caller's need, timeline, contact details, chosen service, and explicit request to book."
+                  value={draft.qualificationRules?.booking_criteria || ""}
+                  onChange={(event) =>
+                    updateDraftField("qualificationRules", {
+                      ...(draft.qualificationRules || {}),
+                      booking_criteria: event.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
             <div>
               <Label>Communication Tone</Label>
               <div className="grid grid-cols-3 gap-2">
@@ -2749,6 +2847,14 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ KNOWLEDGE TAB */}
       {tab === "knowledge" && (
         <div className="space-y-6">
+          <BusinessCalendarPicker
+            agentId={draft.id}
+            value={draft.calendarIntegrationId}
+            onSaved={(calendarIntegrationId) => {
+              setDraft((current) => ({ ...current, calendarIntegrationId }));
+              setSavedAgentBaseline((current) => ({ ...current, calendarIntegrationId }));
+            }}
+          />
           <div
             className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
             data-tour="agent-knowledge"

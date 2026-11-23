@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AuthShell, BackButton } from "../components/AuthShell";
 
 /**
@@ -25,9 +25,16 @@ const SECTIONS: Array<{ id: string; label: string }> = [
 
 const Terms: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Pages that link here say where they are (sign-up passes its own URL), so
+  // Back returns there rather than to whatever history.length guesses.
+  const from = (location.state as { from?: string } | null)?.from;
   const goBack = () => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/login");
+    // Opened from within the app: step back to that exact entry (sign-up
+    // keeps its tab in the URL, so this lands on sign-up). Opened directly:
+    // go to the page that linked here, or the login screen.
+    if (location.key !== "default") navigate(-1);
+    else navigate(from || "/login");
   };
 
   return (

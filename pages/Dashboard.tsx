@@ -543,14 +543,14 @@ const StatCard: React.FC<{
       <i className={`${icon} text-[13px] sm:text-[15px]`} aria-hidden="true" />
     </span>
     <div className="min-w-0">
-      <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#687386] sm:text-[10px] sm:tracking-[0.18em]">
+      <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#76736b] sm:text-[10px] sm:tracking-[0.18em]">
         <MarqueeText>{label}</MarqueeText>
       </p>
-      <p className="mt-1 text-[1.08rem] font-medium leading-none tracking-[-0.04em] text-[#232f3e] sm:text-[1.35rem]">
+      <p className="mt-1 text-[1.08rem] font-medium leading-none tracking-[-0.04em] text-[#101216] sm:text-[1.35rem]">
         <MarqueeText>{value}</MarqueeText>
       </p>
       {sub && (
-        <p className="mt-1 text-[10px] font-normal text-[#6b7484] sm:text-[11px]">
+        <p className="mt-1 text-[10px] font-normal text-[#76736b] sm:text-[11px]">
           <MarqueeText>{sub}</MarqueeText>
         </p>
       )}
@@ -613,26 +613,26 @@ const AgentFilterToolbar: React.FC<{
   const chipClass = (active: boolean) =>
     `flex h-8 shrink-0 snap-center items-center justify-center rounded-full border px-3 text-[13px] font-medium leading-none tracking-[-0.02em] transition-colors ${
       active
-        ? "border-[#F59E0B] bg-[#F59E0B] text-white"
-        : "border-[#e2e8f0] bg-[#f8fafc] text-[#475569] hover:border-[#F59E0B]/35 hover:bg-white hover:text-[#0F172A]"
+        ? "border-[#f15a24] bg-[#f15a24] text-white"
+        : "border-[#d9d7d0] bg-[#f6f5f1] text-[#5a5b61] hover:border-[#f15a24]/35 hover:bg-white hover:text-[#101216]"
     }`;
 
   const chevronClass = (visible: boolean) =>
-    `h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[#64748b] transition hover:border-[#F59E0B]/40 hover:text-[#0F172A] ${
+    `h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d9d7d0] bg-white text-[#76736b] transition hover:border-[#f15a24]/40 hover:text-[#101216] ${
       visible ? "hidden md:inline-flex" : "hidden"
     }`;
 
   return (
-    <section className="rounded-[1.35rem] border border-[#e2e8f0] bg-white px-2 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.035)] sm:px-3 md:px-3 md:py-6">
+    <section className="rounded-[1.35rem] border border-[#d9d7d0] bg-white px-2 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.035)] sm:px-3 md:px-3 md:py-6">
       <div className="flex flex-col gap-3 md:gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="md:hidden">
-          <label className="mb-1.5 block text-[11px] font-medium text-[#64748b]">
+          <label className="mb-1.5 block text-[11px] font-medium text-[#76736b]">
             Agent
           </label>
           <select
             value={selectedAgentId}
             onChange={(event) => onSelectAgent(event.target.value)}
-            className="h-10 w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 text-[13px] font-normal text-[#0F172A] outline-none transition focus:border-[#F59E0B] focus:bg-white"
+            className="h-10 w-full rounded-xl border border-[#d9d7d0] bg-[#f6f5f1] px-3 text-[13px] font-normal text-[#101216] outline-none transition focus:border-[#f15a24] focus:bg-white"
           >
             <option value="all">All Agents</option>
             {agents.map((agent) => (
@@ -693,12 +693,12 @@ const AgentFilterToolbar: React.FC<{
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end" data-tour="dashboard-filters">
-          <span className="text-[13px] font-medium text-[#64748b]">
+          <span className="text-[13px] font-medium text-[#76736b]">
             Time Range:
           </span>
           <button
             type="button"
-            className="h-9 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 text-[13px] font-medium text-[#0F172A] transition hover:border-[#F59E0B]/40 hover:bg-white"
+            className="h-9 rounded-xl border border-[#d9d7d0] bg-[#f6f5f1] px-3 text-[13px] font-medium text-[#101216] transition hover:border-[#f15a24]/40 hover:bg-white"
           >
             Last 7 days
           </button>
@@ -1115,7 +1115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           error banner above, which only renders when the dashboard fails to
           load — so the "Your headline numbers" tour step pointed at nothing. */}
       <div
-        className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 2xl:grid-cols-6"
         data-tour="dashboard-stats"
       >
         <StatCard
@@ -1175,15 +1175,15 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         <div className="min-w-0 ag-panel p-4 sm:p-5">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#76736b]">
                 Call flow
               </p>
-              <h2 className="mt-1 text-lg font-medium tracking-[-0.03em] text-[#232f3e]">
+              <h2 className="mt-1 text-lg font-medium tracking-[-0.03em] text-[#101216]">
                 Usage volume trend
               </h2>
             </div>
-            <div className="hidden items-center gap-1.5 text-[13px] font-medium text-[#64748b] sm:flex">
-              <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
+            <div className="hidden items-center gap-1.5 text-[13px] font-medium text-[#76736b] sm:flex">
+              <span className="h-2 w-2 rounded-full bg-[#f15a24]" />
               Calls
             </div>
           </div>
@@ -1201,7 +1201,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="#e2e8f0"
+                    stroke="#d9d7d0"
                   />
                   <XAxis
                     dataKey="name"
@@ -1223,7 +1223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                   <Tooltip
                     contentStyle={{
                       borderRadius: "14px",
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid #d9d7d0",
                       boxShadow: "0 12px 35px rgba(15, 23, 42, 0.12)",
                       fontSize: "12px",
                     }}
@@ -1232,8 +1232,8 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                     type="monotone"
                     dataKey="calls"
                     name="Calls"
-                    stroke="#F59E0B"
-                    fill="#F59E0B"
+                    stroke="#f15a24"
+                    fill="#f15a24"
                     fillOpacity={0.14}
                     strokeWidth={2.5}
                     dot={{ r: 3, strokeWidth: 2 }}
@@ -1259,7 +1259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         </div>
 
         <div className="min-w-0 ag-panel p-4 sm:p-5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#76736b]">
             Agent performance
           </p>
           <div className="mt-4 max-h-[25rem] space-y-3 overflow-y-auto pr-1">
@@ -1268,7 +1268,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                 key={agent.agentId}
                 type="button"
                 onClick={() => setSelectedAgentId(agent.agentId)}
-                className={`w-full rounded-2xl border p-3 text-left transition-colors sm:p-4 ${selectedAgentId === agent.agentId ? "border-[#F59E0B]/45 bg-[#fff7ed] text-[#0F172A]" : "border-[#e2e8f0] bg-[#f8fafc] text-[#232f3e] hover:border-[#F59E0B]/35 hover:bg-white"}`}
+                className={`w-full rounded-2xl border p-3 text-left transition-colors sm:p-4 ${selectedAgentId === agent.agentId ? "border-[#f15a24]/45 bg-[#fff7ed] text-[#101216]" : "border-[#d9d7d0] bg-[#f6f5f1] text-[#101216] hover:border-[#f15a24]/35 hover:bg-white"}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="min-w-0 flex-1 text-[12px] font-medium tracking-[-0.02em] sm:text-[13px]">
@@ -1278,7 +1278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
                     {agent.totalCalls} calls
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-1.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#475569] sm:gap-2 sm:text-[10px] sm:tracking-widest">
+                <div className="mt-3 grid grid-cols-3 gap-1.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#5a5b61] sm:gap-2 sm:text-[10px] sm:tracking-widest">
                   <span className="truncate">{agent.completedCalls} done</span>
                   <span className="truncate">{agent.outboundCalls} out</span>
                   <span className="truncate">
@@ -1298,7 +1298,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="min-w-0 ag-panel p-4 sm:p-5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#76736b]">
             Direction mix
           </p>
           <ChartFrame className="mt-4 h-64 sm:h-[21rem]" ready={chartsReady}>
@@ -1349,10 +1349,10 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
         <div className="min-w-0 ag-panel p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3" data-tour="dashboard-recent">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#687386]">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#76736b]">
                 Recent calls
               </p>
-              <h2 className="text-base font-medium tracking-[-0.03em] text-[#232f3e]">
+              <h2 className="text-base font-medium tracking-[-0.03em] text-[#101216]">
                 Latest 5 activities
               </h2>
             </div>

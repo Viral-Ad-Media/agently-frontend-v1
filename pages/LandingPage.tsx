@@ -53,7 +53,7 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "How does the $10 minimum pay as you go work?",
-    a: "You pay only for the Agently services you use, with a minimum of $10 to get started. There is no monthly package required. Custom setups and monthly options are planned for later as the broader platform becomes ready.",
+    a: "You pay only for the Agently services you use, with a minimum of $10 to get started. There is no monthly package required. Prefer not to top up by hand? Save your card, set a monthly cap, and Agently tops up your credit automatically whenever it runs low.",
   },
   {
     q: "How is the demo conversation preview generated?",
@@ -242,7 +242,7 @@ const WorkflowIcon: React.FC = () => (
 );
 
 const ShieldIcon: React.FC = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
+  <svg className="lp-ficon" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
     <path d="m9 12 2 2 4-4" />
   </svg>
@@ -305,7 +305,7 @@ const INTEGRATIONS: { name: string; Mark: React.FC }[] = [
  * layout, typography, spacing and responsive behavior is Tailwind utilities.
  */
 const STYLE = `
-:root{color-scheme:light dark;--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--deep:#07101c;--deep2:#0d1724;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;--orange:#f15a24;--orange-deep:#b63a0e;--warm:#ece9e1;--pad:72px;--max:1296px}
+:root{color-scheme:light dark;--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--deep:#07101c;--deep2:#0d1724;--footer:#07101c;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;--orange:#f15a24;--orange-deep:#b63a0e;--warm:#ece9e1;--pad:72px;--max:1296px}
 @media(prefers-color-scheme:dark){:root{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45}}
 :root[data-theme="light"]{color-scheme:light;--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;--orange:#f15a24;--orange-deep:#b63a0e}
 :root[data-theme="dark"]{color-scheme:dark;--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45}
@@ -316,6 +316,10 @@ const STYLE = `
 @keyframes lp-wire-flow{to{stroke-dashoffset:-40}}
 @keyframes lp-integration-scroll{to{transform:translateX(-50%)}}
 .lp-container{width:min(calc(100% - (var(--pad) * 2)),var(--max));min-width:0;margin-inline:auto}
+.lp-fit{scroll-margin-top:65px;min-height:calc(100vh - 65px);min-height:calc(100svh - 65px);display:flex;flex-direction:column;justify-content:center}
+@media(min-width:901px){.lp-price-grid{zoom:.8}}
+@media(min-width:901px) and (max-height:700px){.lp-price-grid{zoom:.72}}
+@media(max-width:699px){.lp-fit{scroll-margin-top:60px;min-height:calc(100vh - 60px);min-height:calc(100svh - 60px)}}
 .lp-header{background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .lp-hero-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:0;transition:opacity 1.4s ease;z-index:-3}
 .lp-hero-bg.lp-active{opacity:1}
@@ -376,6 +380,24 @@ const LandingPage: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+  /* Close the narrow-screen account menu on outside tap or Escape. */
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAccountOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [accountOpen]);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
   const firstFieldRef = useRef<HTMLInputElement | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
@@ -514,15 +536,15 @@ const LandingPage: React.FC = () => {
           <a
             href="#top"
             onClick={handleAnchorClick}
-            className="inline-flex items-center gap-2.5 text-[22px] font-semibold tracking-[-1.1px] shrink-0 font-['DM_Sans',sans-serif]"
+            className="inline-flex items-center gap-2.5 text-[26px] max-[699px]:text-[23px] font-semibold tracking-[-1.1px] shrink-0 font-['DM_Sans',sans-serif]"
             aria-label="Agently home"
           >
             <img
               src="/landing/logo.png"
               alt=""
-              className="w-[30px] h-[30px] max-[479px]:w-8 max-[479px]:h-8 object-contain"
+              className="w-9 h-9 max-[699px]:w-8 max-[699px]:h-8 object-contain"
             />
-            <span className="max-[479px]:hidden">agently</span>
+            <span className="max-[479px]:hidden">Agently</span>
           </a>
 
           <div
@@ -575,7 +597,10 @@ const LandingPage: React.FC = () => {
               aria-expanded={menuOpen}
               aria-label={menuOpen ? "Close navigation" : "Open navigation"}
               aria-controls="primary-nav"
-              onClick={() => setMenuOpen((o) => !o)}
+              onClick={() => {
+                setAccountOpen(false);
+                setMenuOpen((o) => !o);
+              }}
             >
               <MenuOpenIcon />
               <MenuCloseIcon />
@@ -589,17 +614,63 @@ const LandingPage: React.FC = () => {
             <a
               href="#pricing"
               onClick={handleAnchorClick}
-              className={`${BTN} bg-[var(--ink)] text-[var(--bg)] max-[479px]:px-[11px] max-[479px]:text-xs`}
+              className={`${BTN} bg-[var(--ink)] text-[var(--bg)] max-[1100px]:hidden`}
             >
               Get started
             </a>
+            {/* Below 1100px the separate Log in button has no room, so Get started opens a small menu
+                with both choices. */}
+            <div ref={accountRef} className="relative min-[1101px]:hidden">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                aria-controls="account-menu"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAccountOpen((o) => !o);
+                }}
+                className={`${BTN} bg-[var(--ink)] text-[var(--bg)] gap-1.5 max-[479px]:px-[11px] max-[479px]:text-xs`}
+              >
+                Get started
+                <ChevronDownIcon
+                  className={`w-4 h-4 fill-none stroke-current [stroke-width:2] transition-transform ${accountOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {accountOpen && (
+                <div
+                  id="account-menu"
+                  role="menu"
+                  className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[200px] rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.16)]"
+                >
+                  <Link
+                    role="menuitem"
+                    to="/login?mode=signup"
+                    onClick={() => setAccountOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--ink)] hover:bg-[var(--warm)]"
+                  >
+                    Create account
+                    <span className="block text-xs font-normal text-[var(--muted)]">New to Agently</span>
+                  </Link>
+                  <Link
+                    role="menuitem"
+                    to="/login"
+                    onClick={() => setAccountOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--ink)] hover:bg-[var(--warm)]"
+                  >
+                    Log in
+                    <span className="block text-xs font-normal text-[var(--muted)]">Already have an account</span>
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </nav>
       </header>
 
       <main id="top">
         {/* Hero */}
-        <section className="relative min-h-[600px] max-[900px]:min-h-[560px] max-[767px]:min-h-0 max-[767px]:items-start bg-[var(--deep)] text-[var(--on-deep)] flex items-center overflow-hidden isolate">
+        <section className="relative min-h-[460px] max-[1023px]:min-h-0 max-[767px]:items-start bg-[var(--deep)] text-[var(--on-deep)] flex items-center overflow-hidden isolate">
           {HERO_IMAGES.map((img, i) => (
             <img
               key={img.src}
@@ -610,14 +681,18 @@ const LandingPage: React.FC = () => {
             />
           ))}
           <div className="lp-hero-shade" aria-hidden="true" />
-          <div className="lp-container relative pt-[46px] pb-10 max-[767px]:pt-[54px] max-[767px]:pb-[50px] max-[479px]:pt-[52px] max-[479px]:pb-[46px] w-full">
-            <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-5 text-inherit">
+          {/* Heading across the top; from 1024px the intro copy + buttons and the workflow card sit side by side
+              in one row beneath it, so the whole hero fits the first screen. Below 1024px it stacks as before. */}
+          <div className="lp-container relative pt-11 pb-11 max-[1023px]:pt-10 max-[1023px]:pb-10 max-[767px]:pt-[54px] max-[767px]:pb-[50px] max-[479px]:pt-[52px] max-[479px]:pb-[46px] w-full">
+            <p className="font-['IBM_Plex_Mono',monospace] text-[12px] font-medium tracking-[1.1px] uppercase mb-4 text-inherit">
               Customer engagement, always on
             </p>
-            <h1 className="font-semibold text-[80px] leading-[1.02] tracking-[-4px] max-w-[780px] mb-5 text-balance max-[1100px]:text-[68px] max-[1100px]:tracking-[-3.4px] max-[767px]:text-[48px] max-[767px]:tracking-[-2.5px] max-[699px]:text-[40px] max-[699px]:tracking-[-2.2px] max-[479px]:text-[34px] max-[479px]:tracking-[-1.7px] max-[359px]:text-[30px]">
+            <h1 className="font-semibold text-[60px] leading-[1.03] tracking-[-2.8px] max-w-[880px] mb-7 max-[1023px]:mb-4 text-balance max-[1100px]:text-[52px] max-[1100px]:tracking-[-2.4px] max-[767px]:text-[44px] max-[767px]:tracking-[-2.2px] max-[699px]:text-[38px] max-[699px]:tracking-[-2px] max-[479px]:text-[34px] max-[479px]:tracking-[-1.7px] max-[359px]:text-[30px]">
               Every conversation handled. Every opportunity within reach.
             </h1>
-            <p className="text-[18px] max-[699px]:text-base leading-[1.4] max-w-[560px] text-[#d7dce4] mb-6">
+            <div className="min-[1024px]:flex min-[1024px]:items-start min-[1024px]:justify-between min-[1024px]:gap-16">
+            <div className="min-w-0 min-[1024px]:max-w-[520px] min-[1024px]:pt-1">
+            <p className="text-[17px] leading-[1.5] max-w-[520px] text-[#d7dce4] mb-6 max-[699px]:text-base max-[699px]:mb-5">
               Agently brings voice agents, lead management, and website chat
               into one growing platform for businesses of every size—across
               every language your customers use.
@@ -638,8 +713,9 @@ const LandingPage: React.FC = () => {
                 Talk to sales
               </button>
             </div>
+            </div>
 
-            <div className="mt-[30px] max-[479px]:mt-[38px] w-full max-w-[570px] bg-[rgba(8,16,28,0.82)] border border-[rgba(255,255,255,0.18)] rounded-xl p-[15px_16px] max-[479px]:p-[15px] backdrop-blur-[18px]">
+            <div className="mt-[30px] max-[479px]:mt-[38px] min-[1024px]:mt-0 w-full max-w-[570px] min-[1024px]:w-[460px] min-[1024px]:shrink-0 bg-[rgba(8,16,28,0.82)] border border-[rgba(255,255,255,0.18)] rounded-xl p-[15px_16px] max-[479px]:p-[15px] backdrop-blur-[18px]">
               <div className="flex items-center justify-between gap-4 max-[479px]:flex-col max-[479px]:items-start mb-[14px]">
                 <p className="font-['IBM_Plex_Mono',monospace] text-xs tracking-[1px] uppercase text-[#bec7d2]">
                   Choose a workflow
@@ -694,11 +770,12 @@ const LandingPage: React.FC = () => {
                 </span>
               </div>
             </div>
+            </div>
           </div>
         </section>
 
         {/* Platform */}
-        <section id="platform" className="py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="platform" className="lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container">
             <div className="block max-w-[780px] mx-auto mb-[68px] max-[900px]:mb-[52px] max-[479px]:mb-12 text-center">
               <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-5 text-inherit">
@@ -901,7 +978,7 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* Integrations */}
-        <section id="integrations" className="bg-[var(--deep)] text-[var(--on-deep)] overflow-hidden py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="integrations" className="bg-[var(--deep)] text-[var(--on-deep)] overflow-hidden lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container">
             <div className="block max-w-[780px] mx-auto mb-11 text-center">
               <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-4 text-[var(--orange)]">
@@ -988,7 +1065,7 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* Recovery (dark) */}
-        <section id="recovery" className="bg-[var(--deep)] text-[var(--on-deep)] py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="recovery" className="bg-[var(--deep)] text-[var(--on-deep)] lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container grid grid-cols-2 max-[900px]:grid-cols-1 gap-[88px] max-[900px]:gap-[50px] items-center">
             <div>
               <h2 className="text-[52px] max-[767px]:text-[42px] leading-[0.98] tracking-[-3px] font-medium mt-0 mb-[26px] font-['DM_Sans',sans-serif]">
@@ -1036,7 +1113,7 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* Solutions */}
-        <section id="solutions" className="py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="solutions" className="lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container">
             <div className="block max-w-[780px] mx-auto mb-[68px] max-[900px]:mb-[52px] max-[479px]:mb-12 text-center">
               <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-5 text-inherit">
@@ -1075,9 +1152,9 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="pricing" className="lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container">
-            <div className="text-center mb-[62px]">
+            <div className="text-center mb-[clamp(28px,5vh,52px)]">
               <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-[18px] text-[var(--orange-deep)]">
                 Pricing
               </p>
@@ -1089,8 +1166,8 @@ const LandingPage: React.FC = () => {
                 pricing is in USD.
               </p>
             </div>
-            <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-[clamp(6px,1.4vw,20px)] max-[900px]:gap-2 max-[699px]:gap-[5px] max-[479px]:gap-1 items-stretch">
-              <article className="bg-[var(--surface)] border border-[var(--line)] rounded-[14px] max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
+            <div className="lp-price-grid grid grid-cols-[repeat(3,minmax(0,1fr))] gap-[clamp(6px,1.4vw,20px)] max-[900px]:gap-2 max-[699px]:gap-[5px] max-[479px]:gap-1 items-stretch">
+              <article className="bg-[var(--surface)] border border-[var(--line)] rounded-[14px] relative transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.12)] focus-within:-translate-y-1 max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
                 <p className="font-['IBM_Plex_Mono',monospace] text-xs max-[900px]:text-[10px] max-[699px]:text-[7.5px] max-[699px]:leading-[1.25] tracking-[1.1px] max-[900px]:tracking-[0.65px] max-[699px]:tracking-[0.35px] uppercase mb-[45px] max-[900px]:mb-7 max-[699px]:mb-[18px] text-[var(--muted)]">
                   Available now
                 </p>
@@ -1115,47 +1192,50 @@ const LandingPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-                <a
-                  href="#footer"
-                  onClick={handleAnchorClick}
-                  className={`${BTN} mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[var(--ink)] text-[var(--bg)] break-words`}
+                <Link
+                  to="/login?mode=signup"
+                  aria-label="Get started with pay as you go: create your account"
+                  className={`${BTN} after:content-[''] after:absolute after:inset-0 after:rounded-[inherit] mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[var(--ink)] text-[var(--bg)] break-words`}
                 >
                   Get started
-                </a>
+                </Link>
               </article>
 
-              <article className="bg-[var(--orange)] text-[#170a03] border border-[var(--orange)] rounded-[14px] max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
+              <article className="bg-[var(--orange)] text-[#170a03] border border-[var(--orange)] rounded-[14px] relative transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.12)] focus-within:-translate-y-1 max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
                 <p className="font-['IBM_Plex_Mono',monospace] text-xs max-[900px]:text-[10px] max-[699px]:text-[7.5px] max-[699px]:leading-[1.25] tracking-[1.1px] max-[900px]:tracking-[0.65px] max-[699px]:tracking-[0.35px] uppercase mb-[45px] max-[900px]:mb-7 max-[699px]:mb-[18px] opacity-80">
-                  Flexible option
+                  Card on file
                 </p>
                 <h3 className="font-['DM_Sans',sans-serif] text-[30px] max-[900px]:text-[clamp(18px,2.6vw,25px)] max-[699px]:text-[clamp(13px,4vw,17px)] tracking-[-1.4px] max-[900px]:tracking-[-0.7px] max-[699px]:tracking-[-0.35px] font-medium mt-0 mb-3 max-[699px]:mb-2 break-words">
-                  Custom setup
+                  Auto top-up
                 </h3>
                 <p className="text-[24px] max-[900px]:text-[clamp(16px,2.4vw,21px)] max-[699px]:text-[clamp(11px,3.5vw,15px)] font-medium mt-0 mb-[18px] max-[699px]:mb-3 break-words">
-                  Talk to us
+                  From $10{" "}
+                  <small className="text-[13px] max-[699px]:text-[8px] max-[699px]:block font-normal opacity-75">
+                    per top-up
+                  </small>
                 </p>
                 <p className="text-sm max-[699px]:text-[9px] leading-[1.5] max-[699px]:leading-[1.4] text-[#3d180b] mt-0 mb-7 max-[699px]:mb-[14px] min-h-[63px] max-[900px]:min-h-0 break-words">
-                  For larger teams, specialized workflows, or requirements that
-                  need a tailored setup.
+                  Save your card and set a monthly cap. Credit tops up
+                  automatically, so nothing pauses mid-month.
                 </p>
                 <ul className="lp-check list-none m-0 mb-[30px] max-[699px]:mb-4 p-0 pt-6 max-[900px]:pt-[18px] max-[699px]:pt-3 border-t border-[rgba(23,10,3,0.25)] grid gap-3 max-[900px]:gap-[9px] max-[699px]:gap-[7px] text-[13px] max-[900px]:text-[11px] max-[699px]:text-[8.5px] max-[699px]:leading-[1.35]">
-                  {["Multi-team workflows", "Configuration support", "Usage aligned to your operation"].map((li) => (
+                  {["Everything in Pay as you go", "Automatic top-ups when credit runs low", "A monthly cap you control", "Email when you reach your cap"].map((li) => (
                     <li key={li} className="flex gap-[9px] max-[699px]:gap-1 break-words">
                       <CheckIcon />
                       <span>{li}</span>
                     </li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  onClick={contactTrigger}
-                  className={`${BTN} mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[#170a03] text-white break-words`}
+                <Link
+                  to="/login?mode=signup"
+                  aria-label="Get started with auto top-up: create your account"
+                  className={`${BTN} after:content-[''] after:absolute after:inset-0 after:rounded-[inherit] mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[#170a03] text-white break-words`}
                 >
-                  Talk to sales
-                </button>
+                  Get started
+                </Link>
               </article>
 
-              <article className="bg-[var(--surface)] border border-[var(--line)] rounded-[14px] max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
+              <article className="bg-[var(--surface)] border border-[var(--line)] rounded-[14px] relative transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.12)] focus-within:-translate-y-1 max-[699px]:rounded-lg p-[clamp(14px,2.25vw,34px)] max-[900px]:p-[18px_14px] max-[699px]:p-[12px_8px] max-[479px]:p-[10px_6px] flex flex-col min-h-[470px] max-[900px]:min-h-[430px] max-[699px]:min-h-[390px] max-[479px]:min-h-[370px] min-w-0">
                 <p className="font-['IBM_Plex_Mono',monospace] text-xs max-[900px]:text-[10px] max-[699px]:text-[7.5px] max-[699px]:leading-[1.25] tracking-[1.1px] max-[900px]:tracking-[0.65px] max-[699px]:tracking-[0.35px] uppercase mb-[45px] max-[900px]:mb-7 max-[699px]:mb-[18px] text-[var(--muted)]">
                   Coming later
                 </p>
@@ -1177,19 +1257,31 @@ const LandingPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-                <span
-                  className={`${BTN} mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[var(--warm)] text-[var(--ink)] break-words`}
-                  aria-hidden="true"
+                <button
+                  type="button"
+                  onClick={contactTrigger}
+                  aria-label="Get notified when monthly plans launch"
+                  className={`${BTN} after:content-[''] after:absolute after:inset-0 after:rounded-[inherit] mt-auto w-full max-[900px]:text-[11px] max-[900px]:px-2 max-[699px]:min-h-[32px] max-[699px]:h-auto max-[699px]:text-[8.5px] max-[699px]:leading-[1.2] max-[699px]:py-[7px] max-[699px]:px-1 max-[699px]:rounded-[7px] bg-[var(--warm)] text-[var(--ink)] break-words`}
                 >
-                  In development
-                </span>
+                  Get notified
+                </button>
               </article>
             </div>
+            <p className="m-0 mt-[clamp(14px,2.5vh,24px)] text-center text-sm text-[var(--muted)]">
+              Larger team or a custom setup?{" "}
+              <button
+                type="button"
+                onClick={contactTrigger}
+                className="font-medium text-[var(--ink)] underline underline-offset-[3px] hover:text-[var(--orange-deep)]"
+              >
+                Talk to sales
+              </button>
+            </p>
           </div>
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="bg-[var(--surface)] py-[112px] max-[900px]:py-24 max-[479px]:py-[78px]">
+        <section id="faq" className="bg-[var(--surface)] lp-fit py-[clamp(40px,8vh,96px)]">
           <div className="lp-container max-w-[780px]">
             <div className="text-center mb-[52px] max-[479px]:mb-10">
               <p className="font-['IBM_Plex_Mono',monospace] text-[13px] font-medium tracking-[1.15px] uppercase mb-5 text-inherit">
@@ -1267,15 +1359,15 @@ const LandingPage: React.FC = () => {
               <a
                 href="#top"
                 onClick={handleAnchorClick}
-                className="inline-flex items-center gap-2.5 text-[22px] font-semibold tracking-[-1.1px] font-['DM_Sans',sans-serif] mb-6"
+                className="inline-flex items-center gap-2.5 text-[26px] font-semibold tracking-[-1.1px] font-['DM_Sans',sans-serif] mb-6"
                 aria-label="Agently home"
               >
                 <img
                   src="/landing/logo.png"
                   alt=""
-                  className="w-[30px] h-[30px] object-contain"
+                  className="w-9 h-9 object-contain"
                 />
-                <span>agently</span>
+                <span>Agently</span>
               </a>
               <p className="text-[13px] leading-[1.55] text-[#8e97a1] m-0 max-w-[300px]">
                 A customer engagement platform: voice agents, lead management,
