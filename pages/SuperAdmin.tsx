@@ -219,118 +219,89 @@ const AdminLogin: React.FC<{ onAuthenticated: (email: string) => void }> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#08111f] px-4 py-8 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F172A] shadow-[0_36px_120px_rgba(0,0,0,.38)] lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="relative hidden overflow-hidden border-r border-white/10 p-12 lg:flex lg:flex-col lg:justify-between">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(245,158,11,.2),transparent_35%),radial-gradient(circle_at_80%_80%,rgba(59,130,246,.12),transparent_42%)]" />
-          <div className="relative flex items-center gap-2">
-            <img
-              src="/agently-mark.png"
-              alt=""
-              className="h-10 w-auto"
-            />
-            <span className="text-2xl font-bold text-white">Agently</span>
+    <div className="ag-workspace ag-admin flex min-h-screen items-center justify-center bg-[#f6f5f1] px-4 py-10 text-[#101216]">
+      <div className="w-full max-w-[26rem]">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img src="/agently-mark.png" alt="" className="h-7 w-auto" />
+            <span className="text-lg font-semibold">Agently</span>
           </div>
-          <div className="relative max-w-xl">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#F59E0B]">
-              Owner control room
-            </p>
-            <h1 className="mt-5 text-[clamp(2.8rem,5vw,5.6rem)] font-medium leading-[0.9] tracking-[-0.07em]">
-              Private access to the business behind Agently.
-            </h1>
-            <p className="mt-6 max-w-lg text-base leading-7 text-white/55">
-              Manage customers, monitor wallet exposure, and publish public
-              product updates from one protected workspace.
-            </p>
-          </div>
-          <p className="relative text-xs text-white/35">
-            This route is intentionally absent from public navigation.
+          <Link to="/" className="text-xs text-[#5a5b61] hover:text-[#101216]">
+            ← Back to Agently
+          </Link>
+        </div>
+
+        <form onSubmit={submit} className="ag-admin-card p-6 sm:p-8">
+          <p className="ag-admin-eyebrow">Super admin</p>
+          <h1 className="mt-1.5 text-2xl font-semibold">Owner sign in</h1>
+          <p className="mt-2 text-sm leading-6 text-[#5a5b61]">
+            Email, password and the 6-digit code from your authenticator app.
+            Sessions expire automatically.
           </p>
-        </div>
 
-        <div className="flex items-center justify-center bg-[#F8FAFC] p-6 text-[#0F172A] sm:p-10 lg:p-12">
-          <form onSubmit={submit} className="w-full max-w-md">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-700"
-            >
-              ← Return to Agently
-            </Link>
-            <p className="mt-10 text-[10px] font-black uppercase tracking-[0.24em] text-[#F59E0B]">
-              Super admin
-            </p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.055em]">
-              Secure sign in
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Use the owner credentials configured on the backend. Access is
-              rate-limited and expires automatically.
-            </p>
-
-            {!enabled ? (
-              <div className="mt-7 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Super-admin access is disabled or not configured on the backend.
-              </div>
-            ) : null}
-            {error ? (
-              <div className="mt-7 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
-
-            <div className="mt-7 space-y-4">
-              <label className="block">
-                <span className="text-xs font-bold text-slate-600">
-                  Admin email
-                </span>
-                <input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  type="email"
-                  autoComplete="username"
-                  required
-                  className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs font-bold text-slate-600">
-                  Password
-                </span>
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-                />
-              </label>
-              {otpRequired ? (
-                <label className="block">
-                  <span className="text-xs font-bold text-slate-600">
-                    Authenticator code
-                  </span>
-                  <input
-                    value={otp}
-                    onChange={(event) =>
-                      setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-                    }
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    required
-                    className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm tracking-[0.35em] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/15"
-                  />
-                </label>
-              ) : null}
-              <button
-                disabled={loading || !enabled}
-                className="h-12 w-full rounded-xl bg-[#0F172A] px-5 text-sm font-bold text-white transition hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {loading ? "Verifying…" : "Enter control room"}
-              </button>
+          {!enabled ? (
+            <div className="mt-5 rounded-[10px] border border-[#f3b79c] bg-[#fff6f1] p-3 text-sm text-[#8a2c0a]" role="alert">
+              Super-admin access is disabled or not configured on the backend.
             </div>
-          </form>
-        </div>
+          ) : null}
+          {error ? (
+            <div className="mt-5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="mt-6 space-y-4">
+            <label className="block">
+              <span className="text-[13px] font-medium text-[#2b2d33]">Admin email</span>
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                autoComplete="username"
+                required
+                className="ag-admin-input mt-1.5 w-full"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[13px] font-medium text-[#2b2d33]">Password</span>
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="current-password"
+                required
+                className="ag-admin-input mt-1.5 w-full"
+              />
+            </label>
+            {otpRequired ? (
+              <label className="block">
+                <span className="text-[13px] font-medium text-[#2b2d33]">Authenticator code</span>
+                <input
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  required
+                  className="ag-admin-input mt-1.5 w-full font-['IBM_Plex_Mono',monospace] tracking-[0.3em]"
+                />
+                <span className="mt-1.5 block text-xs leading-5 text-[#76736b]">
+                  Open Google Authenticator (or Authy / Microsoft Authenticator) and enter the
+                  current code for “Agently Super Admin”.
+                </span>
+              </label>
+            ) : null}
+            <button
+              disabled={loading || !enabled}
+              className="ag-admin-btn ag-admin-btn--primary h-11 w-full"
+            >
+              {loading ? "Verifying…" : "Sign in"}
+            </button>
+          </div>
+        </form>
+        <p className="mt-4 text-center text-xs text-[#76736b]">
+          This page is not linked from the public site.
+        </p>
       </div>
     </div>
   );
@@ -1329,10 +1300,89 @@ const FitBlogPreview: React.FC<{ draft: BlogPostInput }> = ({ draft }) => {
   );
 };
 
+const ADMIN_NAV: Array<{ key: AdminTab; label: string; icon: string }> = [
+  { key: "overview", label: "Overview", icon: "fa-gauge" },
+  { key: "users", label: "Users & credit", icon: "fa-users" },
+  { key: "pricing", label: "Wallet & pricing", icon: "fa-wallet" },
+  { key: "economics", label: "Tenant economics", icon: "fa-chart-line" },
+  { key: "infrastructure", label: "Infrastructure", icon: "fa-server" },
+  { key: "blog", label: "Blog publishing", icon: "fa-pen-nib" },
+  { key: "assistant", label: "Agently assistant", icon: "fa-comments" },
+  { key: "tour", label: "Product tour", icon: "fa-route" },
+  { key: "features", label: "Feature switches", icon: "fa-toggle-on" },
+];
+
+const ADMIN_TAB_TITLES: Record<AdminTab, string> = {
+  overview: "Overview",
+  users: "Users & credit",
+  pricing: "Wallet & pricing",
+  economics: "Tenant economics",
+  infrastructure: "Shared infrastructure",
+  blog: "Blog publishing",
+  assistant: "Agently assistant",
+  tour: "Product tour",
+  features: "Feature switches",
+};
+
+/** Sidebar content, shared by the desktop rail and the phone drawer. */
+const AdminNav: React.FC<{
+  tab: AdminTab;
+  adminEmail: string;
+  onSelect: (tab: AdminTab) => void;
+  onSignOut: () => void;
+}> = ({ tab, adminEmail, onSelect, onSignOut }) => (
+  <>
+    <div className="flex items-center gap-2 px-2">
+      <img src="/agently-mark.png" alt="" className="h-7 w-auto" />
+      <span className="text-lg font-semibold text-[#101216]">Agently</span>
+    </div>
+    <p className="ag-admin-eyebrow mt-7 px-3">Owner workspace</p>
+    <nav className="mt-2 space-y-0.5" aria-label="Super admin sections">
+      {ADMIN_NAV.map((item) => {
+        const active = tab === item.key;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onSelect(item.key)}
+            aria-current={active ? "page" : undefined}
+            className={`relative flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition ${
+              active
+                ? "bg-[#f6f5f1] font-medium text-[#101216]"
+                : "text-[#5a5b61] hover:bg-[#faf9f5] hover:text-[#101216]"
+            }`}
+          >
+            {active ? (
+              <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#f15a24]" aria-hidden="true" />
+            ) : null}
+            <i
+              className={`fa-solid ${item.icon} w-4 text-center text-[13px] ${active ? "text-[#b63a0e]" : "text-[#76736b]"}`}
+              aria-hidden="true"
+            />
+            <span className="truncate">{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+    <div className="mt-auto border-t border-[#ece9e1] pt-4">
+      <Link to="/" className="mb-2 flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-[#5a5b61] hover:bg-[#faf9f5] hover:text-[#101216] sm:hidden">
+        <i className="fa-solid fa-arrow-up-right-from-square w-4 text-center text-[12px]" aria-hidden="true" />
+        View website
+      </Link>
+      <p className="truncate px-3 text-xs text-[#76736b]" title={adminEmail}>{adminEmail}</p>
+      <button type="button" onClick={onSignOut} className="ag-admin-btn ag-admin-btn--secondary mt-3 w-full">
+        <i className="fa-solid fa-arrow-right-from-bracket text-[11px]" aria-hidden="true" />
+        Sign out
+      </button>
+    </div>
+  </>
+);
+
 const SuperAdmin: React.FC = () => {
   const [authenticated, setAuthenticated] = useState(Boolean(getAdminToken()));
   const [adminEmail, setAdminEmail] = useState("");
   const [tab, setTab] = useState<AdminTab>("overview");
+  const [navOpen, setNavOpen] = useState(false);
   const [metrics, setMetrics] = useState<SuperAdminMetrics | null>(null);
   const [users, setUsers] = useState<SuperAdminUser[]>([]);
   const [userTotal, setUserTotal] = useState(0);
@@ -1867,348 +1917,334 @@ const SuperAdmin: React.FC = () => {
        document-scrolled page, the shell is fixed to the viewport height with
        overflow hidden, and only the main column scrolls. The sidebar is then
        simply always on screen — no sticky involved. */
-    <div className="h-screen overflow-hidden bg-[#F1F5F9] text-[#0F172A]">
+    <div className="ag-workspace ag-admin h-screen overflow-hidden bg-[#f6f5f1] text-[#101216]">
       <div className="flex h-full">
-        <aside className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto bg-[#0F172A] px-5 py-6 text-white lg:flex">
-          <div className="flex items-center gap-2">
-            <img src="/agently-mark.png" alt="" className="h-8 w-auto" />
-            <span className="text-xl font-bold text-white">Agently</span>
-          </div>
-          <p className="mt-8 px-3 text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
-            Owner workspace
-          </p>
-          <nav className="mt-3 space-y-1">
-            {(
-              [
-                "overview",
-                "users",
-                "pricing",
-                "economics",
-                "infrastructure",
-                "blog",
-                "assistant",
-                "tour",
-                "features",
-              ] as AdminTab[]
-            ).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setTab(item)}
-                className={`flex h-11 w-full items-center rounded-xl px-3 text-left text-sm font-medium capitalize transition ${tab === item ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}`}
-              >
-                {item === "overview"
-                  ? "Overview"
-                  : item === "users"
-                    ? "Users & credit"
-                    : item === "pricing"
-                      ? "Wallet & pricing"
-                      : item === "economics"
-                        ? "Tenant economics"
-                        : item === "infrastructure"
-                          ? "Infrastructure"
-                      : item === "blog"
-                        ? "Blog publishing"
-                        : item === "assistant"
-                          ? "Agently assistant"
-                          : item === "features"
-                            ? "Feature switches"
-                            : "Product tour"}
-              </button>
-            ))}
-          </nav>
-          <div className="mt-auto border-t border-white/10 pt-5">
-            <p className="truncate px-3 text-xs text-white/40">{adminEmail}</p>
+        <aside className="hidden h-full w-60 shrink-0 flex-col overflow-y-auto border-r border-[#d9d7d0] bg-white px-4 py-5 lg:flex">
+          <AdminNav
+            tab={tab}
+            adminEmail={adminEmail}
+            onSelect={(next) => setTab(next)}
+            onSignOut={() => {
+              adminApi.logout();
+              setAuthenticated(false);
+            }}
+          />
+        </aside>
+
+        {/* Phone/tablet navigation: a slide-in drawer instead of a bare <select>. */}
+        {navOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Admin menu">
             <button
               type="button"
-              onClick={() => {
-                adminApi.logout();
-                setAuthenticated(false);
-              }}
-              className="mt-3 h-10 w-full rounded-xl bg-[#F59E0B] px-4 text-xs font-bold text-white"
-            >
-              Sign out
-            </button>
+              aria-label="Close menu"
+              className="absolute inset-0 bg-[#101216]/40"
+              onClick={() => setNavOpen(false)}
+            />
+            <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-[#d9d7d0] bg-white px-4 py-5 shadow-xl">
+              <AdminNav
+                tab={tab}
+                adminEmail={adminEmail}
+                onSelect={(next) => {
+                  setTab(next);
+                  setNavOpen(false);
+                }}
+                onSignOut={() => {
+                  adminApi.logout();
+                  setAuthenticated(false);
+                }}
+              />
+            </div>
           </div>
-        </aside>
+        ) : null}
 
         {/* The only scrolling region on this page. min-h-0 is required or the
             flex item refuses to shrink below its content and scrolls the
             shell instead. */}
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-            <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F59E0B]">
-                  Super admin
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold capitalize tracking-[-0.045em]">
-                  {tab === "pricing"
-                    ? "Wallet & pricing"
-                    : tab === "economics"
-                      ? "Tenant economics"
-                      : tab === "infrastructure"
-                        ? "Shared infrastructure"
-                    : tab === "blog"
-                      ? "Blog publishing"
-                      : tab === "assistant"
-                        ? "Agently assistant"
-                        : tab === "tour"
-                          ? "Product tour"
-                          : tab}
-                </h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={tab}
-                  onChange={(event) => setTab(event.target.value as AdminTab)}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm lg:hidden"
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <header className="sticky top-0 z-20 border-b border-[#d9d7d0] bg-[#f6f5f1]/95 px-4 py-3.5 backdrop-blur sm:px-6 lg:px-8">
+            <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNavOpen(true)}
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d9d7d0] bg-white text-[#101216] lg:hidden"
+                  aria-label="Open menu"
                 >
-                  <option value="overview">Overview</option>
-                  <option value="users">Users & credit</option>
-                  <option value="pricing">Wallet & pricing</option>
-                  <option value="economics">Tenant economics</option>
-                  <option value="infrastructure">Shared infrastructure</option>
-                  <option value="blog">Blog publishing</option>
-                  <option value="assistant">Agently assistant</option>
-                  <option value="tour">Product tour</option>
-                  <option value="features">Feature switches</option>
-                </select>
-                <Link
-                  to="/"
-                  className="hidden h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 sm:inline-flex"
-                >
-                  View website
-                </Link>
+                  <i className="fa-solid fa-bars text-sm" aria-hidden="true" />
+                </button>
+                <div className="min-w-0">
+                  <p className="ag-admin-eyebrow">Super admin</p>
+                  <h1 className="mt-0.5 truncate text-xl font-semibold text-[#101216] sm:text-2xl">
+                    {ADMIN_TAB_TITLES[tab]}
+                  </h1>
+                </div>
               </div>
+              <Link to="/" className="ag-admin-btn ag-admin-btn--secondary ag-admin-hide-phone">
+                <i className="fa-solid fa-arrow-up-right-from-square text-[11px]" aria-hidden="true" />
+                View website
+              </Link>
             </div>
           </header>
 
-          <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {error ? (
-              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mb-5 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
                 {error}
               </div>
             ) : null}
             {message ? (
-              <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              <div className="mb-5 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
                 {message}
               </div>
             ) : null}
 
             {tab === "overview" ? (
-              <div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                   {[
-                    ["Registered users", metrics?.users ?? 0],
-                    ["Organizations", metrics?.organizations ?? 0],
-                    ["Published posts", metrics?.publishedPosts ?? 0],
-                    ["Below $1 credit", metrics?.lowCreditOrganizations ?? 0],
-                    [
-                      "Customer credit",
-                      money(metrics?.totalCustomerCreditUsd ?? 0),
-                    ],
-                  ].map(([label, value]) => (
-                    <div
-                      key={String(label)}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        {label}
-                      </p>
-                      <p className="mt-3 text-3xl font-semibold tracking-[-0.055em]">
+                    ["Registered users", metrics?.users ?? 0, "fa-user"],
+                    ["Organizations", metrics?.organizations ?? 0, "fa-building"],
+                    ["Published posts", metrics?.publishedPosts ?? 0, "fa-newspaper"],
+                    ["Below $1 credit", metrics?.lowCreditOrganizations ?? 0, "fa-triangle-exclamation"],
+                    ["Customer credit", money(metrics?.totalCustomerCreditUsd ?? 0), "fa-wallet"],
+                  ].map(([label, value, icon]) => (
+                    <div key={String(label)} className="ag-admin-card min-w-0 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="ag-admin-eyebrow !text-[#5a5b61]">{label}</p>
+                        <i className={`fa-solid ${icon} text-xs text-[#b63a0e]`} aria-hidden="true" />
+                      </div>
+                      <p className="mt-3 truncate text-[1.7rem] font-medium leading-none text-[#101216] [font-variant-numeric:tabular-nums]">
                         {value}
                       </p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setTab("users")}
-                    className="rounded-3xl bg-[#0F172A] p-7 text-left text-white shadow-sm transition hover:-translate-y-0.5"
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F59E0B]">
-                      Customer operations
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold">
-                      Review users and wallet exposure
-                    </h2>
-                    <p className="mt-3 text-sm leading-6 text-white/55">
-                      Search every user, inspect the organization attached to
-                      them, see remaining credit, and start a protected
-                      account-deletion flow.
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => startNewPost()}
-                    className="rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:-translate-y-0.5"
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#F59E0B]">
-                      Publishing
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold">
-                      Create the next Agently update
-                    </h2>
-                    <p className="mt-3 text-sm leading-6 text-slate-500">
-                      Choose a structured template, add images and sections,
-                      preview the article, then save or publish it.
-                    </p>
-                  </button>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {[
+                    {
+                      eyebrow: "Customer operations",
+                      title: "Review users and wallet exposure",
+                      body: "Search every user, see the organization attached to them and their remaining credit, add credit, or start a protected account deletion.",
+                      icon: "fa-users",
+                      action: () => setTab("users"),
+                    },
+                    {
+                      eyebrow: "Publishing",
+                      title: "Create the next Agently update",
+                      body: "Choose a structured template, add images and sections, preview the article, then save or publish it.",
+                      icon: "fa-pen-nib",
+                      action: () => startNewPost(),
+                    },
+                  ].map((card) => (
+                    <button
+                      key={card.title}
+                      type="button"
+                      onClick={card.action}
+                      className="ag-admin-card group flex min-w-0 items-start gap-4 p-5 text-left transition hover:border-[#f15a24]"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#fde7dc] text-[#b63a0e]">
+                        <i className={`fa-solid ${card.icon} text-sm`} aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="ag-admin-eyebrow block">{card.eyebrow}</span>
+                        <span className="mt-1.5 block text-lg font-semibold text-[#101216]">{card.title}</span>
+                        <span className="mt-1.5 block text-sm leading-6 text-[#5a5b61]">{card.body}</span>
+                        <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[#b63a0e]">
+                          Open <i className="fa-solid fa-arrow-right text-[11px] transition group-hover:translate-x-0.5" aria-hidden="true" />
+                        </span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : null}
 
             {tab === "users" ? (
-              <div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <input
-                    value={userSearch}
-                    onChange={(event) => setUserSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void loadUsers(1, userSearch);
-                    }}
-                    placeholder="Search by name or email"
-                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none focus:border-amber-400"
-                  />
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="relative min-w-0 flex-1">
+                    <span className="sr-only">Search users</span>
+                    <i className="fa-solid fa-magnifying-glass pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-[#76736b]" aria-hidden="true" />
+                    <input
+                      value={userSearch}
+                      onChange={(event) => setUserSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void loadUsers(1, userSearch);
+                      }}
+                      placeholder="Search by name or email"
+                      className="ag-admin-input w-full pl-9"
+                    />
+                  </label>
                   <button
                     type="button"
                     onClick={() => void loadUsers(1, userSearch)}
-                    className="h-11 rounded-xl bg-[#0F172A] px-5 text-xs font-bold text-white"
+                    className="ag-admin-btn ag-admin-btn--primary"
                   >
                     Search users
                   </button>
                 </div>
-                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-left">
-                      <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                        <tr>
-                          <th className="px-5 py-4">User</th>
-                          <th className="px-5 py-4">Organization</th>
-                          <th className="px-5 py-4">Billing model</th>
-                          <th className="px-5 py-4">Credit left</th>
-                          <th className="px-5 py-4">Account state</th>
-                          <th className="px-5 py-4 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {users.map((user) => (
-                          <tr key={user.id} className="hover:bg-slate-50/60">
+
+                <div className="ag-admin-card overflow-hidden">
+                  {/* Desktop / large tablet: a table that fits without sideways scrolling. */}
+                  <table className="hidden w-full table-fixed text-left lg:table">
+                    <colgroup>
+                      <col className="w-[22%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[20%]" />
+                      <col className="w-[22%]" />
+                    </colgroup>
+                    <thead className="border-b border-[#d9d7d0] bg-[#faf9f5]">
+                      <tr>
+                        <th className="ag-admin-th">User</th>
+                        <th className="ag-admin-th">Organization</th>
+                        <th className="ag-admin-th">Credit</th>
+                        <th className="ag-admin-th">Account</th>
+                        <th className="ag-admin-th text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#ece9e1]">
+                      {users.map((user) => {
+                        const status = accountStatusInfo(user.subscriptionStatus);
+                        return (
+                          <tr key={user.id} className="align-top hover:bg-[#faf9f5]">
                             <td className="px-5 py-4">
-                              <p className="text-sm font-bold">
-                                {user.name || "Unnamed user"}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-400">
-                                {user.email} · {user.role}
-                              </p>
+                              <p className="truncate text-sm font-medium text-[#101216]">{user.name || "Unnamed user"}</p>
+                              <p className="mt-0.5 truncate text-xs text-[#5a5b61]" title={user.email}>{user.email}</p>
+                              <p className="mt-0.5 text-xs text-[#76736b]">{user.role}</p>
                             </td>
                             <td className="px-5 py-4">
-                              <p className="text-sm font-semibold">
+                              <p className="truncate text-sm font-medium text-[#101216]" title={user.organizationName || ""}>
                                 {user.organizationName || "—"}
                               </p>
-                              <p className="mt-1 text-xs text-slate-400">
-                                {user.onboarded
-                                  ? "Onboarded"
-                                  : "Setup incomplete"}
+                              <p className="mt-0.5 text-xs text-[#76736b]">
+                                {user.onboarded ? "Onboarded" : "Setup incomplete"} · Prepaid credit
                               </p>
                             </td>
                             <td className="px-5 py-4">
-                              <p className="text-sm font-semibold text-slate-700">
-                                Prepaid credit
-                              </p>
-                              <p className="mt-1 text-[10px] text-slate-400">
-                                Usage deducted from wallet
-                              </p>
-                            </td>
-                            <td className="px-5 py-4">
-                              <p
-                                className={`text-sm font-black ${user.walletBalanceUsd < 1 ? "text-red-600" : "text-emerald-600"}`}
-                              >
+                              <p className={`text-sm font-semibold [font-variant-numeric:tabular-nums] ${user.walletBalanceUsd < 1 ? "text-red-700" : "text-emerald-700"}`}>
                                 {money(user.walletBalanceUsd)} left
                               </p>
-                              <p className="mt-1 text-xs text-slate-400">
-                                {money(user.walletCreditsAddedUsd)} added
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setTopUpTarget(user);
-                                  setTopUpAmount("10");
-                                  setTopUpMessage("");
-                                }}
-                                className="mt-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
-                              >
-                                + Add credit
-                              </button>
+                              <p className="mt-0.5 text-xs text-[#76736b]">{money(user.walletCreditsAddedUsd)} added</p>
                             </td>
                             <td className="px-5 py-4">
-                              <span
-                                title={
-                                  accountStatusInfo(user.subscriptionStatus)
-                                    .detail
-                                }
-                                className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500"
-                              >
-                                {
-                                  accountStatusInfo(user.subscriptionStatus)
-                                    .label
-                                }
-                              </span>
-                              <p className="mt-2 max-w-48 text-[10px] leading-4 text-slate-400">
-                                {
-                                  accountStatusInfo(user.subscriptionStatus)
-                                    .detail
-                                }
-                              </p>
+                              <span className="ag-admin-pill" title={status.detail}>{status.label}</span>
+                              <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[#76736b]" title={status.detail}>{status.detail}</p>
                             </td>
-                            <td className="px-5 py-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDeleteTarget(user);
-                                  setDeleteScope(
-                                    user.role === "Owner"
-                                      ? "organization"
-                                      : "user",
-                                  );
-                                  setDeleteConfirm("");
-                                }}
-                                className="rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"
-                              >
-                                Delete account
-                              </button>
+                            <td className="px-5 py-4">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTopUpTarget(user);
+                                    setTopUpAmount("10");
+                                    setTopUpMessage("");
+                                  }}
+                                  className="ag-admin-btn ag-admin-btn--secondary ag-admin-btn--sm"
+                                >
+                                  Add credit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteTarget(user);
+                                    setDeleteScope(user.role === "Owner" ? "organization" : "user");
+                                    setDeleteConfirm("");
+                                  }}
+                                  className="ag-admin-btn ag-admin-btn--danger ag-admin-btn--sm"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
-                        ))}
-                        {!users.length ? (
-                          <tr>
-                            <td
-                              colSpan={6}
-                              className="px-5 py-12 text-center text-sm text-slate-400"
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Phones and small tablets: one card per user, nothing scrolls sideways. */}
+                  <ul className="divide-y divide-[#ece9e1] lg:hidden">
+                    {users.map((user) => {
+                      const status = accountStatusInfo(user.subscriptionStatus);
+                      return (
+                        <li key={user.id} className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-[#101216]">{user.name || "Unnamed user"}</p>
+                              <p className="truncate text-xs text-[#5a5b61]">{user.email}</p>
+                            </div>
+                            <span className="ag-admin-pill shrink-0" title={status.detail}>{status.label}</span>
+                          </div>
+                          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                            <div className="min-w-0">
+                              <dt className="text-[#76736b]">Organization</dt>
+                              <dd className="truncate font-medium text-[#101216]">{user.organizationName || "—"}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[#76736b]">Credit left</dt>
+                              <dd className={`font-semibold [font-variant-numeric:tabular-nums] ${user.walletBalanceUsd < 1 ? "text-red-700" : "text-emerald-700"}`}>
+                                {money(user.walletBalanceUsd)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[#76736b]">Role</dt>
+                              <dd className="text-[#101216]">{user.role} · {user.onboarded ? "Onboarded" : "Setup incomplete"}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[#76736b]">Added</dt>
+                              <dd className="text-[#101216] [font-variant-numeric:tabular-nums]">{money(user.walletCreditsAddedUsd)}</dd>
+                            </div>
+                          </dl>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTopUpTarget(user);
+                                setTopUpAmount("10");
+                                setTopUpMessage("");
+                              }}
+                              className="ag-admin-btn ag-admin-btn--secondary ag-admin-btn--sm w-full"
                             >
-                              No users found.
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                              Add credit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteTarget(user);
+                                setDeleteScope(user.role === "Owner" ? "organization" : "user");
+                                setDeleteConfirm("");
+                              }}
+                              className="ag-admin-btn ag-admin-btn--danger ag-admin-btn--sm w-full"
+                            >
+                              Delete account
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {!users.length ? (
+                    <p className="px-5 py-12 text-center text-sm text-[#76736b]">No users found.</p>
+                  ) : null}
+
+                  <div className="flex items-center justify-between gap-3 border-t border-[#ece9e1] px-5 py-3 text-xs text-[#5a5b61]">
                     <span>{userTotal} users</span>
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         disabled={userPage <= 1}
                         onClick={() => void loadUsers(userPage - 1, userSearch)}
-                        className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-35"
+                        className="ag-admin-btn ag-admin-btn--secondary ag-admin-btn--sm"
                       >
                         Previous
                       </button>
                       <button
+                        type="button"
                         disabled={userPage * 25 >= userTotal}
                         onClick={() => void loadUsers(userPage + 1, userSearch)}
-                        className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-35"
+                        className="ag-admin-btn ag-admin-btn--secondary ag-admin-btn--sm"
                       >
                         Next
                       </button>
@@ -2344,8 +2380,8 @@ const SuperAdmin: React.FC = () => {
                 </div>
 
                 {blogWorkspaceTab === "build" ? (
-                  <div className="grid h-[calc(100vh-16rem)] min-h-[640px] max-h-[860px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-                    <div className="min-h-0 overflow-y-auto bg-slate-50/55 p-4 sm:p-5">
+                  <div className="grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm xl:h-[calc(100vh-16rem)] xl:min-h-[640px] xl:max-h-[860px] xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+                    <div className="min-h-0 bg-slate-50/55 p-4 sm:p-5 xl:overflow-y-auto">
                       <div className="sticky top-0 z-30 mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:flex-row lg:items-center lg:justify-between">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F59E0B]">
@@ -2646,7 +2682,7 @@ const SuperAdmin: React.FC = () => {
                       </section>
                     </div>
 
-                    <aside className="flex min-h-0 flex-col overflow-hidden border-l border-slate-200 bg-[#fbfaf4] p-4">
+                    <aside className="flex min-h-[420px] flex-col overflow-hidden border-t border-slate-200 bg-[#fbfaf4] p-4 xl:min-h-0 xl:border-l xl:border-t-0">
                       <div className="flex shrink-0 items-center justify-between gap-3 pb-3">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F59E0B]">

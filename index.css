@@ -3061,3 +3061,191 @@ textarea.ag-field { min-height: 4.75rem; }
   .ag-section-foot > div { width: 100%; }
   .ag-section-foot .ag-action-btn { flex: 1 1 0; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Super Admin — workspace theme (pages/SuperAdmin.tsx, components/admin/*)
+   Same paper, ink, line and orange tokens as the signed-in app (.ag-workspace).
+   Part 1: the admin's own components. Part 2: scoped remaps so the older tab
+   components (slate / amber / navy Tailwind classes) render in the same theme
+   without rewriting each of them.
+   ════════════════════════════════════════════════════════════════════════ */
+.ag-admin {
+  --admin-faint: #faf9f5;
+  --admin-hair: #ece9e1;
+  --admin-subtle: #76736b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Part 1: components ─────────────────────────────────────────────────── */
+.ag-admin-eyebrow {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #b63a0e;
+}
+.ag-admin-card {
+  border: 1px solid var(--line, #d9d7d0);
+  border-radius: 14px;
+  background: #fff;
+}
+.ag-admin-th {
+  padding: .7rem 1.25rem;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--admin-subtle);
+}
+.ag-admin-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line, #d9d7d0);
+  border-radius: 999px;
+  background: var(--admin-faint);
+  padding: .1rem .55rem;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #3b3c42;
+  white-space: nowrap;
+}
+.ag-admin-input {
+  height: 2.75rem;
+  border: 1px solid #cfccc3;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 .85rem;
+  font-size: .875rem;
+  color: #101216;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.ag-admin-input::placeholder { color: #7b7c82; }
+.ag-admin-input:hover { border-color: #a9a69d; }
+.ag-admin-input:focus { border-color: #b63a0e; box-shadow: 0 0 0 3px rgba(241, 90, 36, .16); }
+
+.ag-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  padding: 0 1rem;
+  font-size: .82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.ag-admin-btn:disabled { opacity: .4; cursor: not-allowed; }
+.ag-admin-btn--sm { height: 2.1rem; padding: 0 .75rem; font-size: .78rem; }
+.ag-admin-btn--primary { border: 1px solid #101216; background: #101216; color: #f6f5f1; }
+.ag-admin-btn--primary:not(:disabled):hover { background: #b63a0e; border-color: #b63a0e; color: #fff; }
+.ag-admin-btn--secondary { border: 1px solid var(--line, #d9d7d0); background: #fff; color: #101216; }
+.ag-admin-btn--secondary:not(:disabled):hover { border-color: #f15a24; color: #b63a0e; }
+.ag-admin-btn--danger { border: 1px solid #f1c4c4; background: #fff; color: #b42318; }
+.ag-admin-btn--danger:not(:disabled):hover { background: #fef2f2; border-color: #e7a0a0; }
+
+/* ── Part 2: remaps for the older tab components ────────────────────────── */
+/* Surfaces */
+.ag-admin .bg-\[\#F1F5F9\],
+.ag-admin .bg-slate-50,
+.ag-admin .bg-slate-50\/60 { background-color: var(--admin-faint) !important; }
+.ag-admin .bg-slate-100 { background-color: #f1efe9 !important; }
+.ag-admin .border-slate-200,
+.ag-admin .border-slate-300 { border-color: var(--line, #d9d7d0) !important; }
+.ag-admin .border-slate-100,
+.ag-admin .divide-slate-100 > * + * { border-color: var(--admin-hair) !important; }
+.ag-admin .rounded-3xl { border-radius: 14px !important; }
+.ag-admin .rounded-2xl { border-radius: 12px !important; }
+.ag-admin .shadow-sm,
+.ag-admin .shadow-\[0_1px_2px_rgba\(15\2c 23\2c 42\2c 0\.04\)\] { box-shadow: none !important; }
+
+/* Ink and muted text */
+.ag-admin .text-\[\#0F172A\],
+.ag-admin .text-slate-950,
+.ag-admin .text-slate-900 { color: #101216 !important; }
+.ag-admin .text-slate-700,
+.ag-admin .text-slate-600 { color: #3b3c42 !important; }
+.ag-admin .text-slate-500 { color: #5a5b61 !important; }
+.ag-admin .text-slate-400 { color: var(--admin-subtle) !important; }
+
+/* Dark slabs (navy) become the workspace ink */
+.ag-admin .bg-\[\#0F172A\],
+.ag-admin .bg-slate-950 { background-color: #101216 !important; }
+
+/* Amber accents become the brand orange */
+.ag-admin .text-\[\#F59E0B\],
+.ag-admin .text-amber-600,
+.ag-admin .text-amber-700 { color: #b63a0e !important; }
+.ag-admin .text-amber-800 { color: #8a2c0a !important; }
+.ag-admin .bg-\[\#F59E0B\] { background-color: #f15a24 !important; }
+.ag-admin .bg-\[\#F59E0B\]:hover { background-color: #b63a0e !important; }
+.ag-admin .bg-amber-50 { background-color: #fff6f1 !important; }
+.ag-admin .border-\[\#F59E0B\],
+.ag-admin .border-amber-400,
+.ag-admin .border-amber-300,
+.ag-admin .border-amber-200 { border-color: #f3b79c !important; }
+.ag-admin .ring-\[\#F59E0B\] { --tw-ring-color: rgba(241, 90, 36, .35) !important; }
+.ag-admin .bg-\[linear-gradient\(135deg\2c \#0F172A\2c \#F59E0B\)\] { background-image: linear-gradient(135deg, #101216, #b63a0e) !important; }
+.ag-admin .focus\:border-amber-400:focus { border-color: #b63a0e !important; }
+
+/* Typography: no ultra-black weights or squeezed/over-spaced tracking */
+.ag-admin .font-black { font-weight: 600 !important; }
+.ag-admin .font-bold { font-weight: 600 !important; }
+.ag-admin [class*="tracking-[-0.0"] { letter-spacing: -0.015em !important; }
+.ag-admin .tracking-widest,
+.ag-admin [class*="tracking-[0.1"],
+.ag-admin [class*="tracking-[0.2"],
+.ag-admin [class*="tracking-[0.3"] { letter-spacing: .07em !important; }
+.ag-admin .uppercase.text-\[10px\],
+.ag-admin .uppercase.text-\[9px\],
+.ag-admin .uppercase.text-\[11px\] { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-weight: 500 !important; }
+
+/* Form fields in the older tabs */
+.ag-admin input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.ag-admin select,
+.ag-admin textarea {
+  border-color: #cfccc3;
+  color: #101216;
+}
+.ag-admin input::placeholder,
+.ag-admin textarea::placeholder { color: #7b7c82; }
+.ag-admin input:focus,
+.ag-admin select:focus,
+.ag-admin textarea:focus { border-color: #b63a0e !important; box-shadow: 0 0 0 3px rgba(241, 90, 36, .14); outline: none; }
+
+/* Nothing in the admin may push the page sideways. Wide tables scroll inside
+   their own card instead. */
+.ag-admin main { overflow-x: hidden; }
+.ag-admin main table { max-width: 100%; }
+.ag-admin main pre,
+.ag-admin main code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ag-admin main p,
+.ag-admin main h2,
+.ag-admin main h3 { overflow-wrap: anywhere; }
+
+/* Buttons in the older tabs: sentence case in the app font, like the rest. */
+.ag-admin button.uppercase,
+.ag-admin a.uppercase {
+  text-transform: none !important;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif !important;
+  font-size: .8rem !important;
+  letter-spacing: 0 !important;
+  font-weight: 500 !important;
+}
+.ag-admin button.uppercase::first-letter { text-transform: uppercase; }
+/* Search field with a leading icon. */
+.ag-admin-input.pl-9 { padding-left: 2.25rem; }
+
+@media (max-width: 639px) { .ag-admin .ag-admin-hide-phone { display: none; } }
+/* Page title stays on one line (the workspace h1 rule sets text-wrap: balance). */
+.ag-admin header h1.truncate { text-wrap: nowrap; }
+
+/* The admin's phone menu is a full-height drawer, not a centred modal: opt out
+   of the global 92dvh cap on [role=dialog] panels. */
+.ag-admin [role="dialog"][aria-label="Admin menu"] > div { max-height: none !important; height: 100dvh; }
