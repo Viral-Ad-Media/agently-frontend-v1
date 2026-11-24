@@ -502,8 +502,12 @@ const PageSelector: React.FC<Props> = ({
         <div className="mt-3 min-w-0 rounded-xl bg-slate-50 p-2.5 sm:p-3">
           <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-bold text-slate-700">
-              {isPaused ? "Paused" : "Reading your pages"} —{" "}
-              {job.completedPages}/{job.totalPages}
+              {isPaused
+                ? "Paused"
+                : job.waitingForWorker
+                  ? "Waiting to start"
+                  : "Reading your pages"}{" "}
+              — {job.completedPages}/{job.totalPages}
             </p>
             <div className="flex min-w-0 flex-wrap gap-1.5">
               {isRunning && (
@@ -539,6 +543,16 @@ const PageSelector: React.FC<Props> = ({
               style={{ width: `${job.progressPercent}%` }}
             />
           </div>
+          {job.waitingForWorker && !isPaused && (
+            <p className="mt-1.5 text-[10px] text-slate-500">
+              Your scan is queued and will begin shortly. If it hasn't started
+              within 10 minutes it is stopped automatically, nothing is charged,
+              and you can start it again.
+            </p>
+          )}
+          {isPaused && job.lastError && (
+            <p className="mt-1.5 text-[10px] text-rose-600">{job.lastError}</p>
+          )}
           {job.currentPageUrl && !isPaused && (
             <p className="mt-1.5 truncate text-[10px] text-slate-500">
               Currently reading {job.currentPageUrl}

@@ -1,6 +1,7 @@
 import { searchIndustries } from "../lib/industries";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BusinessProfile, FAQ, AgentConfig } from "../types";
+import { readThemeChoice } from "../lib/theme";
 
 interface OnboardingProps {
   onGenerateFaqs: (website: string) => Promise<FAQ[]>;
@@ -82,9 +83,13 @@ const STEP_META = [
 /* Same palette, fonts and theme rules as the landing page, scoped to the
    onboarding screen so nothing leaks into the dashboard behind it. */
 const ONBOARDING_CSS = `
-.ob-scope{--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;--orange:#f15a24;--orange-deep:#b63a0e;--orange-soft:#fdebe2;--focus:rgba(241,90,36,.18);color-scheme:light}
-@media (prefers-color-scheme:dark){html:not([data-theme="light"]) .ob-scope{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45;--orange-soft:rgba(255,106,50,.14);--focus:rgba(255,106,50,.25);color-scheme:dark}}
-html[data-theme="dark"] .ob-scope{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45;--orange-soft:rgba(255,106,50,.14);--focus:rgba(255,106,50,.25);color-scheme:dark}
+.ob-scope{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45;--orange-soft:rgba(255,106,50,.14);--focus:rgba(255,106,50,.25);--glow:rgba(255,106,50,.17);--glow2:rgba(70,110,255,.10);--dot:rgba(255,255,255,.07);--card-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 80px rgba(0,0,0,.45);color-scheme:dark}
+.ob-scope.ob-light{--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;--orange:#f15a24;--orange-deep:#b63a0e;--orange-soft:#fdebe2;--focus:rgba(241,90,36,.18);--glow:rgba(241,90,36,.13);--glow2:rgba(70,110,255,.08);--dot:rgba(16,18,22,.08);--card-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 24px 60px rgba(16,18,22,.10);color-scheme:light}
+.ob-scope{position:relative;isolation:isolate;background:radial-gradient(1100px 560px at 50% -8%,var(--glow),transparent 62%),radial-gradient(760px 520px at 104% 104%,var(--glow2),transparent 60%),radial-gradient(600px 420px at -6% 70%,var(--glow2),transparent 60%),var(--bg)}
+.ob-scope::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(var(--dot) 1px,transparent 1.2px);background-size:24px 24px;-webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 40%,#000 30%,transparent 80%);mask-image:radial-gradient(ellipse 70% 60% at 50% 40%,#000 30%,transparent 80%)}
+.ob-scope .ob-card{box-shadow:var(--card-shadow)}
+.ob-bar{background:linear-gradient(100deg,#07101c 0%,#0d1724 55%,#1c130e 100%);box-shadow:inset 0 -1px 0 rgba(255,106,50,.55),0 10px 30px rgba(7,16,28,.25);color:#f7f5ef}
+.ob-bar .ob-step{background:rgba(255,106,50,.16);color:#ffb08c;border:1px solid rgba(255,106,50,.35)}
 .ob-faqs{max-height:clamp(180px,calc(100svh - 470px),440px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .ob-faqs textarea{white-space:pre-wrap;overflow-wrap:anywhere}
 @media (max-height:720px){.ob-scope .ob-main{padding-top:12px;padding-bottom:12px}.ob-scope .ob-steps{margin-bottom:12px}.ob-scope .ob-card{padding:22px 28px}.ob-scope .ob-card h1{font-size:26px;letter-spacing:-.9px}.ob-scope .ob-body{margin-top:16px}.ob-scope .ob-foot{margin-top:18px;padding-top:14px}.ob-scope .ob-stack{row-gap:14px}.ob-scope .ob-card input{height:40px}.ob-scope .ob-greet{padding-top:8px;padding-bottom:8px}.ob-faqs{max-height:clamp(160px,calc(100svh - 400px),440px)}}
@@ -562,11 +567,11 @@ const Onboarding: React.FC<OnboardingProps> = ({
     TONE_OPTIONS.find((t) => t.id === agent.tone) ?? TONE_OPTIONS[0];
 
   return (
-    <div className="ob-scope ag-onboarding-no-callout flex min-h-svh flex-col bg-[var(--bg)] font-['Manrope',sans-serif] text-[var(--ink)]">
+    <div className={`ob-scope ${readThemeChoice() === "light" ? "ob-light" : ""} ag-onboarding-no-callout flex min-h-svh flex-col font-['Manrope',sans-serif] text-[var(--ink)]`}>
       <style>{ONBOARDING_CSS}</style>
 
       {/* Header: the landing page's bar, logo left and progress right. */}
-      <header className="h-[65px] shrink-0 border-b border-[var(--line)] max-[699px]:h-[60px]">
+      <header className="ob-bar relative z-10 h-[65px] shrink-0 max-[699px]:h-[60px]">
         <div className="mx-auto flex h-full w-[min(calc(100%-36px),1296px)] items-center justify-between gap-4">
           <span className="inline-flex items-center gap-2.5 font-['DM_Sans',sans-serif] text-[24px] font-semibold tracking-[-1px] max-[699px]:text-[21px]">
             <img
@@ -576,7 +581,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
             />
             Agently
           </span>
-          <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[1px] text-[var(--muted)]">
+          <span className="ob-step rounded-full px-3 py-1 font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[1px]">
             Step {step} of {TOTAL_STEPS}
           </span>
         </div>

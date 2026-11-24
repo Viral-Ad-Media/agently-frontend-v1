@@ -282,7 +282,7 @@ const CallSimulator: React.FC = () => {
                     </div>
                     <div>
                       <p className="font-black text-[#0F172A] text-sm">
-                        {mode === "owner" ? "Owner conversation" : "Live web call"}
+                        {mode === "owner" ? "Owner conversation" : "Live call test"}
                       </p>
                     </div>
                   </div>
@@ -291,7 +291,7 @@ const CallSimulator: React.FC = () => {
                     className="w-full rounded-xl bg-[#f15a24] hover:bg-[#d97706] text-white py-3.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-100"
                   >
                     <i className="fa-solid fa-phone text-sm" />
-                    {mode === "owner" ? "Start conversation" : "Start Live Call"}
+                    {mode === "owner" ? "Start conversation" : "Start live call test"}
                   </button>
                   <p className="text-[11px] text-[#7a8493] text-center mt-3">
                     Up to {Math.round(maxSessionSeconds / 60)} minutes · uses

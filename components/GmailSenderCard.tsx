@@ -12,6 +12,8 @@ export default function GmailSenderCard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [setupRequired, setSetupRequired] = useState(false);
+  const [betaEmail, setBetaEmail] = useState("");
+  const [betaState, setBetaState] = useState<"idle" | "sending" | "sent" | "already">("idle");
 
   const load = useCallback(async () => {
     try {
@@ -128,6 +130,50 @@ export default function GmailSenderCard() {
           </div>
         ))}
       </div>
+
+      {!setupRequired && connections !== null && connections.length === 0 && (
+        <div className="mt-4 rounded-[12px] border border-[var(--line,#e6e2da)] bg-[var(--orange-tint)] p-3">
+          <p className="text-xs font-semibold text-[var(--ink)]">Gmail sending is in beta</p>
+          <p className="mt-1 text-xs leading-[1.55] text-[var(--ink-soft,#5b6170)]">
+            While Google reviews Agently, each Google account has to be approved before it can connect. Request access
+            with the Gmail address you'll use; once it's approved (usually within a day), click Connect Gmail.
+          </p>
+          {betaState === "sent" || betaState === "already" ? (
+            <p className="mt-2 text-xs font-semibold text-emerald-700">
+              {betaState === "sent" ? "Request sent. We'll add this address shortly." : "This address is already requested."}
+            </p>
+          ) : (
+            <form
+              className="mt-2 flex flex-col gap-2 sm:flex-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                setBetaState("sending");
+                api
+                  .requestGmailBetaAccess(betaEmail)
+                  .then((r) => setBetaState(r.alreadyRequested ? "already" : "sent"))
+                  .catch((err: any) => {
+                    setBetaState("idle");
+                    setError(err?.message || "Couldn't send the request. Please try again.");
+                  });
+              }}
+            >
+              <input
+                type="email"
+                required
+                value={betaEmail}
+                onChange={(e) => setBetaEmail(e.target.value)}
+                placeholder="you@gmail.com"
+                aria-label="Gmail address to approve"
+                className="h-9 min-w-0 flex-1 rounded-[10px] border border-[var(--line,#e6e2da)] bg-white px-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--orange)]"
+              />
+              <button type="submit" className={BTN_QUIET} disabled={betaState === "sending"}>
+                {betaState === "sending" ? "Sending…" : "Request access"}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       <button
         type="button"

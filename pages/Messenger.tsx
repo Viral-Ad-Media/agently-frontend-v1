@@ -10,6 +10,10 @@ import {
 } from "../types";
 import { api } from "../services/api";
 import AppModal from "../components/AppModal";
+import KnowledgeReadinessGate, {
+  assessKnowledgeReadiness,
+  isReadinessDismissed,
+} from "../components/KnowledgeReadinessGate";
 import {
   resolveApiBaseUrl,
   resolveChatbotWidgetBaseUrl,
@@ -301,7 +305,10 @@ const Messenger: React.FC<MessengerProps> = ({
       setDraft({
         ...activeChatbot,
         chatVoice: (activeChatbot as any).chatVoice || "alloy",
-        leadCaptureEnabled: (activeChatbot as any).leadCaptureEnabled !== false,
+        // The API calls it collectLeads. Reading leadCaptureEnabled (never
+        // sent) made the switch show ON after every refresh.
+        leadCaptureEnabled: (activeChatbot as any).collectLeads !== false,
+        leadCaptureFields: (activeChatbot as any).leadCaptureFields || ["name", "email", "phone"],
         chatLanguages: (activeChatbot as any).chatLanguages || ["en"],
       });
     }
@@ -458,6 +465,8 @@ const Messenger: React.FC<MessengerProps> = ({
         embedScript: freshEmbedScript,
         chatVoice: draft.chatVoice,
         chatLanguages: draft.chatLanguages,
+        collectLeads: draft.leadCaptureEnabled !== false,
+        leadCaptureFields: draft.leadCaptureFields,
         // Only sent when the owner flips the switch, so saving never touches
         // the column on a server where its migration hasn't run yet.
         ...(draft.mediaUploadsEnabled !== undefined &&
@@ -788,7 +797,23 @@ const Messenger: React.FC<MessengerProps> = ({
     patch({ faqs: next });
   };
 
-  const handleCopy = async () => {
+  // Thin-knowledge reminder before the tenant copies the embed script to put
+  // the chatbot live (see components/KnowledgeReadinessGate.tsx).
+  const [readinessGateOpen, setReadinessGateOpen] = useState(false);
+  const chatbotReadiness = assessKnowledgeReadiness(
+    currentKnowledgeBase,
+    draft.faqs?.length || 0,
+  );
+
+  const handleCopy = async (skipReadinessCheck = false) => {
+    if (
+      !skipReadinessCheck &&
+      chatbotReadiness.thin &&
+      !isReadinessDismissed(activeChatbot?.id || "chatbot")
+    ) {
+      setReadinessGateOpen(true);
+      return;
+    }
     try {
       const scriptToCopy =
         activeChatbot?.embedScript || buildEmbedScript(draft as any);
@@ -1682,6 +1707,14 @@ const Messenger: React.FC<MessengerProps> = ({
                 added, and an uncapped <pre> pushed every section below it off
                 the fold. It now holds a fixed slot in the layout and scrolls
                 its own content instead. */}
+            <KnowledgeReadinessGate
+              open={readinessGateOpen}
+              scopeId={activeChatbot.id || "chatbot"}
+              action="deploying"
+              readiness={chatbotReadiness}
+              onClose={() => setReadinessGateOpen(false)}
+              onContinue={() => void handleCopy(true)}
+            />
             <pre className="max-h-56 overflow-auto rounded-2xl bg-black/40 p-4 text-xs leading-relaxed text-indigo-100 whitespace-pre-wrap break-all select-all custom-scrollbar">
               {activeChatbot.embedScript || buildEmbedScript(draft as any)}
             </pre>
@@ -1736,9 +1769,9 @@ const Messenger: React.FC<MessengerProps> = ({
               Collect visitor details
             </h3>
             <p className="mt-1 max-w-md text-xs text-slate-500">
-              When this is on, your chatbot asks for a name and contact details
-              during the conversation and saves them to Leads. Turn it off for a
-              pure support experience.
+              When this is on, your chatbot asks for the details you tick below
+              and saves them to Leads. When it's off, it never asks for contact
+              details and nothing is saved to Leads.
             </p>
           </div>
           <button
@@ -1760,6 +1793,53 @@ const Messenger: React.FC<MessengerProps> = ({
             />
           </button>
         </div>
+
+        {draft.leadCaptureEnabled !== false && (
+          <div className="mt-4">
+            <p className="text-xs font-bold text-slate-700">Details to collect</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                ["name", "Name"],
+                ["email", "Email"],
+                ["phone", "Phone"],
+                ["reason", "What they need"],
+              ].map(([key, label]) => {
+                const fields: string[] = draft.leadCaptureFields || ["name", "email", "phone"];
+                const on = fields.includes(key);
+                const contactCount = fields.filter((f) => f === "email" || f === "phone").length;
+                // Keep at least one way to reach the visitor.
+                const locked = on && (key === "email" || key === "phone") && contactCount === 1;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={locked}
+                    title={locked ? "Keep email or phone so you can reach the visitor" : undefined}
+                    onClick={() =>
+                      patch({
+                        leadCaptureFields: on
+                          ? fields.filter((f) => f !== key)
+                          : [...fields, key],
+                      })
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                      on
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                    } disabled:cursor-not-allowed disabled:opacity-80`}
+                  >
+                    {on ? "✓ " : ""}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Email or phone stays on so you can reach the visitor.
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 flex gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
           <span className="text-base">&#9889;</span>

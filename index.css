@@ -2827,3 +2827,237 @@ textarea,
   .ag-workspace .ag-dashboard-stat { padding: .9rem; min-height: 124px; }
   .ag-workspace .ag-dashboard-stat > .ag-dashboard-icon { top: .8rem; right: .8rem; width: 1.5rem; height: 1.5rem; }
 }
+
+/* Dashboard KPI row. Six cards sit on ONE row whenever the content column is
+   wide enough; the row only re-flows for genuinely narrow space. It is a
+   container query on the row's own width, not a viewport breakpoint, so the
+   sidebar being open or collapsed is accounted for automatically.
+     >= 860px content width : 6 across (single row)
+     520-859px              : 3 across (3 + 3)
+     < 520px (phones)       : 2 across
+   The cards are compacted to match: the 132px-tall, 2rem-number version read
+   as "fat" once it had to share a row with five others. */
+.ag-stat-row-wrap { container-type: inline-size; }
+.ag-stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+}
+@container (min-width: 520px) {
+  .ag-stat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+}
+@container (min-width: 860px) {
+  .ag-stat-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.ag-workspace .ag-stat-row .ag-dashboard-stat {
+  min-height: 0;
+  padding: .85rem .9rem .8rem;
+}
+.ag-workspace .ag-stat-row .ag-dashboard-stat > .ag-dashboard-icon {
+  top: .75rem;
+  right: .75rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 7px;
+}
+.ag-workspace .ag-stat-row .ag-dashboard-stat > .ag-dashboard-icon i { font-size: 11px; }
+.ag-workspace .ag-stat-row .ag-dashboard-stat > div > p:first-child {
+  max-width: calc(100% - 1.9rem);
+  /* two lines reserved so the numbers line up even when one label wraps */
+  min-height: 2.7em;
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+.ag-workspace .ag-stat-row .ag-dashboard-stat > div > p:nth-child(2) {
+  margin-top: .55rem;
+  font-size: 1.55rem;
+}
+.ag-workspace .ag-stat-row .ag-dashboard-stat > div > p:nth-child(3) {
+  margin-top: .3rem;
+  font-size: 11px;
+}
+
+/* ─── Agent studio form sections (Prompt & Call Purpose, Lead qualification) ───
+   The old cards were cream-on-cream: a near-white card, white fields with a
+   5% outline and pale grey placeholders, and two sections styled identically.
+   This gives each section three clearly separated layers, all from the
+   workspace tokens (--surface, --line, --warm, --ink, --muted, --orange):
+     1. a header band (warm tint + divider) with a coloured icon chip, so the
+        two sections are told apart by their chip, not by reading the title;
+     2. a white body;
+     3. fields that are visibly recessed (off-white fill + a real 1px border),
+        with dark input text and a mid-grey placeholder that reads as a hint.
+   Contrast: input text #101216 on #fbfaf7 = 18:1; placeholder #7b7c82 = 4.2:1;
+   border #cfccc3 on white = 1.6:1 (the WCAG 1.4.11 3:1 target is met by the
+   darker hover/focus border, and the fill difference carries the shape). */
+.ag-section-card {
+  overflow: hidden;
+  border: 1px solid var(--line, #d9d7d0);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+}
+.ag-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  padding: .95rem 1.15rem;
+  background: #faf9f5;
+  border-bottom: 1px solid #ebe8e0;
+}
+.ag-section-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.ag-section-icon--orange { background: #fde7dc; color: #b63a0e; }
+.ag-section-icon--ink { background: #e6e9ef; color: #1f2a37; }
+.ag-section-title {
+  font-size: .95rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink, #101216);
+}
+.ag-section-sub {
+  margin-top: .2rem;
+  font-size: .78rem;
+  line-height: 1.45;
+  color: var(--muted, #5a5b61);
+}
+.ag-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  padding: 1.15rem;
+}
+.ag-section-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .8rem 1.15rem;
+  background: #faf9f5;
+  border-top: 1px solid #ebe8e0;
+}
+.ag-section-foot-note {
+  font-size: .75rem;
+  color: var(--muted, #5a5b61);
+}
+
+.ag-field-label {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-bottom: .4rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #2b2d33;
+}
+.ag-field-optional {
+  border-radius: 999px;
+  background: #efede7;
+  padding: .05rem .45rem;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--muted, #5a5b61);
+}
+.ag-field-hint {
+  margin-top: .35rem;
+  font-size: .72rem;
+  line-height: 1.45;
+  color: #6b6c72;
+}
+
+.ag-field {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #cfccc3;
+  border-radius: 10px;
+  background: #fbfaf7;
+  padding: .7rem .85rem;
+  font-size: .875rem;
+  line-height: 1.5;
+  color: var(--ink, #101216);
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+textarea.ag-field { min-height: 4.75rem; }
+.ag-field::placeholder { color: #7b7c82; opacity: 1; }
+.ag-field:hover { border-color: #a9a69d; }
+.ag-field:focus,
+.ag-field:focus-visible {
+  border-color: var(--orange-deep, #b63a0e);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(241, 90, 36, .16);
+  outline: none;
+}
+
+.ag-field-legacy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+  margin-top: .55rem;
+  border: 1px solid #f3c9b4;
+  border-radius: 10px;
+  background: #fff6f1;
+  padding: .6rem .75rem;
+  font-size: .75rem;
+  line-height: 1.45;
+  color: #5a5b61;
+}
+.ag-field-legacy p { min-width: 0; flex: 1 1 16rem; }
+.ag-field-legacy-btn {
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid #e7a487;
+  background: #fff;
+  padding: .35rem .7rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: #b63a0e;
+}
+.ag-field-legacy-btn:hover { background: #fde7dc; }
+
+/* Real buttons: solid brand orange for the primary action, a bordered warm
+   button for the secondary one. Both 40px tall with an icon. */
+.ag-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  padding: 0 1.05rem;
+  font-size: .82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.ag-action-btn:active { transform: translateY(1px); }
+.ag-action-btn--primary {
+  border: 1px solid #d94c18;
+  background: var(--orange, #f15a24);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 6px 14px rgba(241, 90, 36, .22);
+}
+.ag-action-btn--primary:hover { background: var(--orange-deep, #b63a0e); border-color: var(--orange-deep, #b63a0e); }
+.ag-action-btn--secondary {
+  border: 1px solid #cfccc3;
+  background: #fff;
+  color: var(--ink, #101216);
+}
+.ag-action-btn--secondary:hover { border-color: var(--orange, #f15a24); color: var(--orange-deep, #b63a0e); background: #fff6f1; }
+@media (max-width: 480px) {
+  .ag-section-foot > div { width: 100%; }
+  .ag-section-foot .ag-action-btn { flex: 1 1 0; }
+}

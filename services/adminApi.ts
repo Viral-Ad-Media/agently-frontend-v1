@@ -283,7 +283,26 @@ async function request<T>(path: string, options: RequestInit & { auth?: boolean 
   return response.json() as Promise<T>;
 }
 
+export interface AdminFeatureFlag {
+  key: string;
+  label: string;
+  description: string;
+  defaultEnabled: boolean;
+  enabled: boolean;
+}
+
 export const adminApi = {
+  async featureFlags() {
+    return request<{ features: AdminFeatureFlag[]; enforcedHere: boolean }>("/api/super-admin/feature-flags");
+  },
+
+  async setFeatureFlag(key: string, enabled: boolean) {
+    return request<{ features: AdminFeatureFlag[]; enforcedHere: boolean }>(
+      `/api/super-admin/feature-flags/${encodeURIComponent(key)}`,
+      { method: "PATCH", body: JSON.stringify({ enabled }) },
+    );
+  },
+
   async config() {
     return request<{ enabled: boolean; otpRequired: boolean }>("/api/super-admin/auth/config", { auth: false });
   },

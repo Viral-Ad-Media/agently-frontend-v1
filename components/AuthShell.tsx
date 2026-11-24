@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { DEFAULT_THEME, readThemeChoice, saveThemeChoice } from "../lib/theme";
 
 /**
  * Shared shell for the auth screens (v1.8, 2026-10-05).
@@ -17,29 +18,11 @@ import { Link } from "react-router-dom";
  *    sets explicit choices, matching the preview).
  */
 
-const AUTH_THEME_KEY = "agently-auth-theme";
 
+// Dark is the base; light applies only when the visitor picked it.
 const THEME_CSS = `
 .auth-scope{
-  --accent:#f2572b;--accent-hover:#d94720;--accent-soft:#fff0ea;
-  --surface:#f7f7f5;--surface-raised:#ffffff;--surface-soft:#eeeeeb;
-  --text:#111521;--muted:#606575;--line:#d9d9d4;--line-strong:#bfc1c5;
-  --field:#ffffff;--focus:rgba(242,87,43,.22);
-  --success:#267a52;--danger:#b63d28;
-  --shadow:0 18px 45px rgba(12,16,27,.08);
-  color-scheme:light;
-}
-@media (prefers-color-scheme:dark){
-  html:not([data-theme="light"]) .auth-scope{
-    --surface:#0d1220;--surface-raised:#131a2a;--surface-soft:#1b2335;
-    --text:#f5f5f2;--muted:#a9afbd;--line:#30384a;--line-strong:#475065;
-    --field:#101726;--focus:rgba(242,87,43,.3);--accent-soft:#331a16;
-    --success:#74cda3;--danger:#ff9c87;
-    --shadow:0 20px 55px rgba(0,0,0,.28);
-    color-scheme:dark;
-  }
-}
-html[data-theme="dark"] .auth-scope{
+  --accent:#f2572b;--accent-hover:#d94720;
   --surface:#0d1220;--surface-raised:#131a2a;--surface-soft:#1b2335;
   --text:#f5f5f2;--muted:#a9afbd;--line:#30384a;--line-strong:#475065;
   --field:#101726;--focus:rgba(242,87,43,.3);--accent-soft:#331a16;
@@ -47,33 +30,21 @@ html[data-theme="dark"] .auth-scope{
   --shadow:0 20px 55px rgba(0,0,0,.28);
   color-scheme:dark;
 }
-html[data-theme="light"] .auth-scope{color-scheme:light;}
+html[data-theme="light"] .auth-scope{
+  --accent-soft:#fff0ea;
+  --surface:#f7f7f5;--surface-raised:#ffffff;--surface-soft:#eeeeeb;
+  --text:#111521;--muted:#606575;--line:#d9d9d4;--line-strong:#bfc1c5;
+  --field:#ffffff;--focus:rgba(242,87,43,.22);
+  --success:#267a52;--danger:#b63d28;
+  --shadow:0 18px 45px rgba(12,16,27,.08);
+  color-scheme:light;
+}
 `;
 
 export type AuthTheme = "light" | "dark";
 
 export function useAuthTheme(): { theme: AuthTheme; choose: (t: AuthTheme) => void } {
-  const [manual, setManual] = useState<AuthTheme | null>(() => {
-    try {
-      const stored = window.localStorage.getItem(AUTH_THEME_KEY);
-      return stored === "light" || stored === "dark" ? stored : null;
-    } catch {
-      return null;
-    }
-  });
-  const [systemDark, setSystemDark] = useState<boolean>(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    if (mq.addEventListener) mq.addEventListener("change", onChange);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener("change", onChange);
-    };
-  }, []);
-
+  const [manual, setManual] = useState<AuthTheme | null>(() => readThemeChoice());
   useEffect(() => {
     if (manual) {
       document.documentElement.setAttribute("data-theme", manual);
@@ -92,14 +63,10 @@ export function useAuthTheme(): { theme: AuthTheme; choose: (t: AuthTheme) => vo
 
   const choose = (t: AuthTheme) => {
     setManual(t);
-    try {
-      window.localStorage.setItem(AUTH_THEME_KEY, t);
-    } catch {
-      /* storage unavailable — the choice still applies for this visit */
-    }
+    saveThemeChoice(t);
   };
 
-  return { theme: manual ?? (systemDark ? "dark" : "light"), choose };
+  return { theme: manual ?? DEFAULT_THEME, choose };
 }
 
 export const SunIcon = () => (

@@ -21,6 +21,11 @@ import {
 } from "../services/voiceCallsApi";
 import AppModal from "../components/AppModal";
 import BusinessCalendarPicker from "../components/BusinessCalendarPicker";
+import { useFeatureFlag } from "../lib/featureFlags";
+import KnowledgeReadinessGate, {
+  assessKnowledgeReadiness,
+  isReadinessDismissed,
+} from "../components/KnowledgeReadinessGate";
 import { formatTimezoneOptionLabel } from "@/utils/timezones";
 import { useWebcall } from "../contexts/WebcallContext";
 
@@ -1534,7 +1539,34 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
     await persistAgentChanges({ showModal: true });
   };
 
+  // Thin-knowledge reminder shown before Call now / Schedule (see
+  // components/KnowledgeReadinessGate.tsx).
+  const calendarFeatureOn = useFeatureFlag("calendar");
+  const [readinessGateMode, setReadinessGateMode] = useState<
+    "call-now" | "schedule" | null
+  >(null);
+
   const openCallCampaignComposer = async (
+    mode: "call-now" | "schedule" = "call-now",
+  ) => {
+    const agentKb =
+      knowledgeBases.find((kb) => kb.id === draftRef.current.knowledgeBaseId) ||
+      knowledgeBases.find((kb) =>
+        kb.linkedVoiceAgentIds?.includes(draftRef.current.id),
+      ) ||
+      null;
+    const readiness = assessKnowledgeReadiness(
+      agentKb,
+      draftRef.current.faqs?.length || 0,
+    );
+    if (readiness.thin && !isReadinessDismissed(draftRef.current.id)) {
+      setReadinessGateMode(mode);
+      return;
+    }
+    await launchCallCampaignComposer(mode);
+  };
+
+  const launchCallCampaignComposer = async (
     mode: "call-now" | "schedule" = "call-now",
   ) => {
     const currentDraft = draftRef.current;
@@ -1850,6 +1882,23 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
         </div>
       )}
 
+      <KnowledgeReadinessGate
+        open={readinessGateMode !== null}
+        scopeId={draft.id}
+        action="calling"
+        readiness={assessKnowledgeReadiness(
+          knowledgeBases.find((kb) => kb.id === draft.knowledgeBaseId) ||
+            knowledgeBases.find((kb) => kb.linkedVoiceAgentIds?.includes(draft.id)) ||
+            null,
+          draft.faqs?.length || 0,
+        )}
+        onClose={() => setReadinessGateMode(null)}
+        onContinue={() => {
+          const mode = readinessGateMode || "call-now";
+          void launchCallCampaignComposer(mode);
+        }}
+      />
+
       {(busy === "save-agent-settings" ||
         busy === "create-in" ||
         busy === "create-out") && (
@@ -1937,7 +1986,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
             className="ag-button-soft"
             data-tour-side-effect="starts a real, billed web call"
           >
-            Live web call
+            Live call test
           </button>
           <button
             type="button"
@@ -2648,7 +2697,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               <Label>Greeting Message</Label>
               <BufferedTextarea
                 rows={2}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all resize-none"
+                className="ag-field outline-none"
                 value={draft.greeting}
                 onBufferedChange={(value, options) =>
                   updateDraftFieldBuffered("greeting", value, options)
@@ -2656,40 +2705,73 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               />
             </div>
 
-            <div className="ag-prompt-purpose-card space-y-5" data-tour="agent-prompt">
-              <div>
-                <h3 className="text-sm font-medium leading-tight text-[#0F172A]">
-                  Prompt & Call Purpose
-                </h3>
-                <p className="mt-1 text-xs leading-5 text-[#94a3b8]">
-                  Set the behavioral framework and objective for every call.
-                </p>
-              </div>
+            {/* Two distinct sections, each with a tinted header band, a body of
+                recessed fields and (for the prompt) an action footer. Styles are
+                the .ag-section-* / .ag-field rules in index.css. */}
+            <section className="ag-section-card" data-tour="agent-prompt">
+              <header className="ag-section-head">
+                <span className="ag-section-icon ag-section-icon--orange" aria-hidden="true">
+                  <i className="fa-solid fa-wand-magic-sparkles" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="ag-section-title">Prompt & Call Purpose</h3>
+                  <p className="ag-section-sub">
+                    How this agent behaves, and what every call is trying to achieve.
+                  </p>
+                </div>
+              </header>
 
-              <div>
-                <Label>
-                  Agent Prompt{" "}
-                  <span className="normal-case tracking-normal font-normal text-[#94a3b8]">
-                    (optional)
-                  </span>
-                </Label>
-                <textarea
-                  rows={1}
-                  className="ag-textarea-premium ag-prompt-single-line"
-                  placeholder="Describe how this agent should behave, what it should prioritize, and what it should avoid."
-                  value={getAgentPrompt()}
-                  onChange={(e) =>
-                    updateDraftRuleText("agentPrompt", e.target.value)
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="ag-section-body">
                 <div>
-                  <Label>Default Call Purpose</Label>
+                  <label className="ag-field-label" htmlFor="agent-prompt-field">
+                    Agent prompt <span className="ag-field-optional">Optional</span>
+                  </label>
                   <textarea
+                    id="agent-prompt-field"
+                    rows={4}
+                    className="ag-field outline-none"
+                    placeholder="Describe how this agent should behave, what it should prioritize, and what it should avoid."
+                    value={getAgentPrompt()}
+                    onChange={(e) =>
+                      updateDraftRuleText("agentPrompt", e.target.value)
+                    }
+                  />
+                  {getCallInstructions().trim() && (
+                    <div className="ag-field-legacy">
+                      <p>
+                        This agent still has older call instructions saved:{" "}
+                        <span className="font-medium text-[#101216]">
+                          “{getCallInstructions().trim().slice(0, 140)}
+                          {getCallInstructions().trim().length > 140 ? "…" : ""}”
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        className="ag-field-legacy-btn"
+                        onClick={() => {
+                          const legacy = getCallInstructions().trim();
+                          const prompt = getAgentPrompt().trim();
+                          updateDraftRuleText(
+                            "agentPrompt",
+                            prompt ? `${prompt}\n\n${legacy}` : legacy,
+                          );
+                          updateDraftRuleText("callInstructions", "");
+                        }}
+                      >
+                        Move into prompt
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="ag-field-label" htmlFor="agent-purpose-field">
+                    Default call purpose
+                  </label>
+                  <textarea
+                    id="agent-purpose-field"
                     rows={2}
-                    className="ag-textarea-premium"
+                    className="ag-field outline-none"
                     placeholder="Example: Confirm interest, answer questions, and book a follow-up appointment."
                     value={getDefaultCallPurpose()}
                     onChange={(e) =>
@@ -2697,134 +2779,145 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
                     }
                   />
                 </div>
-                <div>
-                  <Label>
-                    Default Call Instructions{" "}
-                    <span className="normal-case tracking-normal font-normal text-[#94a3b8]">
-                      (optional)
-                    </span>
-                  </Label>
-                  <textarea
-                    rows={2}
-                    className="ag-textarea-premium"
-                    placeholder="Add any extra calling rules, qualification notes, or handoff instructions."
-                    value={getCallInstructions()}
-                    onChange={(e) =>
-                      updateDraftRuleText("callInstructions", e.target.value)
-                    }
-                  />
-                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-4">
-                {[
-                  { mode: "call-now", label: "Call Now" },
-                  { mode: "schedule", label: "Schedule" },
-                ].map((item) => (
-                  <button
-                    key={item.mode}
-                    type="button"
-                    onClick={() =>
-                      void openCallCampaignComposer(
-                        item.mode as "call-now" | "schedule",
-                      )
-                    }
-                    className="rounded-full border border-slate-200 bg-white px-5 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#475569] transition-all hover:border-amber-300 hover:text-amber-700"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="ag-prompt-purpose-card space-y-5">
-              <div>
-                <h3 className="text-sm font-medium leading-tight text-[#0F172A]">
-                  Lead qualification playbook
-                </h3>
-                <p className="mt-1 text-xs leading-5 text-[#94a3b8]">
-                  Tell this agent what evidence to gather naturally during caller conversations. After a completed call, the transcript is assessed against this playbook and added to the lead record for your review.
+              <footer className="ag-section-foot">
+                <p className="ag-section-foot-note">
+                  Outbound calls use this prompt and purpose.
                 </p>
-              </div>
-              <div>
-                <Label>Questions and qualification evidence</Label>
-                <textarea
-                  rows={5}
-                  className="ag-textarea-premium"
-                  placeholder={"Example:\n• Are they the decision maker?\n• What result do they need and by when?\n• What budget or buying signal did they share?"}
-                  value={draft.qualificationPlaybook || ""}
-                  onChange={(event) =>
-                    updateDraftField("qualificationPlaybook", event.target.value)
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void openCallCampaignComposer("schedule")}
+                    className="ag-action-btn ag-action-btn--secondary"
+                  >
+                    <i className="fa-regular fa-calendar" aria-hidden="true" />
+                    Schedule
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void openCallCampaignComposer("call-now")}
+                    className="ag-action-btn ag-action-btn--primary"
+                    data-tour-side-effect="places a real phone call"
+                  >
+                    <i className="fa-solid fa-phone" aria-hidden="true" />
+                    Call now
+                  </button>
+                </div>
+              </footer>
+            </section>
+
+            <section className="ag-section-card">
+              <header className="ag-section-head">
+                <span className="ag-section-icon ag-section-icon--ink" aria-hidden="true">
+                  <i className="fa-solid fa-list-check" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="ag-section-title">Lead qualification playbook</h3>
+                  <p className="ag-section-sub">
+                    What evidence the agent gathers during calls. After a completed
+                    call, the transcript is scored against this and added to the
+                    lead record for your review.
+                  </p>
+                </div>
+              </header>
+
+              <div className="ag-section-body">
                 <div>
-                  <Label>Qualified score threshold</Label>
+                  <label className="ag-field-label" htmlFor="agent-playbook-field">
+                    Questions and qualification evidence
+                  </label>
+                  <textarea
+                    id="agent-playbook-field"
+                    rows={5}
+                    className="ag-field outline-none"
+                    placeholder={"Example:\n• Are they the decision maker?\n• What result do they need and by when?\n• What budget or buying signal did they share?"}
+                    value={draft.qualificationPlaybook || ""}
+                    onChange={(event) =>
+                      updateDraftField("qualificationPlaybook", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="ag-field-label" htmlFor="agent-qualified-field">
+                      Qualified score threshold
+                    </label>
+                    <input
+                      id="agent-qualified-field"
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="ag-field outline-none"
+                      value={draft.qualificationRules?.qualified_min_score ?? 80}
+                      onChange={(event) =>
+                        updateDraftField("qualificationRules", {
+                          ...(draft.qualificationRules || {}),
+                          qualified_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 80)),
+                        })
+                      }
+                    />
+                    <p className="ag-field-hint">Can mark a lead qualified. It never books an appointment by score alone.</p>
+                  </div>
+                  <div>
+                    <label className="ag-field-label" htmlFor="agent-nurture-field">
+                      Nurture score threshold
+                    </label>
+                    <input
+                      id="agent-nurture-field"
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="ag-field outline-none"
+                      value={draft.qualificationRules?.nurture_min_score ?? 50}
+                      onChange={(event) =>
+                        updateDraftField("qualificationRules", {
+                          ...(draft.qualificationRules || {}),
+                          nurture_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 50)),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="agent-disqualify-field">
+                    Possible disqualifying signals
+                  </label>
                   <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
-                    value={draft.qualificationRules?.qualified_min_score ?? 80}
+                    id="agent-disqualify-field"
+                    type="text"
+                    className="ag-field outline-none"
+                    placeholder="wrong number, outside service area, no authority"
+                    value={(draft.qualificationRules?.disqualify_signals || []).join(", ")}
                     onChange={(event) =>
                       updateDraftField("qualificationRules", {
                         ...(draft.qualificationRules || {}),
-                        qualified_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 80)),
+                        disqualify_signals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
                       })
                     }
                   />
-                  <p className="mt-1 text-[10px] text-[#7a8493]">This can mark a lead qualified. It never books an appointment by score alone.</p>
+                  <p className="ag-field-hint">Comma separated. Matches are flagged for your review; the AI never discards the lead.</p>
                 </div>
                 <div>
-                  <Label>Nurture score threshold</Label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
-                    value={draft.qualificationRules?.nurture_min_score ?? 50}
+                  <label className="ag-field-label" htmlFor="agent-booking-field">
+                    Booking readiness criteria
+                  </label>
+                  <textarea
+                    id="agent-booking-field"
+                    rows={2}
+                    className="ag-field outline-none"
+                    placeholder="Example: Confirm the caller's need, timeline, contact details, chosen service, and explicit request to book."
+                    value={draft.qualificationRules?.booking_criteria || ""}
                     onChange={(event) =>
                       updateDraftField("qualificationRules", {
                         ...(draft.qualificationRules || {}),
-                        nurture_min_score: Math.max(0, Math.min(100, Number(event.target.value) || 50)),
+                        booking_criteria: event.target.value,
                       })
                     }
                   />
                 </div>
               </div>
-              <div>
-                <Label>Possible disqualifying signals</Label>
-                <input
-                  type="text"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-400"
-                  placeholder="wrong number, outside service area, no authority"
-                  value={(draft.qualificationRules?.disqualify_signals || []).join(", ")}
-                  onChange={(event) =>
-                    updateDraftField("qualificationRules", {
-                      ...(draft.qualificationRules || {}),
-                      disqualify_signals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                    })
-                  }
-                />
-                <p className="mt-1 text-[10px] text-[#7a8493]">Matches are flagged for owner review; the AI does not automatically discard the lead.</p>
-              </div>
-              <div>
-                <Label>Booking readiness criteria</Label>
-                <textarea
-                  rows={2}
-                  className="ag-textarea-premium"
-                  placeholder="Example: Confirm the caller's need, timeline, contact details, chosen service, and explicit request to book."
-                  value={draft.qualificationRules?.booking_criteria || ""}
-                  onChange={(event) =>
-                    updateDraftField("qualificationRules", {
-                      ...(draft.qualificationRules || {}),
-                      booking_criteria: event.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
+            </section>
 
             <div>
               <Label>Communication Tone</Label>
@@ -2847,6 +2940,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
       {/* ═══════════════════════════════════════════════ KNOWLEDGE TAB */}
       {tab === "knowledge" && (
         <div className="space-y-6">
+          {calendarFeatureOn && (
           <BusinessCalendarPicker
             agentId={draft.id}
             value={draft.calendarIntegrationId}
@@ -2855,6 +2949,7 @@ const AgentSettings: React.FC<AgentSettingsProps> = ({
               setSavedAgentBaseline((current) => ({ ...current, calendarIntegrationId }));
             }}
           />
+          )}
           <div
             className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
             data-tour="agent-knowledge"

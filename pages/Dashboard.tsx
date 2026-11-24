@@ -1114,8 +1114,12 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
       {/* data-tour anchor belongs on the real KPI row. It used to sit on the
           error banner above, which only renders when the dashboard fails to
           load — so the "Your headline numbers" tour step pointed at nothing. */}
+      {/* One row of six whenever the content area is wide enough (a container
+          query on .ag-stat-row, so a collapsed or open sidebar both count),
+          3+3 on tablets and 2 per row on phones. See index.css. */}
+      <div className="ag-stat-row-wrap">
       <div
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 2xl:grid-cols-6"
+        className="ag-stat-row"
         data-tour="dashboard-stats"
       >
         <StatCard
@@ -1162,6 +1166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ org, dashboard }) => {
           tone="slate"
           sub={`${live.chatbotLeadsCaptured} bot · ${live.callLeadsCaptured} call`}
         />
+      </div>
       </div>
 
       <AgentFilterToolbar

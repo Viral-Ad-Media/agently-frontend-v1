@@ -542,6 +542,10 @@ export interface ChatbotConfig {
    * leads and nothing changes for anything already deployed.
    */
   leadCaptureEnabled?: boolean;
+  /** Server name for the lead switch (chatbots.collect_leads). */
+  collectLeads?: boolean;
+  /** Details the chat collects: any of name, email, phone, reason. */
+  leadCaptureFields?: string[];
   /** Customers can send photos / short video clips in the widget. Server default: on. */
   mediaUploadsEnabled?: boolean;
   /**
@@ -691,4 +695,6 @@ export interface WorkspaceBootstrap {
   agentStats?: AgentStats[];
   knowledgeBases?: KnowledgeBase[];
   businessProfiles?: BusinessSettingsProfile[];
+  /** Super Admin feature switches; see lib/featureFlags.ts. */
+  featureFlags?: Record<string, boolean> | null;
 }

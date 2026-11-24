@@ -151,7 +151,7 @@ describe("Login", () => {
     renderLogin();
     fireEvent.click(screen.getByRole("button", { name: "Use dark theme" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(window.localStorage.getItem("agently-auth-theme")).toBe("dark");
+    expect(window.localStorage.getItem("agently-theme")).toBe("dark");
     fireEvent.click(screen.getByRole("button", { name: "Use light theme" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });

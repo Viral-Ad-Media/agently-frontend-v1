@@ -103,17 +103,24 @@ describe("LandingPage", () => {
     expect(screen.getByText(/website visitor starts a chat/i)).toBeInTheDocument();
   });
 
+  it("defaults to dark when the visitor has not picked a theme", () => {
+    window.localStorage.clear();
+    renderLanding();
+    const dark = screen.getAllByRole("button", { name: "Dark" })[0];
+    expect(dark.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("toggles light/dark theme and persists the choice", () => {
     renderLanding();
     const darkButton = screen.getByRole("button", { name: "Dark" });
     const lightButton = screen.getByRole("button", { name: "Light" });
     fireEvent.click(darkButton);
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(window.localStorage.getItem("agently-landing-theme")).toBe("dark");
+    expect(window.localStorage.getItem("agently-theme")).toBe("dark");
     expect(darkButton.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(lightButton);
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    expect(window.localStorage.getItem("agently-landing-theme")).toBe("light");
+    expect(window.localStorage.getItem("agently-theme")).toBe("light");
   });
 
   it("toggles the mobile navigation with the hamburger button", () => {

@@ -1452,6 +1452,14 @@ export const api = {
    * header on a full-page navigation, so this fetches a short-lived,
    * single-purpose start token (authenticated) whose URL the page navigates to.
    */
+  /** Ask to be added as a Google test user so this account can connect Gmail. */
+  async requestGmailBetaAccess(googleEmail: string) {
+    return request<{ requested: boolean; alreadyRequested: boolean }>('/api/email/gmail/beta-access', {
+      method: 'POST',
+      body: { googleEmail },
+    });
+  },
+
   async createIntegrationStartToken(provider: 'google' | 'calendly' | 'gmail') {
     // returnTo: the page to land back on after the provider's consent screen.
     // The server accepts only an in-app path and signs it into the OAuth state.
@@ -1514,6 +1522,26 @@ export const api = {
       method: 'POST',
       body: input,
     });
+  },
+
+  /** Outbound SMS (behind the "sms" feature switch). */
+  async getSmsNumbers() {
+    return request<{
+      numbers: Array<{ id: string; phoneNumber: string; outboundSmsStatus: string | null }>;
+      vendorCostPerSegmentUsd: number;
+    }>('/api/sms/numbers');
+  },
+
+  async getSmsMessages(leadId: string) {
+    return request<{
+      messages: Array<{ id: string; body: string; status: string; segments: number; errorCode: string | null; createdAt: string; to: string }>;
+    }>(`/api/sms/messages?leadId=${encodeURIComponent(leadId)}`);
+  },
+
+  async sendSms(input: { leadId?: string; to?: string; body: string; fromNumberId?: string }) {
+    return request<{
+      message: { id: string; sid: string | null; status: string; from: string; to: string; segments: number };
+    }>('/api/sms/send', { method: 'POST', body: input });
   },
 
   /**

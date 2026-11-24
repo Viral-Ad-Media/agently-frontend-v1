@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { DEFAULT_THEME, readThemeChoice, saveThemeChoice } from "../lib/theme";
 
 /*
  * Agently landing page v1.7 — pure-Tailwind React port of the approved
@@ -32,7 +33,6 @@ import { Link } from "react-router-dom";
 const DEMO_PHONE_DISPLAY = "+1 (123) 456-7890";
 const DEMO_PHONE_HREF = "tel:+11234567890";
 const SUPPORT_EMAIL = "agentlycallsupport@gmail.com";
-const THEME_STORAGE_KEY = "agently-landing-theme";
 
 /* ---------- FAQ data + disclosure icons ---------- */
 const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -305,8 +305,7 @@ const INTEGRATIONS: { name: string; Mark: React.FC }[] = [
  * layout, typography, spacing and responsive behavior is Tailwind utilities.
  */
 const STYLE = `
-:root{color-scheme:light dark;--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--deep:#07101c;--deep2:#0d1724;--footer:#07101c;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;--orange:#f15a24;--orange-deep:#b63a0e;--warm:#ece9e1;--pad:72px;--max:1296px}
-@media(prefers-color-scheme:dark){:root{--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45}}
+:root{color-scheme:dark;--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--deep:#07101c;--deep2:#0d1724;--footer:#07101c;--on-deep:#f7f5ef;--on-deep-muted:#aeb6c1;--orange:#ff6a32;--orange-deep:#ff7a45;--warm:#24272b;--pad:72px;--max:1296px}
 :root[data-theme="light"]{color-scheme:light;--bg:#f6f5f1;--surface:#ffffff;--ink:#101216;--muted:#5a5b61;--line:#d9d7d0;--warm:#ece9e1;--orange:#f15a24;--orange-deep:#b63a0e}
 :root[data-theme="dark"]{color-scheme:dark;--bg:#111419;--surface:#171b21;--ink:#f3f1eb;--muted:#afb3ba;--line:#33373d;--warm:#24272b;--orange:#ff6a32;--orange-deep:#ff7a45}
 @media(max-width:900px){:root{--pad:clamp(22px,6.4vw,72px)}}
@@ -373,7 +372,6 @@ const BTN =
 
 const LandingPage: React.FC = () => {
   const [themeChoice, setThemeChoice] = useState<ThemeChoice | null>(null);
-  const [systemDark, setSystemDark] = useState<boolean>(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const [activeCase, setActiveCase] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -407,27 +405,22 @@ const LandingPage: React.FC = () => {
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
-  /* Theme: explicit choice wins, otherwise follow the OS. */
+  /* Theme: dark by default; an explicit choice (shared with sign-in and
+     onboarding) wins. The base CSS palette is dark, so there is no flash. */
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setSystemDark(mq.matches);
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark") {
+    const stored = readThemeChoice();
+    if (stored) {
       setThemeChoice(stored);
       document.documentElement.setAttribute("data-theme", stored);
     }
-    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    if (mq.addEventListener) mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  const effectiveTheme: ThemeChoice =
-    themeChoice ?? (systemDark ? "dark" : "light");
+  const effectiveTheme: ThemeChoice = themeChoice ?? DEFAULT_THEME;
 
   const chooseTheme = (t: ThemeChoice) => {
     setThemeChoice(t);
     document.documentElement.setAttribute("data-theme", t);
-    window.localStorage.setItem(THEME_STORAGE_KEY, t);
+    saveThemeChoice(t);
   };
 
   /* Hero crossfade. */

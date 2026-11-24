@@ -12,6 +12,7 @@ import { ICONS } from "@/constants";
 import { voiceCallsApi } from "../services/voiceCallsApi";
 import { api } from "../services/api";
 import PlatformAssistant from "./PlatformAssistant";
+import { useFeatureFlag } from "../lib/featureFlags";
 import TopUpGateModal from "./TopUpGateModal";
 
 const NAV_ITEMS: Array<{
@@ -733,6 +734,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   onLogout,
 }) => {
   const location = useLocation();
+  const calendarFeatureOn = useFeatureFlag("calendar");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [operatorAgentId, setOperatorAgentId] = useState<string>(() => {
     try {
@@ -908,7 +910,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
 
             <nav className="shrink-0 space-y-1 overflow-visible">
-              {NAV_ITEMS.map((item) => (
+              {NAV_ITEMS.filter(
+                (item) => item.to !== "/bookings" || calendarFeatureOn,
+              ).map((item) => (
                 <SidebarLink
                   key={item.to}
                   {...item}

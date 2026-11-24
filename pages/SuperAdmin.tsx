@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import FeatureFlagsAdmin from "../components/admin/FeatureFlagsAdmin";
 import { Link } from "react-router-dom";
 import BlogContent from "../components/BlogContent";
 import PlatformAssistantAdmin from "../components/admin/PlatformAssistantAdmin";
@@ -28,7 +29,8 @@ type AdminTab =
   | "infrastructure"
   | "blog"
   | "assistant"
-  | "tour";
+  | "tour"
+  | "features";
 type BlogWorkspaceTab = "build" | "automation";
 
 const createId = () =>
@@ -1886,6 +1888,7 @@ const SuperAdmin: React.FC = () => {
                 "blog",
                 "assistant",
                 "tour",
+                "features",
               ] as AdminTab[]
             ).map((item) => (
               <button
@@ -1908,7 +1911,9 @@ const SuperAdmin: React.FC = () => {
                         ? "Blog publishing"
                         : item === "assistant"
                           ? "Agently assistant"
-                          : "Product tour"}
+                          : item === "features"
+                            ? "Feature switches"
+                            : "Product tour"}
               </button>
             ))}
           </nav>
@@ -1967,6 +1972,7 @@ const SuperAdmin: React.FC = () => {
                   <option value="blog">Blog publishing</option>
                   <option value="assistant">Agently assistant</option>
                   <option value="tour">Product tour</option>
+                  <option value="features">Feature switches</option>
                 </select>
                 <Link
                   to="/"
@@ -2217,6 +2223,7 @@ const SuperAdmin: React.FC = () => {
             {tab === "infrastructure" ? <SharedInfraAdmin /> : null}
             {tab === "assistant" ? <PlatformAssistantAdmin /> : null}
             {tab === "tour" ? <TourAdmin /> : null}
+            {tab === "features" ? <FeatureFlagsAdmin /> : null}
 
             {tab === "blog" ? (
               <div className="space-y-4">

@@ -80,6 +80,9 @@ export interface ScrapeJob {
   estimatedUsd: number;
   consumedUsd: number;
   lastError: string | null;
+  createdAt?: string | null;
+  /** Queued, but no scrape worker has claimed it yet. */
+  waitingForWorker?: boolean;
 }
 
 export interface DiscoverResponse {

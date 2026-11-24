@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import SettingsTabs from "../components/SettingsTabs";
 import GmailSenderCard from "../components/GmailSenderCard";
+import { useFeatureFlag } from "../lib/featureFlags";
 import BrandSurface, {
   BTN_PRIMARY,
   BTN_QUIET,
@@ -118,6 +119,9 @@ export const connectionLabel = (connection: CalendarConnection): string =>
   PROVIDER_META[connection.provider].title;
 
 const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
+  // Super Admin kill switches (lib/featureFlags.ts).
+  const calendarFeatureOn = useFeatureFlag("calendar");
+  const gmailFeatureOn = useFeatureFlag("gmail");
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<IntegrationsStatus | null>(null);
@@ -710,8 +714,13 @@ const Integrations: React.FC<{ user: User | null }> = ({ user }) => {
               </div>
             )}
 
-            {renderAccounts()}
-            <GmailSenderCard />
+            {calendarFeatureOn && renderAccounts()}
+            {gmailFeatureOn && <GmailSenderCard />}
+            {!calendarFeatureOn && !gmailFeatureOn && (
+              <p className="text-sm text-[var(--muted)]">
+                Calendar and email connections are coming soon.
+              </p>
+            )}
           </div>
         )}
       </main>

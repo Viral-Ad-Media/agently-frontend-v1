@@ -1,4 +1,5 @@
 import React, { lazy, useEffect, useState } from "react";
+import { setFeatureFlags, useFeatureFlag } from "./lib/featureFlags";
 import { Routes, Route, Navigate } from "react-router-dom";
 import {
   AgentConfig,
@@ -201,6 +202,8 @@ const ActiveProductTour: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  // Super Admin kill switch for calendar/Calendly booking (lib/featureFlags.ts).
+  const calendarFeatureOn = useFeatureFlag("calendar");
   const [workspace, setWorkspace] = useState<WorkspaceBootstrap | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [startupError, setStartupError] = useState("");
@@ -316,6 +319,10 @@ const App: React.FC = () => {
       .getAuthConfig()
       .then((config) => {
         if (!cancelled) setAuthConfig(config);
+        setFeatureFlags(
+          (config as { featureFlags?: Record<string, boolean> | null })
+            ?.featureFlags,
+        );
       })
       .catch(() => {
         // Non-fatal: the panel falls back to the documented default.
@@ -326,6 +333,7 @@ const App: React.FC = () => {
   }, []);
 
   const applyWorkspace = (nextWorkspace: WorkspaceBootstrap) => {
+    setFeatureFlags(nextWorkspace.featureFlags);
     setWorkspace(nextWorkspace);
     setStartupError("");
   };
@@ -1275,7 +1283,9 @@ const App: React.FC = () => {
           <Route
             path="/bookings"
             element={
-              org ? (
+              org && !calendarFeatureOn ? (
+                <Navigate to="/dashboard" replace />
+              ) : org ? (
                 <ProtectedRoute {...protectedRouteProps}>
                   <Bookings user={user} />
                 </ProtectedRoute>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import SmsComposeModal from '../components/SmsComposeModal';
+import { useFeatureFlag } from '../lib/featureFlags';
 import { Link } from "react-router-dom";
 import type { Lead } from "../types";
 import LeadMediaGallery from "../components/LeadMediaGallery";
@@ -135,6 +137,7 @@ export default function LeadsInbox(props: LeadsInboxProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
+  const [smsLead, setSmsLead] = useState<Lead | null>(null);
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -420,9 +423,20 @@ export default function LeadsInbox(props: LeadsInboxProps) {
           onDelete={(id) => run(async () => { await props.onDeleteLead(id); setActiveId(null); })}
           onConvert={(id) => run(async () => { await props.onUpdateLead(id, { crmStage: "qualified" }); await props.onRefresh(); setActiveId(null); setView("pipeline"); })}
           onEmail={(lead) => { setActiveId(null); setEmailLead(lead); }}
+          onText={(lead) => { setActiveId(null); setSmsLead(lead); }}
           onChanged={props.onRefresh}
           onRename={async (id, title) => { await props.onUpdateLead(id, { reason: title }); await props.onRefresh(); }}
           onSaveContact={async (id, contact) => { await props.onUpdateLead(id, contact); await props.onRefresh(); }}
+        />
+      )}
+      {smsLead && (
+        <SmsComposeModal
+          key={smsLead.id}
+          open
+          onClose={() => setSmsLead(null)}
+          leadId={smsLead.id}
+          phone={smsLead.phone || ""}
+          recipientName={smsLead.name}
         />
       )}
       {emailLead && (
@@ -927,7 +941,7 @@ function ContactSection({ lead, onSave }: {
   );
 }
 
-function LeadDrawer({ lead, onClose, onArchive, onDelete, onConvert, onEmail, onChanged, onRename, onSaveContact }: {
+function LeadDrawer({ lead, onClose, onArchive, onDelete, onConvert, onEmail, onText, onChanged, onRename, onSaveContact }: {
   lead: Lead;
   onSaveContact: (id: string, contact: { name: string; email: string; phone: string }) => Promise<void>;
   onRename: (id: string, title: string) => Promise<void>;
@@ -936,8 +950,11 @@ function LeadDrawer({ lead, onClose, onArchive, onDelete, onConvert, onEmail, on
   onDelete: (id: string) => void;
   onConvert: (id: string) => void;
   onEmail: (lead: Lead) => void;
+  onText: (lead: Lead) => void;
   onChanged: () => Promise<void>;
 }) {
+  const gmailFeatureOn = useFeatureFlag('gmail');
+  const smsFeatureOn = useFeatureFlag('sms');
   useEffect(() => {
     const close = (event: KeyboardEvent) => {if (event.key === 'Escape') onClose();};
     window.addEventListener('keydown', close);
@@ -989,7 +1006,8 @@ function LeadDrawer({ lead, onClose, onArchive, onDelete, onConvert, onEmail, on
             <ContactSection lead={lead} onSave={onSaveContact} />
 
             <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-              {lead.email && <button onClick={() => onEmail(lead)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">Email lead</button>}
+              {lead.phone && smsFeatureOn && <button onClick={() => onText(lead)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">Text lead</button>}
+              {lead.email && gmailFeatureOn && <button onClick={() => onEmail(lead)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">Email lead</button>}
               <button onClick={() => onArchive(lead.id)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">Archive</button>
               <button onClick={() => onConvert(lead.id)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700">Convert to deal →</button>
               <button onClick={() => { if (confirm(`Delete "${leadTitle(lead)}"?`)) onDelete(lead.id); }} className="rounded-xl px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50">Delete</button>
