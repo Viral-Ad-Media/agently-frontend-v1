@@ -15,11 +15,15 @@ import { ApiError, NETWORK_OFFLINE_MESSAGE } from "../services/api";
  * The invitation link proves mailbox control on its own, so there is no second
  * code to enter here. Invited members are created without a password, so the
  * common outcome is "signed in, now choose a password", which the API flags
- * with mustSetPassword.
+ * with mustSetPassword. The password is chosen right here: sending the member
+ * to Settings did not work, because Settings is owner-only for a Viewer and
+ * its password form demanded a current password the member never had.
  */
 
 interface AcceptInviteProps {
   onAccept: (token: string) => Promise<{ mustSetPassword?: boolean }>;
+  /** Sets the first password for an invited member (no current password). */
+  onSetPassword: (newPassword: string) => Promise<unknown>;
 }
 
 const CheckIcon = () => (
@@ -39,13 +43,48 @@ const CheckIcon = () => (
   </svg>
 );
 
-const AcceptInvite: React.FC<AcceptInviteProps> = ({ onAccept }) => {
+const AcceptInvite: React.FC<AcceptInviteProps> = ({
+  onAccept,
+  onSetPassword,
+}) => {
   const location = useLocation();
   const [status, setStatus] = useState<
     "working" | "missing" | "error" | "done"
   >("working");
   const [message, setMessage] = useState("");
   const [mustSetPassword, setMustSetPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+
+  const submitPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (password.length < 8) {
+      setPasswordError("Use at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setPasswordError("The two passwords don't match.");
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError("");
+    try {
+      await onSetPassword(password);
+      setMustSetPassword(false);
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "We couldn't save that password. Please try again.",
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
   // An invitation is single-use and the effect can run twice in StrictMode.
   // Without this guard the second run consumes nothing and reports the
   // invitation as already used, on a perfectly good link.
@@ -105,7 +144,56 @@ const AcceptInvite: React.FC<AcceptInviteProps> = ({ onAccept }) => {
             </>
           )}
 
-          {status === "done" && (
+          {status === "done" && mustSetPassword && (
+            <form onSubmit={submitPassword} className="text-left">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckIcon />
+              </div>
+              <h1 className="text-center text-[19px] font-medium tracking-[-0.035em] text-[#0F172A]">
+                Invitation accepted — choose your password
+              </h1>
+              <p className="mt-1.5 text-center text-[13px] font-normal leading-[18px] text-[#0F172A]/68">
+                You'll use your email and this password to sign in next time.
+              </p>
+              <label className="mt-4 block text-[12px] font-medium text-[#0F172A]/72">
+                New password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[#0F172A]/12 bg-white px-3.5 text-[14px] text-[#0F172A] outline-none focus:border-[#f15a24]/60"
+                />
+              </label>
+              <label className="mt-3 block text-[12px] font-medium text-[#0F172A]/72">
+                Confirm password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-[#0F172A]/12 bg-white px-3.5 text-[14px] text-[#0F172A] outline-none focus:border-[#f15a24]/60"
+                />
+              </label>
+              <p className="mt-2 text-[12px] text-[#0F172A]/52">
+                At least 8 characters. Avoid common passwords.
+              </p>
+              {passwordError && (
+                <p role="alert" className="mt-2 text-[13px] text-red-700">
+                  {passwordError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={passwordSaving}
+                className="mt-4 flex w-full items-center justify-center min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633] disabled:opacity-50"
+              >
+                {passwordSaving ? "Saving…" : "Save password and continue"}
+              </button>
+            </form>
+          )}
+
+          {status === "done" && !mustSetPassword && (
             <>
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <CheckIcon />
@@ -114,15 +202,14 @@ const AcceptInvite: React.FC<AcceptInviteProps> = ({ onAccept }) => {
                 You're in
               </h1>
               <p className="mt-1.5 text-[13px] font-normal leading-[18px] text-[#0F172A]/68">
-                {mustSetPassword
-                  ? "Set a password in Settings so you can sign in again later."
-                  : "Your invitation has been accepted."}
+                You now have access to this workspace. Account settings, billing
+                and team management stay with the account owner.
               </p>
               <Link
-                to={mustSetPassword ? "/settings" : "/dashboard"}
+                to="/dashboard"
                 className="mt-4 flex w-full items-center justify-center min-h-[44px] rounded-full bg-[#0F172A] px-5 py-3 text-[14px] font-medium text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-[#1a2633]"
               >
-                {mustSetPassword ? "Choose a password" : "Go to dashboard"}
+                Go to dashboard
               </Link>
             </>
           )}

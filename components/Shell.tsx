@@ -734,6 +734,31 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   onLogout,
 }) => {
   const location = useLocation();
+  /*
+   * Pages an invited member can see but not use. The server enforces the same
+   * rules (Viewer = read-only everywhere; billing, team management and
+   * workspace settings = owner only); this overlay just greys the page out
+   * and says why. Settings and Team are handled inside those pages, because a
+   * member still needs Settings for their own password and devices.
+   */
+  const lockedPage = (() => {
+    if (user.role !== "Owner" && location.pathname === "/billing") {
+      return {
+        title: "Owner only",
+        body: "Billing, cards and top-ups are managed by the account owner.",
+      };
+    }
+    if (
+      user.role === "Viewer" &&
+      ["/agent", "/phone-numbers", "/outreach"].includes(location.pathname)
+    ) {
+      return {
+        title: "Read-Only Access",
+        body: "Your Viewer role doesn't allow editing. Ask the account owner to make changes.",
+      };
+    }
+    return null;
+  })();
   const calendarFeatureOn = useFeatureFlag("calendar");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [operatorAgentId, setOperatorAgentId] = useState<string>(() => {
@@ -1038,15 +1063,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               className="custom-scrollbar mx-auto w-full min-w-0 max-w-full flex-1 overflow-y-auto px-4 pb-0 pt-4 sm:px-5 md:pt-5 lg:px-6 xl:px-8"
               style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
             >
-              {user.role === "Viewer" &&
-              [
-                "/agent",
-                "/phone-numbers",
-                "/outreach",
-                "/settings",
-                "/team",
-                "/billing",
-              ].includes(location.pathname) ? (
+              {lockedPage ? (
                 <div className="relative">
                   <div className="absolute inset-0 z-10 rounded-3xl bg-white/70 backdrop-blur-[2px] flex items-start justify-center pt-24 pointer-events-auto">
                     <div className="mx-4 max-w-sm rounded-2xl border border-slate-200 bg-white px-5 py-5 text-center shadow-xl sm:px-8 sm:py-6">
@@ -1067,11 +1084,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                         </svg>
                       </div>
                       <p className="font-black text-slate-900 mb-1">
-                        Read-Only Access
+                        {lockedPage.title}
                       </p>
                       <p className="text-xs text-slate-400">
-                        Your Viewer role doesn't allow editing. Contact an Admin
-                        or Owner to make changes.
+                        {lockedPage.body}
                       </p>
                     </div>
                   </div>

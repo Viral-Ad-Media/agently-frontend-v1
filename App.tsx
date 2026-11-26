@@ -259,7 +259,16 @@ const App: React.FC = () => {
     const isAlreadyResetRoute =
       window.location.pathname.startsWith("/forgot-password") ||
       window.location.pathname.startsWith("/reset-password");
-    if (!resetToken || isAlreadyResetRoute) return;
+    /*
+     * Team invitation links are /accept-invite?token=…, and `token` is also
+     * one of the names a reset link may use. Without this exemption every
+     * invitation was rewritten into /forgot-password?resetToken=… and the
+     * invitee landed on a reset form holding a token that is not a reset
+     * token — the invitation could never be accepted.
+     */
+    const isInvitationRoute =
+      window.location.pathname.startsWith("/accept-invite");
+    if (!resetToken || isAlreadyResetRoute || isInvitationRoute) return;
 
     const nextUrl = `${window.location.origin}/forgot-password?resetToken=${encodeURIComponent(resetToken)}`;
     // Still a full replace() rather than history.replaceState: the email client
@@ -1016,7 +1025,14 @@ const App: React.FC = () => {
           <Route path="/reset-password" element={<ForgotPassword />} />
           <Route
             path="/accept-invite"
-            element={<AcceptInvite onAccept={handleAcceptInvitation} />}
+            element={
+              <AcceptInvite
+                onAccept={handleAcceptInvitation}
+                onSetPassword={(newPassword) =>
+                  handleChangePassword({ currentPassword: "", newPassword })
+                }
+              />
+            }
           />
           <Route
             path="/features"
@@ -1239,6 +1255,7 @@ const App: React.FC = () => {
                 <ProtectedRoute {...protectedRouteProps}>
                   <Team
                     org={org}
+                    currentUser={user}
                     onInvite={handleInviteMember}
                     onRemoveMember={handleRemoveMember}
                   />

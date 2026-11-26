@@ -1429,6 +1429,12 @@ const SuperAdmin: React.FC = () => {
   const [topUpAmount, setTopUpAmount] = useState("10");
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
   const [topUpMessage, setTopUpMessage] = useState("");
+  // "Skip card requirement" switch in the credit modal. Starts at the
+  // workspace's current state each time the modal opens.
+  const [skipCard, setSkipCard] = useState(false);
+  useEffect(() => {
+    if (topUpTarget) setSkipCard(Boolean(topUpTarget.cardRequirementWaived));
+  }, [topUpTarget]);
   const [automationStatus, setAutomationStatus] = useState<{
     configured: boolean;
     webhookConfigured: boolean;
@@ -1513,23 +1519,48 @@ const SuperAdmin: React.FC = () => {
       setTopUpMessage("This user has no organization to credit.");
       return;
     }
-    const amount = Number(topUpAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setTopUpMessage("Enter an amount greater than zero.");
+    const amount = topUpAmount.trim() === "" ? 0 : Number(topUpAmount);
+    const waiverChanged =
+      skipCard !== Boolean(topUpTarget.cardRequirementWaived);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setTopUpMessage("Enter an amount of zero or more.");
+      return;
+    }
+    if (amount === 0 && !waiverChanged) {
+      setTopUpMessage("Enter an amount, or change the card setting.");
       return;
     }
     setTopUpSubmitting(true);
     setTopUpMessage("");
+    const done: string[] = [];
     try {
-      await adminApi.topUpWallet(topUpTarget.organizationId, amount);
-      setTopUpMessage(`Added ${money(amount)}.`);
+      // Credit first: it creates the wallet if the workspace has none yet,
+      // and the card waiver is stored on that wallet.
+      if (amount > 0) {
+        await adminApi.topUpWallet(topUpTarget.organizationId, amount);
+        done.push(`Added ${money(amount)}.`);
+      }
+      if (waiverChanged) {
+        await adminApi.setCardWaiver(
+          topUpTarget.organizationId,
+          skipCard,
+          "Testing on manual credit",
+        );
+        done.push(
+          skipCard
+            ? "Card requirement skipped — this workspace can buy numbers and go live on its credit."
+            : "Card requirement restored.",
+        );
+      }
+      setTopUpMessage(done.join(" "));
       await loadUsers(userPage, userSearch);
-      setTimeout(() => setTopUpTarget(null), 900);
+      setTimeout(() => setTopUpTarget(null), 1400);
     } catch (err) {
       handleAuthFailure(err);
-      setTopUpMessage(
-        err instanceof Error ? err.message : "Unable to add credit.",
-      );
+      const reason =
+        err instanceof Error ? err.message : "Unable to save the change.";
+      setTopUpMessage(done.length ? `${done.join(" ")} ${reason}` : reason);
+      if (done.length) await loadUsers(userPage, userSearch);
     } finally {
       setTopUpSubmitting(false);
     }
@@ -2131,6 +2162,9 @@ const SuperAdmin: React.FC = () => {
                                 {money(user.walletBalanceUsd)} left
                               </p>
                               <p className="mt-0.5 text-xs text-[#76736b]">{money(user.walletCreditsAddedUsd)} added</p>
+                              {user.cardRequirementWaived ? (
+                                <p className="mt-0.5 text-xs font-medium text-[#b45309]" title="Super Admin skipped the add-a-card rule for this workspace">Card skipped</p>
+                              ) : null}
                             </td>
                             <td className="px-5 py-4">
                               <span className="ag-admin-pill" title={status.detail}>{status.label}</span>
@@ -2198,7 +2232,10 @@ const SuperAdmin: React.FC = () => {
                             </div>
                             <div>
                               <dt className="text-[#76736b]">Added</dt>
-                              <dd className="text-[#101216] [font-variant-numeric:tabular-nums]">{money(user.walletCreditsAddedUsd)}</dd>
+                              <dd className="text-[#101216] [font-variant-numeric:tabular-nums]">
+                                {money(user.walletCreditsAddedUsd)}
+                                {user.cardRequirementWaived ? <span className="ml-1 font-medium text-[#b45309]">· Card skipped</span> : null}
+                              </dd>
                             </div>
                           </dl>
                           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -3084,7 +3121,7 @@ const SuperAdmin: React.FC = () => {
             </p>
             <label className="mt-5 block">
               <span className="text-xs font-bold text-slate-600">
-                Amount to add (USD)
+                Amount to add (USD) — leave 0 to only change the card setting
               </span>
               <input
                 type="number"
@@ -3094,6 +3131,22 @@ const SuperAdmin: React.FC = () => {
                 onChange={(event) => setTopUpAmount(event.target.value)}
                 className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-[#F59E0B]"
               />
+            </label>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3">
+              <input
+                type="checkbox"
+                checked={skipCard}
+                onChange={(event) => setSkipCard(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#0F172A]"
+              />
+              <span className="text-sm leading-5 text-slate-600">
+                <span className="block font-bold text-slate-800">
+                  Skip the card requirement
+                </span>
+                Lets this workspace buy phone numbers and put chatbots live
+                without saving a card. Usage still comes out of its credit
+                balance. Untick to restore the normal rule.
+              </span>
             </label>
             {topUpMessage ? (
               <p className="mt-3 text-xs font-semibold text-slate-600">
@@ -3114,7 +3167,7 @@ const SuperAdmin: React.FC = () => {
                 onClick={() => void submitTopUp()}
                 className="h-11 flex-1 rounded-xl bg-[#0F172A] text-sm font-bold text-white disabled:opacity-40"
               >
-                {topUpSubmitting ? "Adding…" : "Add credit"}
+                {topUpSubmitting ? "Saving…" : "Save"}
               </button>
             </div>
           </div>

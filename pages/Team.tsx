@@ -12,6 +12,8 @@ import { NETWORK_OFFLINE_MESSAGE, api } from "../services/api";
 
 interface TeamProps {
   org: Organization;
+  /** The signed-in person. Only the Owner can manage the team. */
+  currentUser?: User | null;
   onInvite: (
     email: string,
     role: Extract<UserRole, "Admin" | "Viewer">,
@@ -27,30 +29,64 @@ type TeamMetrics = {
   viewers: number;
 };
 
+type InvitationInfo = {
+  status: "pending" | "expired" | "accepted" | "revoked";
+  sentAt?: string;
+  expiresAt?: string;
+};
+
+type TeamMember = User & { invitation?: InvitationInfo | null };
+
 type TeamResponse = {
-  members?: User[];
+  members?: TeamMember[];
   metrics?: TeamMetrics;
 };
+
+type TeamSession = Awaited<
+  ReturnType<typeof api.listTeamSessions>
+>["sessions"][number];
+
+type InviteRole = Extract<UserRole, "Admin" | "Viewer">;
 
 const ROLE_PERMISSIONS: Record<
   string,
   { label: string; can: string[]; cannot: string[] }
 > = {
-  Owner: { label: "Full Access", can: ["Everything"], cannot: [] },
+  Owner: {
+    label: "Full Access",
+    can: [
+      "Everything",
+      "Invite, remove and sign out members",
+      "See and remove every signed-in device",
+      "Billing, cards and workspace settings",
+      "Delete the account",
+    ],
+    cannot: [],
+  },
   Admin: {
     label: "Manager",
     can: [
       "View workspace data",
-      "Manage agents and chatbots",
-      "Manage FAQs",
-      "Invite members",
+      "Manage agents, chatbots and knowledge",
+      "Work leads, calls and outreach",
+      "Change their own password",
     ],
-    cannot: ["Delete organization", "Remove owner"],
+    cannot: [
+      "Invite or remove members",
+      "Billing and cards",
+      "Workspace settings",
+      "Delete the account",
+    ],
   },
   Viewer: {
     label: "Read Only",
-    can: ["View dashboard", "View call logs", "View leads"],
-    cannot: ["Edit settings", "Invite members", "Change billing"],
+    can: ["View dashboard, calls and leads", "Change their own password"],
+    cannot: [
+      "Edit anything in the workspace",
+      "Invite or remove members",
+      "Billing and settings",
+      "Delete the account",
+    ],
   },
 };
 
@@ -64,26 +100,65 @@ const cleanError = (error: unknown, fallback: string) => {
   return isNetworkMessage(message) ? NETWORK_OFFLINE_MESSAGE : message;
 };
 
-const getInitialMetrics = (members: User[]): TeamMetrics => ({
+const getInitialMetrics = (members: TeamMember[]): TeamMetrics => ({
   total: members.length,
   owners: members.filter((m) => m.role === "Owner").length,
   admins: members.filter((m) => m.role === "Admin").length,
   viewers: members.filter((m) => m.role === "Viewer").length,
 });
 
-const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
-  const [members, setMembers] = useState<User[]>(org.members || []);
+/** "Chrome on Windows" from a user-agent string. */
+const describeDevice = (userAgent: string) => {
+  const ua = userAgent || "";
+  let browser = "Browser";
+  if (/Edg\//.test(ua)) browser = "Edge";
+  else if (/Chrome\//.test(ua)) browser = "Chrome";
+  else if (/Firefox\//.test(ua)) browser = "Firefox";
+  else if (/Safari\//.test(ua)) browser = "Safari";
+  else if (/okhttp|Expo|ReactNative|CFNetwork/i.test(ua)) browser = "Mobile app";
+
+  let os = "";
+  if (/iPhone|iPad/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Windows/.test(ua)) os = "Windows";
+  else if (/Mac OS X|Macintosh/.test(ua)) os = "macOS";
+  else if (/Linux/.test(ua)) os = "Linux";
+  return os ? `${browser} on ${os}` : browser;
+};
+
+const invitationBadge = (invitation?: InvitationInfo | null) => {
+  if (invitation?.status === "pending")
+    return { text: "Invite pending", tone: "bg-amber-50 text-amber-700" };
+  if (invitation?.status === "expired")
+    return { text: "Invite expired", tone: "bg-red-50 text-red-600" };
+  return null;
+};
+
+const canResend = (member: TeamMember) =>
+  member.invitation?.status === "pending" ||
+  member.invitation?.status === "expired";
+
+const Team: React.FC<TeamProps> = ({
+  org,
+  currentUser,
+  onInvite,
+  onRemoveMember,
+}) => {
+  const isOwner = currentUser?.role === "Owner";
+  const [members, setMembers] = useState<TeamMember[]>(org.members || []);
   const [metrics, setMetrics] = useState<TeamMetrics>(() =>
     getInitialMetrics(org.members || []),
   );
+  const [sessions, setSessions] = useState<TeamSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<User | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
+  const [signOutTarget, setSignOutTarget] = useState<TeamMember | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] =
-    useState<Extract<UserRole, "Admin" | "Viewer">>("Viewer");
+  const [inviteRole, setInviteRole] = useState<InviteRole>("Viewer");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -119,6 +194,24 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     }
   }, []);
 
+  const loadSessions = useCallback(async () => {
+    if (!isOwner) return;
+    setSessionsLoading(true);
+    try {
+      const response = await api.listTeamSessions();
+      if (mountedRef.current) setSessions(response.sessions || []);
+    } catch (err) {
+      if (mountedRef.current)
+        setError(cleanError(err, "Unable to load signed-in devices."));
+    } finally {
+      if (mountedRef.current) setSessionsLoading(false);
+    }
+  }, [isOwner]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadMembers(), loadSessions()]);
+  }, [loadMembers, loadSessions]);
+
   useEffect(() => {
     mountedRef.current = true;
     setMembers(org.members || []);
@@ -129,6 +222,10 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
       loadRequestRef.current += 1;
     };
   }, [loadMembers, org.id]);
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
 
   const handleInvite = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -154,10 +251,23 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     }
   };
 
-  const updateRole = async (
-    memberId: string,
-    role: Extract<UserRole, "Admin" | "Viewer">,
-  ) => {
+  const resendInvite = async (member: TeamMember) => {
+    if (member.role === "Owner") return;
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await onInvite(member.email, member.role as InviteRole, member.name);
+      setSuccess(`A fresh invitation was sent to ${member.email}.`);
+      await loadMembers();
+    } catch (err) {
+      setError(cleanError(err, "Unable to resend the invitation."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateRole = async (memberId: string, role: InviteRole) => {
     setSaving(true);
     setError("");
     try {
@@ -178,13 +288,113 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
     try {
       await onRemoveMember(removeTarget.id);
       setRemoveTarget(null);
-      await loadMembers();
-      setSuccess("Team member removed.");
+      await refreshAll();
+      setSuccess("Team member removed and signed out everywhere.");
     } catch (err) {
       setError(cleanError(err, "Unable to remove team member."));
+      await refreshAll();
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmSignOutMember = async () => {
+    if (!signOutTarget) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.signOutTeamMember(signOutTarget.id);
+      setSuccess(`${signOutTarget.name} was signed out of every device.`);
+      setSignOutTarget(null);
+      await loadSessions();
+    } catch (err) {
+      setError(cleanError(err, "Unable to sign out this member."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const revokeDevice = async (session: TeamSession) => {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await api.revokeTeamSession(session.id);
+      setSuccess(
+        `Signed out ${describeDevice(session.userAgent)} for ${session.userName || session.userEmail}.`,
+      );
+      await loadSessions();
+    } catch (err) {
+      setError(cleanError(err, "Unable to sign out that device."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const roleControl = (user: TeamMember, wide = false) => {
+    if (user.role === "Owner") {
+      return (
+        <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">
+          Owner
+        </span>
+      );
+    }
+    if (!isOwner) {
+      return (
+        <span className="inline-flex w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+          {user.role}
+        </span>
+      );
+    }
+    return (
+      <select
+        value={user.role}
+        disabled={saving}
+        onChange={(e) => void updateRole(user.id, e.target.value as InviteRole)}
+        className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none focus:border-amber-300 ${wide ? "w-full min-[420px]:w-auto" : ""}`}
+      >
+        <option value="Admin">Admin</option>
+        <option value="Viewer">Viewer</option>
+      </select>
+    );
+  };
+
+  const memberActions = (user: TeamMember, wide = false) => {
+    if (!isOwner || user.role === "Owner") return null;
+    const btn = `rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 ${wide ? "w-full min-[420px]:w-auto" : ""}`;
+    return (
+      <div
+        className={`flex gap-2 ${wide ? "flex-col min-[420px]:flex-row" : "justify-end"}`}
+      >
+        {canResend(user) && (
+          <button
+            type="button"
+            onClick={() => void resendInvite(user)}
+            disabled={saving}
+            className={`${btn} border-slate-200 text-slate-600 hover:bg-slate-50`}
+          >
+            Resend invite
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setSignOutTarget(user)}
+          disabled={saving}
+          className={`${btn} border-slate-200 text-slate-600 hover:bg-slate-50`}
+          title="End every session this member has, on every device"
+        >
+          Sign out
+        </button>
+        <button
+          type="button"
+          onClick={() => setRemoveTarget(user)}
+          disabled={saving}
+          className={`${btn} border-red-100 text-red-500 hover:bg-red-50`}
+        >
+          Remove
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -201,7 +411,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         <div className="flex shrink-0 items-start justify-end gap-2">
           <button
             type="button"
-            onClick={loadMembers}
+            onClick={() => void refreshAll()}
             disabled={loading}
             className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-500 transition hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10 sm:rounded-xl"
             aria-label="Refresh team members"
@@ -226,13 +436,18 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
           </button>
           <button
             type="button"
-            onClick={() => setShowInvite(true)}
+            onClick={() => isOwner && setShowInvite(true)}
+            disabled={!isOwner}
             /* Icon-only button: it has no text content, so the tour's
                text: matcher could never find it. */
             data-tour="team-invite"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 sm:h-10 sm:w-10 sm:rounded-xl"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:hover:bg-slate-300 sm:h-10 sm:w-10 sm:rounded-xl"
             aria-label="Invite member"
-            title="Invite member"
+            title={
+              isOwner
+                ? "Invite member"
+                : "Only the account owner can invite members"
+            }
           >
             <i
               className="fa-sharp fa-solid fa-user-plus text-sm"
@@ -243,6 +458,19 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
       </header>
 
       <SettingsTabs active="team" />
+
+      {!isOwner && (
+        <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <i
+            className="fa-sharp fa-solid fa-lock mt-0.5 text-slate-400"
+            aria-hidden="true"
+          />
+          <p>
+            Only the account owner can invite, remove or sign out members and
+            change their roles.
+          </p>
+        </div>
+      )}
 
       {(error || success) && (
         <div
@@ -274,59 +502,48 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
       </div>
 
       <div className="space-y-3 md:hidden">
-        {sortedMembers.map((user) => (
-          <div
-            key={user.id}
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
-                {user.name?.[0]?.toUpperCase() || "U"}
+        {sortedMembers.map((user) => {
+          const badge = invitationBadge(user.invitation);
+          return (
+            <div
+              key={user.id}
+              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
+                  {user.name?.[0]?.toUpperCase() || "U"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {user.name}
+                    {user.id === currentUser?.id && (
+                      <span className="ml-1.5 text-xs font-medium text-slate-400">
+                        (you)
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {user.email}
+                  </p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {ROLE_PERMISSIONS[user.role]?.label || user.role}
+                  </p>
+                  {badge && (
+                    <span
+                      className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.tone}`}
+                    >
+                      {badge.text}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-slate-900">
-                  {user.name}
-                </p>
-                <p className="truncate text-xs text-slate-500">{user.email}</p>
-                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {ROLE_PERMISSIONS[user.role]?.label || user.role}
-                </p>
+              <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+                {roleControl(user, true)}
+                {memberActions(user, true)}
               </div>
             </div>
-            <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
-              {user.role === "Owner" ? (
-                <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">
-                  Owner
-                </span>
-              ) : (
-                <select
-                  value={user.role}
-                  disabled={saving}
-                  onChange={(e) =>
-                    void updateRole(
-                      user.id,
-                      e.target.value as Extract<UserRole, "Admin" | "Viewer">,
-                    )
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none focus:border-amber-300 min-[420px]:w-auto"
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Viewer">Viewer</option>
-                </select>
-              )}
-              {user.role !== "Owner" && (
-                <button
-                  type="button"
-                  onClick={() => setRemoveTarget(user)}
-                  disabled={saving}
-                  className="w-full rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50 min-[420px]:w-auto"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!sortedMembers.length && (
           <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-400 shadow-sm">
             No team members found.
@@ -342,69 +559,53 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
                 <th className="px-6 py-4">Member</th>
                 <th className="px-6 py-4">Email</th>
                 <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-6 py-4 text-right">
+                  {isOwner ? "Actions" : ""}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {sortedMembers.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
-                        {user.name?.[0]?.toUpperCase() || "U"}
+              {sortedMembers.map((user) => {
+                const badge = invitationBadge(user.invitation);
+                return (
+                  <tr key={user.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
+                          {user.name?.[0]?.toUpperCase() || "U"}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">
+                            {user.name}
+                            {user.id === currentUser?.id && (
+                              <span className="ml-1.5 text-xs font-medium text-slate-400">
+                                (you)
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            {ROLE_PERMISSIONS[user.role]?.label || user.role}
+                          </p>
+                          {badge && (
+                            <span
+                              className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.tone}`}
+                            >
+                              {badge.text}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">
-                          {user.name}
-                        </p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          {ROLE_PERMISSIONS[user.role]?.label || user.role}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {user.email}
-                  </td>
-                  <td className="px-6 py-4">
-                    {user.role === "Owner" ? (
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">
-                        Owner
-                      </span>
-                    ) : (
-                      <select
-                        value={user.role}
-                        disabled={saving}
-                        onChange={(e) =>
-                          void updateRole(
-                            user.id,
-                            e.target.value as Extract<
-                              UserRole,
-                              "Admin" | "Viewer"
-                            >,
-                          )
-                        }
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none focus:border-amber-300"
-                      >
-                        <option value="Admin">Admin</option>
-                        <option value="Viewer">Viewer</option>
-                      </select>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {user.role !== "Owner" && (
-                      <button
-                        type="button"
-                        onClick={() => setRemoveTarget(user)}
-                        disabled={saving}
-                        className="rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {user.email}
+                    </td>
+                    <td className="px-6 py-4">{roleControl(user)}</td>
+                    <td className="px-6 py-4 text-right">
+                      {memberActions(user)}
+                    </td>
+                  </tr>
+                );
+              })}
               {!sortedMembers.length && (
                 <tr>
                   <td
@@ -420,11 +621,91 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         </div>
       </div>
 
+      {isOwner && (
+        <section
+          className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"
+          aria-labelledby="team-devices-heading"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3
+                id="team-devices-heading"
+                className="text-base font-black text-slate-900"
+              >
+                Signed-in devices
+              </h3>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Every device currently signed in to this workspace, for you and
+                your team. Sign out any device you don't recognise.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadSessions()}
+              disabled={sessionsLoading}
+              className="shrink-0 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {sessionsLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+
+          <ul className="mt-4 divide-y divide-slate-100">
+            {sessions.map((session) => (
+              <li
+                key={session.id}
+                className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900">
+                    {session.userName || session.userEmail || "Unknown member"}
+                    <span className="ml-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {session.userRole}
+                    </span>
+                    {session.current && (
+                      <span className="ml-2 text-xs font-medium text-emerald-600">
+                        This device
+                      </span>
+                    )}
+                  </p>
+                  <p
+                    className="mt-1 truncate text-xs text-slate-500"
+                    title={session.userAgent}
+                  >
+                    {describeDevice(session.userAgent)}
+                    {session.client ? ` · ${session.client}` : ""}
+                    {session.requestIp ? ` · ${session.requestIp}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Signed in {new Date(session.createdAt).toLocaleString()} ·
+                    last active {new Date(session.lastSeenAt).toLocaleString()}
+                  </p>
+                </div>
+                {!session.current && (
+                  <button
+                    type="button"
+                    onClick={() => void revokeDevice(session)}
+                    disabled={saving}
+                    className="w-full shrink-0 rounded-xl border border-red-100 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 disabled:opacity-50 sm:w-auto"
+                  >
+                    Sign out device
+                  </button>
+                )}
+              </li>
+            ))}
+            {!sessions.length && !sessionsLoading && (
+              <li className="py-6 text-center text-sm text-slate-400">
+                No active devices.
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
       <AppModal
         open={showInvite}
         onClose={() => setShowInvite(false)}
         title="Invite Team Member"
-        description="Send workspace access to a teammate."
+        description="They'll get an email link, choose their own password, and join with the role you pick."
         size="md"
         footer={
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -480,16 +761,16 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
             </label>
             <select
               value={inviteRole}
-              onChange={(e) =>
-                setInviteRole(
-                  e.target.value as Extract<UserRole, "Admin" | "Viewer">,
-                )
-              }
+              onChange={(e) => setInviteRole(e.target.value as InviteRole)}
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-amber-300"
             >
-              <option value="Viewer">Viewer</option>
-              <option value="Admin">Admin</option>
+              <option value="Viewer">Viewer — read only</option>
+              <option value="Admin">Admin — can work in the app</option>
             </select>
+            <p className="mt-2 text-xs text-slate-500">
+              Neither role can touch billing, workspace settings, the team or
+              account deletion. Those stay with you.
+            </p>
           </div>
         </form>
       </AppModal>
@@ -498,7 +779,7 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         open={Boolean(removeTarget)}
         onClose={() => setRemoveTarget(null)}
         title="Remove team member?"
-        description="This will remove their workspace access."
+        description="Their access is revoked immediately."
         size="sm"
         footer={
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -521,7 +802,42 @@ const Team: React.FC<TeamProps> = ({ org, onInvite, onRemoveMember }) => {
         }
       >
         <p className="text-sm text-slate-500">
-          {removeTarget?.name} will no longer be able to access this workspace.
+          {removeTarget?.name} will be signed out of every device and will no
+          longer be able to access this workspace. Any unused invitation link
+          stops working too.
+        </p>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(signOutTarget)}
+        onClose={() => setSignOutTarget(null)}
+        title="Sign out everywhere?"
+        description="Ends every session this member has."
+        size="sm"
+        footer={
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setSignOutTarget(null)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmSignOutMember()}
+              disabled={saving}
+              className="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              Sign out
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-500">
+          {signOutTarget?.name} will be signed out on every device. They stay a
+          member and can sign in again with their password. To take away their
+          access for good, use Remove.
         </p>
       </AppModal>
 

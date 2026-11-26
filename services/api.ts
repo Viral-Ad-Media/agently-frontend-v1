@@ -1247,6 +1247,40 @@ export const api = {
     });
   },
 
+  /** Owner only: end every session a member has, without removing them. */
+  async signOutTeamMember(id: string) {
+    return request<{ success: boolean }>(`/api/team/members/${encodeURIComponent(id)}/sign-out`, {
+      method: 'POST',
+    });
+  },
+
+  /** Owner only: every live signed-in device across the workspace. */
+  async listTeamSessions() {
+    return request<{
+      sessions: Array<{
+        id: string;
+        userId: string;
+        userName: string;
+        userEmail: string;
+        userRole: string;
+        client: string;
+        userAgent: string;
+        requestIp: string;
+        createdAt: string;
+        lastSeenAt: string;
+        current: boolean;
+      }>;
+    }>('/api/team/sessions');
+  },
+
+  /** Owner only: sign out one device in the workspace. */
+  async revokeTeamSession(sessionId: string) {
+    return request<{ success: boolean; currentSessionRevoked: boolean }>(
+      `/api/team/sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'DELETE' },
+    );
+  },
+
   async getBillingSummary() {
     return request('/api/billing/summary');
   },

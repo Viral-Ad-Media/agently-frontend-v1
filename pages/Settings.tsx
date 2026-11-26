@@ -285,7 +285,12 @@ const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const disabled = !isEditing || saving;
+  // Workspace settings belong to the account owner. Invited members see them
+  // greyed out; the server refuses the save for them as well.
+  const isOwner = user?.role === "Owner";
+  const disabled = !isOwner || !isEditing || saving;
+  const passwordFieldClass =
+    "mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500";
   const fieldClass = `mt-2 w-full rounded-xl border px-4 py-3 text-sm font-semibold outline-none transition ${
     disabled
       ? "cursor-not-allowed border-slate-200 bg-slate-100/70 text-slate-500"
@@ -305,7 +310,9 @@ const Settings: React.FC<SettingsProps> = ({
           </h2>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+        <div
+          className={`${isOwner ? "flex" : "hidden"} shrink-0 items-center justify-end gap-1.5 sm:gap-2`}
+        >
           {isEditing && (
             <button
               type="button"
@@ -357,7 +364,20 @@ const Settings: React.FC<SettingsProps> = ({
       <SettingsTabs active="profile" />
 
       <main className="w-full max-w-none">
-        <section className={sectionClass} data-tour="settings-general">
+        {!isOwner && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <i className="fa-sharp fa-solid fa-lock mt-0.5 text-slate-400" aria-hidden="true" />
+            <p>
+              Workspace and business settings are managed by the account owner.
+              You can still change your own password and sign out your own
+              devices below.
+            </p>
+          </div>
+        )}
+        <section
+          className={`${sectionClass} ${isOwner ? "" : "opacity-60"}`}
+          data-tour="settings-general"
+        >
           <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h3 className="text-base font-black text-slate-900">
@@ -395,7 +415,10 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         </section>
 
-        <section className={sectionClass} data-tour="settings-business">
+        <section
+          className={`${sectionClass} ${isOwner ? "" : "opacity-60"}`}
+          data-tour="settings-business"
+        >
           <div className="mb-5">
             <h3 className="text-base font-black text-slate-900">
               Business Profile
@@ -452,7 +475,7 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         </section>
 
-        <section className={sectionClass}>
+        <section className={`${sectionClass} ${isOwner ? "" : "opacity-60"}`}>
           <div className="mb-5">
             <h3 className="text-base font-black text-slate-900">
               Workspace Preferences
@@ -499,8 +522,9 @@ const Settings: React.FC<SettingsProps> = ({
                 Password Access
               </h3>
               <p className="mt-1 text-xs font-medium text-slate-500">
-                Change the password in edit mode, or send a reset link to the
-                registered email.
+                Change your password, or send a reset link to your email. If
+                you joined from an invitation and never set one, leave
+                "Current password" blank.
               </p>
             </div>
             <button
@@ -521,8 +545,8 @@ const Settings: React.FC<SettingsProps> = ({
                 onChange={(event) => setCurrentPassword(event.target.value)}
                 type="password"
                 autoComplete="current-password"
-                disabled={disabled}
-                className={fieldClass}
+                disabled={passwordSaving}
+                className={passwordFieldClass}
               />
             </label>
             <label className="block">
@@ -532,8 +556,8 @@ const Settings: React.FC<SettingsProps> = ({
                 onChange={(event) => setNewPassword(event.target.value)}
                 type="password"
                 autoComplete="new-password"
-                disabled={disabled}
-                className={fieldClass}
+                disabled={passwordSaving}
+                className={passwordFieldClass}
               />
             </label>
             <label className="block">
@@ -543,8 +567,8 @@ const Settings: React.FC<SettingsProps> = ({
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 type="password"
                 autoComplete="new-password"
-                disabled={disabled}
-                className={fieldClass}
+                disabled={passwordSaving}
+                className={passwordFieldClass}
               />
             </label>
           </div>
@@ -553,13 +577,7 @@ const Settings: React.FC<SettingsProps> = ({
             <button
               type="button"
               onClick={() => void changePassword()}
-              disabled={
-                !isEditing ||
-                passwordSaving ||
-                (!currentPassword && !!user?.email) ||
-                !newPassword ||
-                !confirmPassword
-              }
+              disabled={passwordSaving || !newPassword || !confirmPassword}
               className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {passwordSaving ? "Updating..." : "Apply Password Change"}

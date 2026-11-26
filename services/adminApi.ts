@@ -132,6 +132,8 @@ export type SuperAdminUser = {
   walletCreditsAddedUsd: number;
   walletDeductionsUsd: number;
   walletStatus: string;
+  /** Super Admin let this workspace provision without a saved card. */
+  cardRequirementWaived?: boolean;
 };
 
 
@@ -412,6 +414,14 @@ export const adminApi = {
     return request<{ success: boolean; transaction: unknown }>(
       `/api/super-admin/wallets/${encodeURIComponent(organizationId)}/top-up`,
       { method: "POST", body: JSON.stringify({ amountUsd, note }) },
+    );
+  },
+
+  /** Skip (or restore) the "add a card first" rule for one workspace. */
+  async setCardWaiver(organizationId: string, waived: boolean, note?: string) {
+    return request<{ success: boolean; cardRequirementWaived: boolean }>(
+      `/api/super-admin/organizations/${encodeURIComponent(organizationId)}/card-waiver`,
+      { method: "PUT", body: JSON.stringify({ waived, note }) },
     );
   },
 
