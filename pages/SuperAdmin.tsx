@@ -275,19 +275,24 @@ const AdminLogin: React.FC<{ onAuthenticated: (email: string) => void }> = ({
             </label>
             {otpRequired ? (
               <label className="block">
-                <span className="text-[13px] font-medium text-[#2b2d33]">Authenticator code</span>
+                <span className="text-[13px] font-medium text-[#2b2d33]">Authenticator or recovery code</span>
                 <input
                   value={otp}
-                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
+                  onChange={(event) =>
+                    // 6 digits from the app, or a one-time recovery code (XXXX-XXXX-XXXX).
+                    setOtp(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 14))
+                  }
+                  inputMode={/[A-Z]/.test(otp) ? "text" : "numeric"}
                   autoComplete="one-time-code"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                   placeholder="123456"
                   required
-                  className="ag-admin-input mt-1.5 w-full font-['IBM_Plex_Mono',monospace] tracking-[0.3em]"
+                  className="ag-admin-input mt-1.5 w-full font-['IBM_Plex_Mono',monospace] tracking-[0.2em]"
                 />
                 <span className="mt-1.5 block text-xs leading-5 text-[#76736b]">
-                  Open Google Authenticator (or Authy / Microsoft Authenticator) and enter the
-                  current code for “Agently Super Admin”.
+                  The current 6-digit code for “Agently Admin” in Google Authenticator. No phone?
+                  Use one of your recovery codes instead.
                 </span>
               </label>
             ) : null}
